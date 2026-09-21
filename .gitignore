@@ -1,0 +1,15 @@
+# Deck build scratch (contains a node_modules symlink and intermediate renders)
+.origin-flow-build/
+
+# Environment files — never commit these to a public repository
+.env
+.env.*
+!.env.example
+
+.DS_Store
+node_modules/
+*.log
+
+# Private working notes — competitive research, answer scripts, claim discipline.
+# Deliberately excluded from the public repository.
+private/
