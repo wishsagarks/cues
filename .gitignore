@@ -1,3 +1,22 @@
+# Gradle and Android build output
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.kotlin/
+
+# On-device model assets are side-loaded, never committed: they are hundreds of
+# megabytes and are not ours to redistribute.
+*.task
+*.gguf
+*.tflite
+
 # Deck build scratch (contains a node_modules symlink and intermediate renders)
 .origin-flow-build/
 

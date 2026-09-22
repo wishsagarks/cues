@@ -183,5 +183,5 @@ class GrammarParserTest {
 
 internal fun corpusText(): String =
     checkNotNull(object {}.javaClass.getResourceAsStream("/corpus/paraphrases.txt")) {
-        "corpus/paraphrases.txt missing from test resources"
+        "corpus/paraphrases.txt missing from resources"
     }.bufferedReader().readText()

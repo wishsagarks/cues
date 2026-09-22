@@ -12,7 +12,23 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Design and idea only.** There is no application implementation in this repository, and no measured performance results. All application work is planned for the event itself.
+**Offline core implemented; no device integration and no measured results.**
+
+The decision core is built and tested: the routine model, the three-valued
+evaluator, the compiler and approval digest, the closed action registry, the
+grammar-based drafting path, the session engine and the receipts. It is pure
+Kotlin/JVM with no Android dependency, so `./dev t` runs its suite on any
+machine with a JDK.
+
+Not built: every part that touches a phone. The Android action executor, the
+Bluetooth and power adapters, the Do Not Disturb rule, the timer service and
+the on-device language model are scaffolded and return honest "not implemented"
+outcomes. That work happens at the event, on the loaner hardware.
+
+**There are no measured performance results.** Nothing in this repository has
+run on an iQOO. Every latency, delivery and reliability figure in the design
+documents remains a target. Assumptions awaiting verification are tracked in
+[CLEANUP.md](CLEANUP.md).
 
 Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 
@@ -25,6 +41,9 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [FDD.md](docs/FDD.md) | Functional design: architecture, session semantics, action registry |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
+| [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
+| [RED_LIGHT.md](RED_LIGHT.md) | Building when the laptop is only reachable through Office Kit |
+| [CLEANUP.md](CLEANUP.md) | Provisional choices, each with the condition that retires it |
 
 Earlier versions are in the git history.
 
@@ -41,6 +60,17 @@ Earlier versions are in the git history.
 Natural-language automation, persistent routines and end-of-routine actions all have established precedents, including Apple Shortcuts and Siri AI in iOS 27, Tasker's AI generator, and Samsung's Modes and Routines. This proposal does not claim to have invented them, nor to exceed a contextual assistant at inference.
 
 The proposed contribution is a focused combination — offline authoring, bounded sessions with approved endings, rehearsal before activation, and receipts explaining each run — demonstrated on real device events. Claims withdrawn during research are tracked in private working notes that are not published here.
+
+## Building
+
+`:core` needs only a JDK 21. `:app` is included in the build only when an
+Android SDK is present, so the core suite runs anywhere.
+
+```sh
+./dev t                                  # core tests
+./dev d "when my earbuds connect ..."    # compile a cue, print review + rehearsal
+./dev h                                  # everything else
+```
 
 ## License
 

@@ -1,6 +1,8 @@
 # Product Requirements Specification
 
-Revision: 22 September 2026. This specification describes proposed behavior, not completed functionality.
+Revision: 22 September 2026. This specification describes intended behavior. Some of it is
+implemented and tested offline; the parts that touch a phone are not. See the repository
+[README](../README.md) for what exists today.
 
 ## Product and user
 
@@ -27,7 +29,9 @@ The first target experience is a focus session triggered by selected earbuds, wi
 | Add only after core stability | Wi-Fi and time triggers, one charging-deadline reminder |
 | Later | Opt-in event history and shadow mode, named contexts, opportunity queue, temporary patches, timetable import, geofencing, Office Kit integration |
 
-Do not build arbitrary app control, screen clicking, continuous ambient listening, automatic messaging or broad passive personal-data collection. No application code is planned before the event under the supplied constraint.
+Do not build arbitrary app control, screen clicking, continuous ambient listening, automatic messaging or broad passive personal-data collection.
+
+Work completed before the event covers the build scaffolding and the offline decision core — the routine model, evaluator, compiler, action registry, grammar drafting path, session engine, receipts and rehearsal — with unit tests. No device integration, no on-device model and no measured results were produced beforehand; that work belongs to the event.
 
 ## Core journey
 

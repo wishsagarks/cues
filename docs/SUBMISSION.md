@@ -2,7 +2,7 @@
 
 Open Innovation. Hyderabad City Battle, September 26–27, as supplied in the event brief.
 
-Status: proposed app. No application implementation or performance results yet.
+Status: the offline decision core is implemented and unit-tested. No device integration, no on-device model and no performance results yet.
 
 ## Idea title
 
@@ -26,9 +26,9 @@ Natural-language automation already has precedents, including Tasker’s AI gene
 
 Phone assistants are also becoming far more contextual. Apple’s Siri AI in iOS 27 infers context from a broad personal index of messages, emails, photos and onscreen content. That capability is real and we do not claim to exceed it. Cues takes a different position on purpose. Context is declared rather than inferred: a routine uses only the signals the user explicitly attaches, each shown with its source and age, and anything else stays unknown. The runtime carries no network dependency and no usage budget, because a rule expected to fire every evening for months has different requirements from an assistant you invoke. And recognising that a moment has begun is the well-covered half of the problem; this proposal concentrates on the ending — releasing only what the routine owns, respecting a later user choice, and not firing twice on a reconnect.
 
-The solo 30-hour core supports Bluetooth and charging triggers, an app-owned timer, an app-owned DND contribution, review, cleanup and receipts. Wi-Fi and schedule adapters follow if the core is stable. One stretch idea checks whether the phone is charging at a deadline and reminds the user if it is not. Longer-term ideas include tasks that wait for an approved opportunity, named contexts and temporary changes such as “just this week.”
+The offline decision core — evaluation, compilation, session lifecycle, cleanup and receipts — is implemented and tested ahead of the event; the 30-hour build is where it meets the phone. That core supports Bluetooth and charging triggers, an app-owned timer, an app-owned DND contribution, review, cleanup and receipts. Wi-Fi and schedule adapters follow if the core is stable. One stretch idea checks whether the phone is charging at a deadline and reminds the user if it is not. Longer-term ideas include tasks that wait for an approved opportunity, named contexts and temporary changes such as “just this week.”
 
-The demo enables airplane mode, explicitly disables Wi-Fi and keeps Bluetooth on. A spoken routine is reviewed and approved. Connecting the earbuds starts the focus session; disconnecting ends it and releases the app’s DND contribution. Android permission, scheduling or background limits are visible outcomes, never hidden successes. All application work is planned for the event.
+The demo enables airplane mode, explicitly disables Wi-Fi and keeps Bluetooth on. A spoken routine is reviewed and approved. Connecting the earbuds starts the focus session; disconnecting ends it and releases the app’s DND contribution. Android permission, scheduling or background limits are visible outcomes, never hidden successes.
 
 ## Short version
 
@@ -42,7 +42,7 @@ The project treats automation as a complete lifecycle. It makes the end conditio
 
 - Deck: [Cues_Deck.pptx](Cues_Deck.pptx), eleven slides with speaker notes. Slide 8 positions the proposal against contextual assistants such as Siri AI in iOS 27.
 - Video URL: not recorded yet. Record the real start-and-stop demonstration after implementation.
-- Prototype URL: not available yet. Do not represent these design documents as a working prototype.
+- Prototype URL: not available yet. The repository contains a tested offline core and an Android scaffold whose device actions are deliberately unimplemented. Do not represent either as a working prototype.
 - Android and LLM proficiency: select the actual proficiency level.
 - Prior builds and placements: provide only verifiable personal history.
 

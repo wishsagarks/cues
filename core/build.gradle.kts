@@ -47,6 +47,10 @@ tasks.register<JavaExec>("demo") {
     description = "Compiles a spoken sentence and prints its review and rehearsal."
     mainClass.set("com.cues.core.cli.MainKt")
     classpath = sourceSets["main"].runtimeClasspath
+    // The review text contains en and em dashes. Without this the JVM follows
+    // the ambient locale, which is ASCII in containers and in some terminals,
+    // and the user sees "Monday?Friday" in the one place clarity matters most.
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
     // Gradle's --args is awkward to type on a phone keyboard; -Pq="..." is not.
     if (project.hasProperty("q")) args(project.property("q").toString())
 }

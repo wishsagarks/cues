@@ -4,7 +4,7 @@
 
 **Cues: Context You Declare, Behaviour That Ends**
 
-Track: Open Innovation. Intended platform: an Android app on iQOO. Status: idea and design only. All application implementation is planned for the event.
+Track: Open Innovation. Intended platform: an Android app on iQOO. Status: the offline decision core is implemented and unit-tested; everything that touches the device is scaffolded and unimplemented, and there are no measured results. Device integration is the work of the event.
 
 The unit of the product is a **cue**: a context the user names, and the behaviour that begins and ends with it. The app is Cues; the thing a person creates is a cue.
 

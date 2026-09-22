@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Every permission here is required by a specific entry in the action
+      registry or a specific event adapter. There is no microphone-in-the-
+      background permission, no notification-listener access and no location:
+      context in Cues is declared, and a permission we do not need is a promise
+      we would have to keep explaining.
+    -->
+
+    <!-- Resolving the chosen paired device and observing its connection. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Speech recognition, only ever after a user gesture. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Showing the running session and its outcome. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- The app-owned quiet rule (AutomaticZenRule). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!--
+      A countdown that ends "some time in the next fifteen minutes" is not a
+      countdown. If this is refused, the app says the timing is approximate
+      rather than claiming precision it does not have.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Reconciling sessions that were running when the phone restarted. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <application
+        android:name=".CuesApplication"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Cues">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Cues">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          The session's own foreground service. Cues owns its timer rather than
+          asking a clock app to run one, so cancellation and receipts stay under
+          its control.
+        -->
+        <service
+            android:name=".runtime.SessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Running a user-approved focus session with a visible countdown." />
+        </service>
+
+        <!--
+          Registered in the manifest so a connection can start the app. Whether
+          this actually delivers in the background on the target phone is a
+          device question, not a manifest one, and is on the event spike list.
+        -->
+        <receiver
+            android:name=".runtime.BluetoothReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".runtime.PowerReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".runtime.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".runtime.DeadlineReceiver" android:exported="false" />
+
+    </application>
+</manifest>
