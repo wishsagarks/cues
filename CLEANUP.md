@@ -34,21 +34,43 @@ and promote Termux.
 
 ---
 
-## CL-02 — Android stubs that report BLOCKED
+## CL-02 — Android runtime written against real APIs, verified on none of them
 
-**Status:** open · **Raised:** 22 Sep 2026
+**Status:** open · **Raised:** 22 Sep 2026 · **Updated:** 22 Sep 2026
 
-`AndroidActionExecutor` returns `BLOCKED` with an explanation for every action.
-`Stubs.kt` logs events without acting on them. `OnDeviceLlmDrafter` returns a
-clean failure. `SampleRoutine` supplies a hard-coded cue so the scaffold screen
-renders something.
+`Stubs.kt` and the always-`BLOCKED` executor are gone. `AndroidActionExecutor`
+now calls the real APIs — `AutomaticZenRule` for the owned quiet rule,
+`AlarmManager.setExactAndAllowWhileIdle` plus a foreground `SessionService`
+for the timer — and `AndroidCapabilityProvider` reads live permission state.
+`BluetoothReceiver`, `PowerReceiver`, `BootReceiver` and `DeadlineReceiver`
+call into `CueService` for real. The Compose screens (Home, Review, Routine
+detail, Receipts) are wired to `CueService` and render real drafted/armed
+routines — `SampleRoutine` is deleted, its job now done by an actual draft.
 
-These are deliberately unable to succeed. An executor that returned
-`SUCCEEDED` without doing anything would make the app look finished and the
-receipts lie, which is the precise failure the product is built to avoid.
+None of it has compiled anywhere. `:app` cannot build in this container (see
+CL-04), so every one of these calls is a considered reading of the platform
+docs, not a tested result. What's left honestly `BLOCKED` is now specific
+refusals — policy access not granted, exact-alarm not granted, result
+notifications not wired up — not a blanket "not implemented".
 
-**Remove when:** each is replaced by a real implementation verified on the
-device. `SampleRoutine` goes when the Review surface can display a drafted cue.
+Two things flagged for the first Saturday pass, not yet true bugs:
+
+- `AndroidActionExecutor.zenRuleIds` is an in-memory map from session id to
+  the platform's zen-rule id. It does not survive process death, so a
+  `DND_CONTRIBUTION` obligation left over from a killed process falls back to
+  "no rule was held" on release rather than actually finding and removing it.
+  A real fix reconciles against `NotificationManager.automaticZenRules`,
+  matched by owner and name, on boot.
+- The Review screen's rehearsal and required-access rows never account for a
+  capability that becomes available only after the user leaves the app to
+  grant a permission and comes back — there is no re-check on resume.
+- The Receipts screen loads once via `remember { store.receipts() }` and does
+  not refresh while open. Fine for a demo; a live session ending while the
+  screen is on-screen won't show up without leaving and reopening it.
+
+**Remove when:** each path is exercised on the loaner and the result recorded
+— a working implementation, or a documented limitation with its own entry
+here.
 
 ---
 

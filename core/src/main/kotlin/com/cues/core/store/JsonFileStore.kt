@@ -33,6 +33,9 @@ import java.util.logging.Logger
  * (`Trigger`, `Condition`, `ContextValue`), and encoding them consistently
  * matters more than any per-type tuning.
  */
+/** One recorded outcome, as the receipt screen wants it: who, when, what happened. */
+data class ReceiptEntry(val sessionId: String, val atMillis: Long, val text: String)
+
 class JsonFileStore(
     root: File,
     private val maxReceiptFiles: Int = 200,
@@ -89,6 +92,23 @@ class JsonFileStore(
     fun receiptFiles(): List<File> = (receiptsDir.listFiles() ?: emptyArray())
         .filter { it.extension == "txt" }
         .sortedBy { it.name }
+
+    /**
+     * Receipts as structured entries, most recent first — what a UI actually
+     * wants, rather than a list of filenames it would have to parse itself.
+     */
+    fun receipts(limit: Int = maxReceiptFiles): List<ReceiptEntry> =
+        receiptFiles().takeLast(limit).reversed().map { file ->
+            val name = file.nameWithoutExtension
+            // Filenames are "<stamp>-<sessionId>.txt". The stamp is a plain
+            // decimal number, so the first '-' is always the real boundary —
+            // even though sessionId (a UUID-based id) contains dashes of its
+            // own.
+            val dash = name.indexOf('-')
+            val stamp = if (dash > 0) name.take(dash).toLongOrNull() ?: 0L else 0L
+            val sessionId = if (dash >= 0) name.substring(dash + 1) else name
+            ReceiptEntry(sessionId, stamp, file.readText())
+        }
 
     private fun pruneReceipts() {
         val files = receiptFiles()

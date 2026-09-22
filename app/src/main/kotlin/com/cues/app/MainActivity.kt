@@ -3,72 +3,216 @@ package com.cues.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.cues.app.ui.CuesTheme
+import com.cues.app.ui.HomeScreen
+import com.cues.app.ui.ReceiptScreen
+import com.cues.app.ui.ReviewScreen
+import com.cues.app.ui.RoutineDetailScreen
+import com.cues.core.CueService
+import com.cues.core.approval.ArmResult
+import com.cues.core.approval.DeleteResult
+import com.cues.core.drafting.DraftResult
+import com.cues.core.model.Capability
+import com.cues.core.model.Routine
+import com.cues.core.model.RoutineStatus
 import com.cues.core.rehearsal.Rehearsal
-import com.cues.core.rehearsal.RehearsalRow
+import com.cues.core.session.isLive
+import com.cues.core.store.JsonFileStore
+import kotlinx.coroutines.launch
 
 /**
- * Scaffold for the four surfaces the PRS describes: Home, Review, Routine
- * detail and Receipt.
+ * Single-activity host for the four surfaces the PRS describes.
  *
- * What is here today is the one screen that proves the core is wired in: it
- * runs a rehearsal through the shared evaluator and renders the rows. It is a
- * skeleton, and the event's UI work replaces it.
+ * No navigation library: a sealed [Screen] plus one `when` is the whole
+ * router, which is enough for four screens and keeps this dependency-free.
+ * [CueService] is the only thing any screen calls into for a decision or a
+ * side effect — the composables below are rendering and event wiring only.
  */
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val app = application as CuesApplication
+
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    RehearsalScreen()
+            CuesTheme {
+                CuesApp(cueService = app.cueService, store = app.store)
+            }
+        }
+    }
+}
+
+private sealed interface Screen {
+    data object Home : Screen
+    data class Review(val routine: Routine) : Screen
+    data class Detail(val routineId: String) : Screen
+    data object Receipts : Screen
+}
+
+@Composable
+private fun CuesApp(cueService: CueService, store: JsonFileStore) {
+    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    var routines by remember { mutableStateOf(cueService.list()) }
+    var isDrafting by remember { mutableStateOf(false) }
+    var missingCapabilities by remember { mutableStateOf<Set<Capability>>(emptySet()) }
+
+    val snackbarHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    fun refresh() {
+        routines = cueService.list()
+    }
+
+    fun notify(message: String) {
+        scope.launch { snackbarHost.showSnackbar(message) }
+    }
+
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHost) }) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (val current = screen) {
+                Screen.Home -> HomeScreen(
+                    routines = routines,
+                    isDrafting = isDrafting,
+                    onDraft = { text ->
+                        isDrafting = true
+                        scope.launch {
+                            when (val result = cueService.draft(text)) {
+                                is DraftResult.Drafted -> {
+                                    missingCapabilities = emptySet()
+                                    screen = Screen.Review(result.routine)
+                                }
+
+                                is DraftResult.NeedsClarification -> notify(result.question)
+                                is DraftResult.Failed -> notify("Could not draft that: ${result.reason}")
+                            }
+                            isDrafting = false
+                        }
+                    },
+                    onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },
+                    onOpenReceipts = { screen = Screen.Receipts },
+                )
+
+                is Screen.Review -> ReviewFlow(
+                    routine = current.routine,
+                    cueService = cueService,
+                    missingCapabilities = missingCapabilities,
+                    onApproved = {
+                        refresh()
+                        missingCapabilities = emptySet()
+                        screen = Screen.Home
+                    },
+                    onMissingCapabilities = { missingCapabilities = it },
+                    onNotify = ::notify,
+                    onBack = { screen = Screen.Home },
+                )
+
+                is Screen.Detail -> {
+                    val routine = routines.firstOrNull { it.id == current.routineId }
+                    if (routine == null) {
+                        screen = Screen.Home
+                    } else {
+                        val activeSessionId = remember(routine.id, routines) {
+                            store.activeFor(routine.id).firstOrNull { it.state.isLive() }?.id
+                        }
+                        RoutineDetailScreen(
+                            routine = routine,
+                            onBack = { screen = Screen.Home },
+                            onPauseResume = {
+                                val result = if (routine.status == RoutineStatus.PAUSED) {
+                                    cueService.resume(routine.id)
+                                } else {
+                                    cueService.pause(routine.id)?.let { ArmResult.Ok(it) }
+                                }
+                                when (result) {
+                                    is ArmResult.Ok -> refresh()
+                                    is ArmResult.MissingCapabilities -> {
+                                        missingCapabilities = result.missing
+                                        notify("Resumed as reviewable — a permission is still missing.")
+                                        refresh()
+                                    }
+
+                                    else -> notify("Could not change this cue's status.")
+                                }
+                            },
+                            onDelete = {
+                                when (val result = cueService.delete(routine.id)) {
+                                    DeleteResult.Ok -> {
+                                        refresh()
+                                        screen = Screen.Home
+                                    }
+
+                                    is DeleteResult.Blocked ->
+                                        notify("Still cleaning up ${result.sessionsWithObligations.size} session(s) — try again shortly.")
+                                }
+                            },
+                            onManualStop = activeSessionId?.let { sessionId ->
+                                {
+                                    cueService.onManualStop(sessionId)
+                                    refresh()
+                                }
+                            },
+                            deleteBlockedReason = null,
+                        )
+                    }
                 }
+
+                Screen.Receipts -> ReceiptScreen(
+                    receipts = remember { store.receipts() },
+                    onBack = { screen = Screen.Home },
+                )
             }
         }
     }
 }
 
+/**
+ * The Review screen plus the state that belongs only to it: the normalized
+ * routine and its rehearsal, both derived once per drafted routine rather
+ * than recomputed on every recomposition.
+ */
 @Composable
-private fun RehearsalScreen() {
-    // A placeholder cue so the screen has something to show before authoring
-    // exists. Replaced by the drafted routine once the Review surface lands.
-    val rows: List<RehearsalRow> = rememberSampleRehearsal()
+private fun ReviewFlow(
+    routine: Routine,
+    cueService: CueService,
+    missingCapabilities: Set<Capability>,
+    onApproved: () -> Unit,
+    onMissingCapabilities: (Set<Capability>) -> Unit,
+    onNotify: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val review = remember(routine) { cueService.review(routine) }
+    val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-    ) {
-        Text("Cues", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "Sample events. Nothing on your phone changes.",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
+    ReviewScreen(
+        routine = review.normalized,
+        review = review,
+        rehearsal = rehearsal,
+        missingCapabilities = missingCapabilities,
+        onApprove = {
+            when (val result = cueService.approveAndArm(review.normalized)) {
+                is ArmResult.Ok -> onApproved()
+                is ArmResult.MissingCapabilities -> {
+                    onMissingCapabilities(result.missing)
+                    onNotify("Approved. Grant the missing access, then try arming again.")
+                }
 
-        rows.forEach { row ->
-            Text(row.label, style = MaterialTheme.typography.titleSmall)
-            Text(row.outcome, style = MaterialTheme.typography.bodyMedium)
-            row.explanation.forEach {
-                Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp))
+                is ArmResult.Invalid -> onNotify("This cue isn't valid yet — see the checks above.")
+                ArmResult.NotApproved -> onNotify("Approval did not take. Try again.")
+                ArmResult.NotPaused -> Unit
             }
-            Text("", modifier = Modifier.padding(bottom = 12.dp))
-        }
-    }
+        },
+        onBack = onBack,
+    )
 }
-
-@Composable
-private fun rememberSampleRehearsal(): List<RehearsalRow> =
-    androidx.compose.runtime.remember { Rehearsal.run(SampleRoutine.focusOnEarbuds()).rows }

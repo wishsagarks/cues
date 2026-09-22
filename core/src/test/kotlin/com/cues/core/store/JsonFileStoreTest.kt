@@ -109,6 +109,29 @@ class JsonFileStoreTest {
     }
 
     @Test
+    fun `receipts() parses filenames into structured entries, most recent first`() {
+        val bounded = JsonFileStore(root, maxReceiptFiles = 10)
+        // A UUID-based session id, which itself contains dashes — the parser
+        // must split on the first dash only, not the session id's own.
+        bounded.record("session-4f00f6e7-74df-424b-94a9-a41928c695a3", listOf("Started", "  device connected"))
+        Thread.sleep(2)
+        bounded.record("session-abc", listOf("Ended"))
+
+        val entries = bounded.receipts()
+
+        assertEquals(listOf("session-abc", "session-4f00f6e7-74df-424b-94a9-a41928c695a3"), entries.map { it.sessionId })
+        assertTrue(entries.last().text.contains("device connected"))
+    }
+
+    @Test
+    fun `receipts() honours its own limit independently of the store's retention`() {
+        val bounded = JsonFileStore(root, maxReceiptFiles = 10)
+        repeat(5) { i -> bounded.record("session-$i", listOf("line $i")) }
+
+        assertEquals(2, bounded.receipts(limit = 2).size)
+    }
+
+    @Test
     fun `receipts are kept oldest first`() {
         val bounded = JsonFileStore(root, maxReceiptFiles = 10)
         bounded.record("s1", listOf("first"))
