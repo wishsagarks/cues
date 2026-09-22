@@ -2,6 +2,7 @@ package com.cues.core.ports
 
 import com.cues.core.model.ActionId
 import com.cues.core.model.ActionArgs
+import com.cues.core.model.Routine
 import com.cues.core.model.ActionState
 import com.cues.core.model.OwnedResource
 import com.cues.core.model.Session
@@ -55,4 +56,24 @@ interface ActionExecutor {
 
 interface ReceiptSink {
     fun record(sessionId: String, lines: List<String>)
+}
+
+/**
+ * Persistence for routines.
+ *
+ * Separate from [SessionStore] because the two have different failure modes: a
+ * lost session is a lost record of one run, a lost routine is a rule the user
+ * approved and expects to still be there tomorrow.
+ */
+interface RoutineStore {
+    fun save(routine: Routine)
+    // Named findRoutine, not find: a class implementing both RoutineStore and
+    // SessionStore cannot have two find(String) overrides whose only
+    // difference is an unrelated return type — they erase to the same JVM
+    // signature. SessionStore.find has the established call sites, so this
+    // is the name that moved.
+    fun findRoutine(id: String): Routine?
+    fun all(): List<Routine>
+    fun armed(): List<Routine>
+    fun delete(id: String)
 }

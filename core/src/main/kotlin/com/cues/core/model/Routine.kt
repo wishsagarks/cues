@@ -35,7 +35,40 @@ data class Routine(
     /** Digest of the normalized executable semantics the user approved. Null until approval. */
     val approvedDigest: String? = null,
     val status: RoutineStatus = RoutineStatus.DRAFT,
+    /**
+     * Which drafter actually produced this routine — never which one was
+     * hoped to. Surfaced verbatim in the review and diagnostics screens so a
+     * canonical parser is never presented as language understanding, and a
+     * model that silently fell back to the parser cannot go unnoticed either.
+     *
+     * Deliberately outside [Normalizer.digest]'s semantic form: which drafter
+     * wrote a cue says nothing about what the cue does, so this field must
+     * never be able to invalidate an existing approval.
+     */
+    val draftedBy: DraftSourceId? = null,
 )
+
+/**
+ * Which component actually produced a draft.
+ *
+ * Recorded on every drafted [Routine] and surfaced in diagnostics. PRS
+ * requirement IN-03 exists because a canonical parser presented as "AI
+ * understanding" is a lie told to a judge, and an on-device model that
+ * silently fell back to a parser is the same lie told by accident. Neither is
+ * acceptable, so the answer travels with the data rather than being asserted
+ * in a slide.
+ *
+ * Lives in `model`, not `drafting`, so [Routine] can reference it without a
+ * backward dependency on the package that drafts routines.
+ */
+@Serializable
+enum class DraftSourceId {
+    /** A deterministic phrase grammar. Fast, offline, and honest about its limits. */
+    GRAMMAR_PARSER,
+
+    /** A small language model running on the phone. */
+    ON_DEVICE_LLM,
+}
 
 @Serializable
 enum class RoutineStatus { DRAFT, INVALID, REVIEWABLE, ARMED, PAUSED, DISABLED }

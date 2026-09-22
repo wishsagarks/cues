@@ -1,24 +1,8 @@
 package com.cues.core.drafting
 
 import com.cues.core.compile.Finding
+import com.cues.core.model.DraftSourceId
 import com.cues.core.model.Routine
-
-/**
- * Which component actually produced a draft.
- *
- * Recorded on every result and surfaced in diagnostics. PRS requirement IN-03
- * exists because a canonical parser presented as "AI understanding" is a lie
- * told to a judge, and an on-device model that silently fell back to a parser
- * is the same lie told by accident. Neither is acceptable, so the answer is
- * carried in the data rather than asserted in a slide.
- */
-enum class DraftSourceId {
-    /** A deterministic phrase grammar. Fast, offline, and honest about its limits. */
-    GRAMMAR_PARSER,
-
-    /** A small language model running on the phone. */
-    ON_DEVICE_LLM,
-}
 
 /** What a drafter could not handle, kept rather than discarded. */
 data class Unsupported(

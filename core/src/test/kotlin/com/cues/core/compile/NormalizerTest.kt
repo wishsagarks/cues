@@ -130,6 +130,18 @@ class NormalizerTest {
     }
 
     @Test
+    fun `which drafter produced a routine does not affect its digest`() {
+        val a = Fixtures.heroRoutine().copy(draftedBy = com.cues.core.model.DraftSourceId.GRAMMAR_PARSER)
+        val b = Fixtures.heroRoutine().copy(draftedBy = com.cues.core.model.DraftSourceId.ON_DEVICE_LLM)
+        val c = Fixtures.heroRoutine().copy(draftedBy = null)
+
+        // Which drafter wrote a cue says nothing about what the cue does, and
+        // must never be able to invalidate an existing approval.
+        assertEquals(Normalizer.digest(a), Normalizer.digest(b))
+        assertEquals(Normalizer.digest(a), Normalizer.digest(c))
+    }
+
+    @Test
     fun `normalization is idempotent`() {
         val once = Normalizer.normalize(Fixtures.heroRoutine())
         assertEquals(once, Normalizer.normalize(once))
