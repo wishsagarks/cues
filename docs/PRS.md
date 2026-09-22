@@ -31,7 +31,7 @@ The first target experience is a focus session triggered by selected earbuds, wi
 
 Do not build arbitrary app control, screen clicking, continuous ambient listening, automatic messaging or broad passive personal-data collection.
 
-Work completed before the event covers the build scaffolding and the offline decision core — the routine model, evaluator, compiler, action registry, grammar drafting path, session engine, receipts and rehearsal — with unit tests. No device integration, no on-device model and no measured results were produced beforehand; that work belongs to the event.
+Work completed before the event covers the offline decision core — the routine model, evaluator, compiler, action registry, grammar drafting path, session engine, receipts and rehearsal — with unit tests, plus an Android runtime (action executor, Bluetooth and power adapters, timer service, review and other Compose screens) written against real device APIs but never compiled or run, since this work happened without an Android SDK. No on-device model and no measured results were produced beforehand; verifying the runtime on real hardware and adding the model belong to the event.
 
 ## Core journey
 
@@ -130,4 +130,4 @@ Measure compilation latency, event delivery delay and cleanup delay on the actua
 | OS permission monitor flags background listeners | Explain each permission in the permission check, keep Bluetooth and charging listeners minimal, and track monitoring health |
 | Too many contextual ideas | Keep rich context as roadmap and preserve the core start-and-exit proof |
 
-Research, comparison and pitch wording live in the private positioning notes (kept locally, outside this repository). Technical behavior lives in [FDD.md](FDD.md). The revised authoring, review and approval plan is in [SPRINT_3.md](SPRINT_3.md).
+Research, comparison and pitch wording live in the private positioning notes (kept locally, outside this repository). Technical behavior lives in [FDD.md](FDD.md). The revised authoring, review and approval plan is in [SPRINT_3.md](SPRINT_3.md); runtime proof, R&D spikes and measurement are in [SPRINT_4_5.md](SPRINT_4_5.md).

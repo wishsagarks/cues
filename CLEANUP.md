@@ -137,7 +137,7 @@ software.
 
 **Status:** open · **Raised:** 22 Sep 2026
 
-Assumed without verification: that the loaner runs OriginOS 6 on Android 15 or
+Assumed without verification: that the loaner runs OriginOS 7 on Android 15 or
 later; that `AutomaticZenRule` behaves as documented there; that exact alarms
 can be scheduled; that manifest-declared Bluetooth and power receivers actually
 deliver while the app is backgrounded under the OEM battery policy.

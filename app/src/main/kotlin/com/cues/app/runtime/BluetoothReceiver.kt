@@ -18,7 +18,7 @@ import com.cues.core.model.TriggerEvent
  *
  * WRITTEN AGAINST A REAL API, VERIFIED ON NOTHING. Whether ACL_CONNECTED and
  * ACL_DISCONNECTED actually deliver to a manifest-registered receiver while
- * this app is backgrounded on OriginOS 6 is exactly what the FDD calls the
+ * this app is backgrounded on OriginOS 7 is exactly what the FDD calls the
  * "receiver declaration is not proof of delivery" problem — the first thing
  * to prove on the loaner, via `./dev l`.
  *

@@ -12,7 +12,7 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Offline core implemented; no device integration and no measured results.**
+**Offline core implemented and tested; Android runtime written but unverified; no measured results.**
 
 The decision core is built and tested: the routine model, the three-valued
 evaluator, the compiler and approval digest, the closed action registry, the
@@ -20,10 +20,13 @@ grammar-based drafting path, the session engine and the receipts. It is pure
 Kotlin/JVM with no Android dependency, so `./dev t` runs its suite on any
 machine with a JDK.
 
-Not built: every part that touches a phone. The Android action executor, the
-Bluetooth and power adapters, the Do Not Disturb rule, the timer service and
-the on-device language model are scaffolded and return honest "not implemented"
-outcomes. That work happens at the event, on the loaner hardware.
+The Android runtime — the action executor, the Bluetooth and power adapters,
+the owned Do Not Disturb rule, the timer service and the Compose screens — is
+written against real Android APIs and wired end to end, but none of it has
+compiled or run anywhere: this environment has no Android SDK (see
+[CLEANUP.md](CLEANUP.md) CL-04). Proving each call against the actual OS, on
+the loaner hardware, is the event's first job. The on-device language model
+is not yet wired in.
 
 **There are no measured performance results.** Nothing in this repository has
 run on an iQOO. Every latency, delivery and reliability figure in the design
@@ -40,6 +43,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [PRS.md](docs/PRS.md) | Product requirements, scope tiers and proposed evaluation |
 | [FDD.md](docs/FDD.md) | Functional design: architecture, session semantics, action registry |
 | [SPRINT_3.md](docs/SPRINT_3.md) | Revised six-hour plan for offline authoring, review and approval |
+| [SPRINT_4_5.md](docs/SPRINT_4_5.md) | Hours 16–30: unattended device proof, R&D spikes, measured drafting choice and demo |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |

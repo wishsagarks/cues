@@ -29,7 +29,7 @@ import com.cues.core.ports.ActionOutcome
  *
  * Open questions a real device answers, this code does not:
  *  - Whether an [AutomaticZenRule] this app owns coexists cleanly with
- *    another active quiet mode on OriginOS 6, and what interruption filter
+ *    another active quiet mode on OriginOS 7, and what interruption filter
  *    reads back correctly afterward.
  *  - Whether `canScheduleExactAlarms()` is granted by default on this build,
  *    and what the actual delivery jitter is under Doze.

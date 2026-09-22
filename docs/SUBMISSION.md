@@ -42,7 +42,7 @@ The project treats automation as a complete lifecycle. It makes the end conditio
 
 - Deck: [Cues_Deck.pptx](Cues_Deck.pptx), eleven slides with speaker notes. Slide 8 positions the proposal against contextual assistants such as Siri AI in iOS 27.
 - Video URL: not recorded yet. Record the real start-and-stop demonstration after implementation.
-- Prototype URL: not available yet. The repository contains a tested offline core and an Android scaffold whose device actions are deliberately unimplemented. Do not represent either as a working prototype.
+- Prototype URL: not available yet. The repository contains a tested offline core and an Android runtime written against real device APIs but never compiled or run. Do not represent either as a working prototype.
 - Android and LLM proficiency: select the actual proficiency level.
 - Prior builds and placements: provide only verifiable personal history.
 
