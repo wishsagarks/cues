@@ -2,6 +2,7 @@ package com.cues.core.ports
 
 import com.cues.core.model.ActionId
 import com.cues.core.model.ActionArgs
+import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.model.ActionState
 import com.cues.core.model.OwnedResource
@@ -76,4 +77,39 @@ interface RoutineStore {
     fun all(): List<Routine>
     fun armed(): List<Routine>
     fun delete(id: String)
+}
+
+/**
+ * What the OS currently grants.
+ *
+ * A single read of live permission/access state. [com.cues.core.approval.Approvals]
+ * calls this at arm time rather than trusting anything cached, because a user
+ * revoking a permission between review and approval is exactly the case this
+ * exists to catch.
+ */
+fun interface CapabilityProvider {
+    fun granted(): Set<Capability>
+}
+
+/**
+ * Speech-to-text, kept behind a port so `:core` never depends on Android's
+ * `SpeechRecognizer`.
+ *
+ * No implementation ships this sprint. Speech is the one authoring input
+ * whose behaviour genuinely depends on the device and the venue — recognizer
+ * availability, downloaded language packs, a loud room — and none of that is
+ * knowable without the loaner phone. Typed input already exercises the whole
+ * pipeline behind this port; wiring the real recognizer is event work.
+ */
+interface SpeechInput {
+    suspend fun listen(): SpeechResult
+}
+
+sealed interface SpeechResult {
+    data class Recognized(val transcript: String) : SpeechResult
+    data object NoMatch : SpeechResult
+    data object PermissionDenied : SpeechResult
+    /** The device has no usable recognizer, or the needed language is not downloaded. */
+    data object Unavailable : SpeechResult
+    data class Failed(val reason: String) : SpeechResult
 }
