@@ -100,9 +100,11 @@ case "$cmd" in
     [ $# -ge 1 ] || { red 'Usage: ./dev save "message"'; exit 1; }
     branch="$(git rev-parse --abbrev-ref HEAD)"
     git add -A
-    git commit -m "$1" || { info "nothing to commit"; exit 0; }
-    # Venue wifi is not to be trusted. Back off and retry rather than
-    # leaving a commit stranded on the phone.
+    # Nothing new to commit is not a reason to skip the push: there may still
+    # be commits from an earlier attempt that never made it off the phone.
+    git commit -m "$1" || info "nothing new to commit"
+    # Venue wifi is not to be trusted. Back off and retry rather than leaving
+    # work stranded on a device that goes back in a box on Sunday.
     delay=2
     for attempt in 1 2 3 4 5; do
       if git push -u origin "$branch"; then ok "pushed to $branch"; exit 0; fi
