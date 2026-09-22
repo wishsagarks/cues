@@ -41,6 +41,15 @@ tasks.test {
     }
 }
 
+// `./dev sim` routes here.
+tasks.register<JavaExec>("sim") {
+    group = "cues"
+    description = "Runs a full cue lifecycle through CueService and prints each step's receipt."
+    mainClass.set("com.cues.core.cli.SimMainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
+
 // `./dev d "<sentence>"` routes here.
 tasks.register<JavaExec>("demo") {
     group = "cues"

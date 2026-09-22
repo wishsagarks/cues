@@ -9,6 +9,7 @@
 #
 #   ./dev t              core tests            (no Android SDK needed)
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
+#   ./dev sim            full lifecycle through CueService: draft to timeout
 #   ./dev b              assemble debug APK
 #   ./dev i              install on the connected device
 #   ./dev r              install and launch
@@ -64,6 +65,10 @@ case "$cmd" in
     [ $# -ge 1 ] || { red 'Usage: ./dev d "When my earbuds connect after 6 PM..."'; exit 1; }
     # -q keeps Gradle's own chatter out of the review table.
     $GW -q :core:demo -Pq="$1"
+    ;;
+
+  sim)
+    $GW -q :core:sim
     ;;
 
   b) need_sdk; $GW :app:assembleDebug "$@"; ok "APK built" ;;

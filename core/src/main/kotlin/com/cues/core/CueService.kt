@@ -8,7 +8,6 @@ import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.DraftResult
 import com.cues.core.model.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
-import com.cues.core.eval.ReasonCode
 import com.cues.core.model.ContextValue
 import com.cues.core.model.EventKind
 import com.cues.core.model.Routine
@@ -147,6 +146,14 @@ class CueService(
      * — not the moment this method got around to running. A broadcast that was
      * queued behind other work must still be judged against the conditions
      * that held when the earbuds actually connected, not a later "now".
+     *
+     * [SessionEngine.onTriggerEvent] is only asked about a routine whose
+     * trigger could plausibly be this event — right kind, right device.
+     * Its own admission checks (duplicate, already-active) run before trigger
+     * matching, so asking it about an event that was never this routine's
+     * business would report "already running" instead of the truth, which
+     * is that the event had nothing to do with this routine at all. Filtering
+     * here means every result that does come back is worth a receipt.
      */
     fun onDeviceEvent(
         event: TriggerEvent,
@@ -156,11 +163,40 @@ class CueService(
         val snapshot = SnapshotBuilder.build(event.atMillis, zoneId(), charging, connectedDeviceIds)
 
         return routines.armed().flatMap { routine ->
-            listOf(
-                engine.onExitEvent(routine, event),
-                engine.onTriggerEvent(routine, event, snapshot),
-            ).filter { it.isMeaningfulFor(routine) }.onEach { recordReceipt(routine, it) }
+            val results = mutableListOf<EngineResult>()
+
+            val exit = engine.onExitEvent(routine, event)
+            if (exit !is EngineResult.Ignored) {
+                recordReceipt(routine, exit)
+                results += exit
+            }
+
+            if (event.couldStart(routine)) {
+                val start = engine.onTriggerEvent(routine, event, snapshot)
+                recordReceipt(routine, start)
+                results += start
+            }
+
+            results
         }
+    }
+
+    /** True when [routine]'s trigger is even the right shape for this event — same kind, same device. */
+    private fun TriggerEvent.couldStart(routine: Routine): Boolean = when (val t = routine.trigger) {
+        is com.cues.core.model.Trigger.BluetoothConnection -> {
+            val wantedKind = when (t.transition) {
+                com.cues.core.model.DeviceTransition.CONNECTED -> EventKind.BLUETOOTH_CONNECTED
+                com.cues.core.model.DeviceTransition.DISCONNECTED -> EventKind.BLUETOOTH_DISCONNECTED
+            }
+            kind == wantedKind && deviceId == t.deviceId
+        }
+
+        is com.cues.core.model.Trigger.Charging -> kind == when (t.transition) {
+            com.cues.core.model.PowerTransition.PLUGGED_IN -> EventKind.POWER_CONNECTED
+            com.cues.core.model.PowerTransition.UNPLUGGED -> EventKind.POWER_DISCONNECTED
+        }
+
+        com.cues.core.model.Trigger.Manual -> kind == EventKind.MANUAL_RUN
     }
 
     /** The exact-alarm callback for one session's deadline. */
@@ -239,22 +275,7 @@ class CueService(
         EngineResult.Ignored -> "ignored-${routine.id}-${clock.nowMillis()}"
     }
 
-    /**
-     * False for the two outcomes that are pure noise from trying every armed
-     * routine against every event: "wrong device" and "wrong event kind".
-     * Everything else — a real skip reason, a start, an end, a scheduled or
-     * cancelled exit — is worth a receipt.
-     */
-    private fun EngineResult.isMeaningfulFor(routine: Routine): Boolean = when (this) {
-        EngineResult.Ignored -> false
-        is EngineResult.Skipped -> reasons.size != 1 || reasons.single().code !in TRIGGER_MISMATCH_CODES
-        else -> true
-    }
-
     private fun <T> unread(reason: UnknownReason): ContextValue<T> =
         ContextValue.Unknown(reason, com.cues.core.model.ContextSource.USER)
 
-    private companion object {
-        val TRIGGER_MISMATCH_CODES = setOf(ReasonCode.TRIGGER_KIND_MISMATCH, ReasonCode.TRIGGER_DEVICE_MISMATCH)
-    }
 }
