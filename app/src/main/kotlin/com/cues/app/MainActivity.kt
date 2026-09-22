@@ -1,6 +1,7 @@
 package com.cues.app
 
 import android.os.Bundle
+import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.cues.app.ui.CuesTheme
+import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.HomeScreen
 import com.cues.app.ui.ReceiptScreen
 import com.cues.app.ui.ReviewScreen
@@ -24,12 +26,14 @@ import com.cues.core.CueService
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.DeleteResult
 import com.cues.core.drafting.DraftResult
+import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
 import com.cues.core.rehearsal.Rehearsal
 import com.cues.core.session.isLive
 import com.cues.core.store.JsonFileStore
+import com.cues.app.runtime.DeviceDiagnosticsRepository
 import kotlinx.coroutines.launch
 
 /**
@@ -42,15 +46,28 @@ import kotlinx.coroutines.launch
  */
 class MainActivity : ComponentActivity() {
 
+    private lateinit var localSpeechInput: LocalSpeechInput
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as CuesApplication
+        localSpeechInput = LocalSpeechInput(this)
 
         setContent {
             CuesTheme {
-                CuesApp(cueService = app.cueService, store = app.store)
+                CuesApp(
+                    cueService = app.cueService,
+                    store = app.store,
+                    deviceDiagnostics = app.deviceDiagnostics,
+                    localSpeechInput = localSpeechInput,
+                )
             }
         }
+    }
+
+    override fun onDestroy() {
+        if (::localSpeechInput.isInitialized) localSpeechInput.stop()
+        super.onDestroy()
     }
 }
 
@@ -59,14 +76,24 @@ private sealed interface Screen {
     data class Review(val routine: Routine) : Screen
     data class Detail(val routineId: String) : Screen
     data object Receipts : Screen
+    data object Diagnostics : Screen
 }
 
 @Composable
-private fun CuesApp(cueService: CueService, store: JsonFileStore) {
+private fun CuesApp(
+    cueService: CueService,
+    store: JsonFileStore,
+    deviceDiagnostics: DeviceDiagnosticsRepository,
+    localSpeechInput: LocalSpeechInput,
+) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     var routines by remember { mutableStateOf(cueService.list()) }
     var isDrafting by remember { mutableStateOf(false) }
     var missingCapabilities by remember { mutableStateOf<Set<Capability>>(emptySet()) }
+    var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
+    var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
+    var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
+    var deviceSourceText by remember { mutableStateOf<String?>(null) }
 
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -79,29 +106,54 @@ private fun CuesApp(cueService: CueService, store: JsonFileStore) {
         scope.launch { snackbarHost.showSnackbar(message) }
     }
 
+    fun draft(text: String) {
+        isDrafting = true
+        scope.launch {
+            when (val result = cueService.draft(text)) {
+                is DraftResult.Drafted -> {
+                    missingCapabilities = emptySet()
+                    screen = Screen.Review(result.routine)
+                }
+
+                is DraftResult.NeedsClarification -> {
+                    if (result.about == "trigger.device" && result.deviceCandidates.isNotEmpty()) {
+                        deviceSourceText = text
+                        deviceCandidates = result.deviceCandidates
+                    } else {
+                        notify(result.question)
+                    }
+                }
+
+                is DraftResult.Failed -> notify("Could not draft that: ${result.reason}")
+            }
+            isDrafting = false
+        }
+    }
+
     Scaffold(snackbarHost = { SnackbarHost(snackbarHost) }) { padding ->
         Box(Modifier.padding(padding)) {
             when (val current = screen) {
                 Screen.Home -> HomeScreen(
                     routines = routines,
                     isDrafting = isDrafting,
-                    onDraft = { text ->
-                        isDrafting = true
-                        scope.launch {
-                            when (val result = cueService.draft(text)) {
-                                is DraftResult.Drafted -> {
-                                    missingCapabilities = emptySet()
-                                    screen = Screen.Review(result.routine)
-                                }
-
-                                is DraftResult.NeedsClarification -> notify(result.question)
-                                is DraftResult.Failed -> notify("Could not draft that: ${result.reason}")
-                            }
-                            isDrafting = false
-                        }
-                    },
+                    onDraft = ::draft,
                     onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },
                     onOpenReceipts = { screen = Screen.Receipts },
+                    onOpenDiagnostics = { screen = Screen.Diagnostics },
+                    onStartVoice = { onTranscript, onUnavailable ->
+                        localSpeechInput.start(onTranscript, onUnavailable)
+                    },
+                    deviceCandidates = deviceCandidates,
+                    onSelectDevice = { device ->
+                        val source = deviceSourceText
+                        deviceCandidates = null
+                        deviceSourceText = null
+                        if (source != null) draft("$source (selected paired device: ${device.label})")
+                    },
+                    onDismissDevicePicker = {
+                        deviceCandidates = null
+                        deviceSourceText = null
+                    },
                 )
 
                 is Screen.Review -> ReviewFlow(
@@ -170,6 +222,25 @@ private fun CuesApp(cueService: CueService, store: JsonFileStore) {
 
                 Screen.Receipts -> ReceiptScreen(
                     receipts = remember { store.receipts() },
+                    onBack = { screen = Screen.Home },
+                )
+
+                Screen.Diagnostics -> DiagnosticsScreen(
+                    diagnostics = diagnostics,
+                    isRefreshing = isDiagnosticsRefreshing,
+                    onRefresh = {
+                        isDiagnosticsRefreshing = true
+                        deviceDiagnostics.refresh {
+                            diagnostics = it
+                            isDiagnosticsRefreshing = false
+                        }
+                    },
+                    onRecordJoviMicOrAssist = { observation ->
+                        diagnostics = deviceDiagnostics.recordJoviMicOrAssist(observation)
+                    },
+                    onRecordPermissionMonitor = { observation ->
+                        diagnostics = deviceDiagnostics.recordPermissionMonitor(observation)
+                    },
                     onBack = { screen = Screen.Home },
                 )
             }

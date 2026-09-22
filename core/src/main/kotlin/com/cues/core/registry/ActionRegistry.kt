@@ -17,11 +17,27 @@ import com.cues.core.model.OwnedResource
 data class ActionDefinition(
     val id: ActionId,
     val label: String,
+    /** The user-visible risk class shown before approval. */
+    val risk: ActionRisk,
     val requiredCapabilities: Set<Capability>,
     /** What this action makes the session responsible for releasing, if anything. */
     val owns: OwnedResource?,
     val validate: (ActionArgs) -> ArgResult,
 )
+
+/**
+ * A deliberately small, closed explanation of an action's risk.
+ *
+ * This is registry data rather than a Compose opinion: a new action cannot
+ * quietly appear in review without declaring the risk it carries.
+ */
+enum class ActionRisk {
+    /** Cues creates an effect, records ownership, and can release it on exit. */
+    OWNED_AND_REVERSIBLE,
+
+    /** A local result notification changes no standing phone state. */
+    LOCAL_NOTICE,
+}
 
 sealed interface ArgResult {
     data class Valid(val normalized: ActionArgs) : ArgResult
@@ -47,6 +63,7 @@ object ActionRegistry {
         ActionDefinition(
             id = ActionId.START_FOCUS_TIMER,
             label = "Start a focus timer",
+            risk = ActionRisk.OWNED_AND_REVERSIBLE,
             // Exact alarms because a countdown that ends "somewhere in the next
             // fifteen minutes" is not a countdown.
             requiredCapabilities = setOf(Capability.EXACT_ALARM, Capability.POST_NOTIFICATIONS),
@@ -69,6 +86,7 @@ object ActionRegistry {
         ActionDefinition(
             id = ActionId.REQUEST_DND,
             label = "Quiet notifications",
+            risk = ActionRisk.OWNED_AND_REVERSIBLE,
             requiredCapabilities = setOf(Capability.NOTIFICATION_POLICY_ACCESS),
             owns = OwnedResource.DND_CONTRIBUTION,
             validate = { args ->
@@ -82,6 +100,7 @@ object ActionRegistry {
         ActionDefinition(
             id = ActionId.NOTIFY_RESULT,
             label = "Show the result",
+            risk = ActionRisk.LOCAL_NOTICE,
             requiredCapabilities = setOf(Capability.POST_NOTIFICATIONS),
             // Nothing to release: a notification is not a mode.
             owns = null,

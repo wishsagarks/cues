@@ -3,6 +3,8 @@ package com.cues.core.review
 import com.cues.core.Fixtures
 import com.cues.core.compile.Normalizer
 import com.cues.core.model.*
+import com.cues.core.registry.ActionRegistry
+import com.cues.core.registry.ActionRisk
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -88,5 +90,32 @@ class ReviewCopyTest {
     @Test
     fun `always is shown for a routine with no conditions`() {
         assertEquals("always", ReviewCopy.ifText(Fixtures.heroRoutine(conditions = emptyList())))
+    }
+
+    @Test
+    fun `registry risk classes identify owned effects separately from notices`() {
+        assertEquals(
+            ActionRisk.OWNED_AND_REVERSIBLE,
+            ActionRegistry.definition(ActionId.START_FOCUS_TIMER)?.risk,
+        )
+        assertEquals(
+            ActionRisk.OWNED_AND_REVERSIBLE,
+            ActionRegistry.definition(ActionId.REQUEST_DND)?.risk,
+        )
+        assertEquals(ActionRisk.LOCAL_NOTICE, ActionRegistry.definition(ActionId.NOTIFY_RESULT)?.risk)
+    }
+
+    @Test
+    fun `permission copy describes Bluetooth use without implying device scanning`() {
+        val copy = with(ReviewCopy) { Capability.BLUETOOTH_CONNECT.permissionCheckCopy() }
+
+        assertEquals(
+            "Identify the paired device named in this cue when Android delivers its connection change.",
+            copy.purpose,
+        )
+        assertEquals(
+            "Used only for that cue's Bluetooth connection or disconnection events; Cues does not scan nearby devices.",
+            copy.frequency,
+        )
     }
 }

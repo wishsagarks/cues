@@ -1,6 +1,7 @@
 package com.cues.core.review
 
 import com.cues.core.model.*
+import com.cues.core.registry.ActionRisk
 import com.cues.core.receipt.friendly
 
 /**
@@ -13,6 +14,11 @@ import com.cues.core.receipt.friendly
  * end up disagreeing about what a cue does.
  */
 object ReviewCopy {
+
+    data class PermissionCheckCopy(
+        val purpose: String,
+        val frequency: String,
+    )
 
     fun whenText(routine: Routine): String = when (val t = routine.trigger) {
         is Trigger.BluetoothConnection -> when (t.transition) {
@@ -109,5 +115,38 @@ object ReviewCopy {
         Capability.POST_NOTIFICATIONS -> "notifications"
         Capability.EXACT_ALARM -> "exact alarms"
         Capability.BATTERY_STATE -> "battery state"
+    }
+
+    /** Explains the actual, bounded use of each requested capability before approval. */
+    fun Capability.permissionCheckCopy(): PermissionCheckCopy = when (this) {
+        Capability.BLUETOOTH_CONNECT -> PermissionCheckCopy(
+            purpose = "Identify the paired device named in this cue when Android delivers its connection change.",
+            frequency = "Used only for that cue's Bluetooth connection or disconnection events; Cues does not scan nearby devices.",
+        )
+
+        Capability.NOTIFICATION_POLICY_ACCESS -> PermissionCheckCopy(
+            purpose = "Create and release Cues' own quiet-notifications contribution.",
+            frequency = "Used when a matching session starts and when it ends; it never resets another app's quiet mode.",
+        )
+
+        Capability.POST_NOTIFICATIONS -> PermissionCheckCopy(
+            purpose = "Show the session timer and truthful result or cleanup notices.",
+            frequency = "Used only when a session starts, ends or needs attention.",
+        )
+
+        Capability.EXACT_ALARM -> PermissionCheckCopy(
+            purpose = "Schedule this cue's approved timer deadline.",
+            frequency = "One deadline per active timer; it is cleared when that session ends.",
+        )
+
+        Capability.BATTERY_STATE -> PermissionCheckCopy(
+            purpose = "Read the current charging state when an approved power event arrives.",
+            frequency = "Read only at charging events or an approved charging check; Cues does not infer charging history.",
+        )
+    }
+
+    fun ActionRisk.friendlyName(): String = when (this) {
+        ActionRisk.OWNED_AND_REVERSIBLE -> "Owned & reversible"
+        ActionRisk.LOCAL_NOTICE -> "Local notice"
     }
 }

@@ -126,7 +126,8 @@ Measure compilation latency, event delivery delay and cleanup delay on the actua
 | Background delivery or power management fails | Actual-device spike, monitoring health, explicit limitation and recovery |
 | Timer completion or cleanup requires precise scheduling | Preflight access and show timing limits; do not promise exact delivery without evidence |
 | DND platform behavior differs | Test ownership and overlapping modes first; reduce claim if unsupported |
-| Novelty challenged | Acknowledge precedents, demonstrate the focused lifecycle experience |
+| Novelty challenged | Acknowledge precedents, including OriginOS 7 Jovi Security's visible actions and confirmation before sensitive actions; demonstrate upfront approval of the whole lifetime, cleanup on exit and no model at runtime |
+| OS permission monitor flags background listeners | Explain each permission in the permission check, keep Bluetooth and charging listeners minimal, and track monitoring health |
 | Too many contextual ideas | Keep rich context as roadmap and preserve the core start-and-exit proof |
 
-Research, comparison and pitch wording live in the private positioning notes (kept locally, outside this repository). Technical behavior lives in [FDD.md](FDD.md).
+Research, comparison and pitch wording live in the private positioning notes (kept locally, outside this repository). Technical behavior lives in [FDD.md](FDD.md). The revised authoring, review and approval plan is in [SPRINT_3.md](SPRINT_3.md).

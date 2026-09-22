@@ -4,6 +4,7 @@ import android.app.Application
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
+import com.cues.app.runtime.DeviceDiagnosticsRepository
 import com.cues.core.CueService
 import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.GrammarParser
@@ -39,6 +40,9 @@ class CuesApplication : Application() {
 
     val store: JsonFileStore by lazy { JsonFileStore(storeRoot) }
 
+    /** Sprint 3.0's target-phone results, kept outside the rule store. */
+    val deviceDiagnostics: DeviceDiagnosticsRepository by lazy { DeviceDiagnosticsRepository(this) }
+
     private val executor by lazy { AndroidActionExecutor(this) }
     private val capabilities by lazy { AndroidCapabilityProvider(this) }
 
@@ -53,7 +57,7 @@ class CuesApplication : Application() {
     private val drafter by lazy {
         CompositeDrafter(
             primary = OnDeviceLlmDrafter(),
-            fallback = GrammarParser(pairedDevices()),
+            fallback = GrammarParser(pairedDeviceProvider = ::pairedDevices),
         )
     }
 

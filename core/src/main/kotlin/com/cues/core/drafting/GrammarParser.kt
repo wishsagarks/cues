@@ -26,6 +26,8 @@ data class PairedDevice(
  */
 class GrammarParser(
     private val pairedDevices: List<PairedDevice> = emptyList(),
+    /** Re-reads bonded devices after the user grants Bluetooth access. */
+    private val pairedDeviceProvider: (() -> List<PairedDevice>)? = null,
     private val idGenerator: () -> String = { "routine-" + java.util.UUID.randomUUID() },
 ) : RoutineDrafter {
 
@@ -46,6 +48,7 @@ class GrammarParser(
                 id,
                 "Which device did you mean: ${trigger.candidates.joinToString(", ") { it.label }}?",
                 about = "trigger.device",
+                deviceCandidates = trigger.candidates,
             )
         }
 
@@ -116,6 +119,7 @@ class GrammarParser(
     private data class AmbiguousDevice(val candidates: List<PairedDevice>) : TriggerParse
 
     private fun parseTrigger(text: String, consumed: MutableList<IntRange>): TriggerParse? {
+        val availableDevices = pairedDeviceProvider?.invoke() ?: pairedDevices
         CHARGER_WORDS.forEach { word ->
             val match = Regex("\\b($word)\\b").find(text) ?: return@forEach
             val unplugged = Regex("\\b(unplug\\w*|disconnect\\w*|stop\\w* charging|off charge)\\b").containsMatchIn(text)
@@ -125,7 +129,7 @@ class GrammarParser(
             )
         }
 
-        val matches = pairedDevices.filter { device ->
+        val matches = availableDevices.filter { device ->
             device.aliases.any { Regex("\\b${Regex.escape(it)}\\b").containsMatchIn(text) }
         }
 
@@ -150,7 +154,7 @@ class GrammarParser(
             // A device word with no paired match: the user is talking about
             // hardware we cannot resolve, which is a question, not a guess.
             DEVICE_WORDS.any { Regex("\\b$it\\b").containsMatchIn(text) } ->
-                AmbiguousDevice(pairedDevices)
+                AmbiguousDevice(availableDevices)
 
             else -> null
         }
@@ -350,7 +354,7 @@ class GrammarParser(
             Regex("\\b(wi-?fi)\\b[^.]*") to
                 "Wi-Fi is a planned trigger, but it is not available yet.",
             Regex("\\b(?:every|each) (morning|evening|night|day|week)\\b[^.]*") to
-                "A repeating schedule is a planned trigger, but it is not available yet.",
+                "Time-scheduled content tasks aren't supported.",
             Regex("\\b(volume)\\b[^.]*") to
                 "Cues does not change the volume.",
             Regex("\\b(brightness|wallpaper|airplane mode)\\b[^.]*") to

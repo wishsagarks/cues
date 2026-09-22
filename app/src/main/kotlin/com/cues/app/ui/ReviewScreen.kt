@@ -26,6 +26,7 @@ import com.cues.core.compile.Severity
 import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.rehearsal.RehearsalRow
+import com.cues.core.registry.ActionRegistry
 import com.cues.core.review.ReviewCopy
 
 /**
@@ -60,16 +61,23 @@ fun ReviewScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            item { TrustBoundaryCard() }
+            item { SectionLabel("How this cue ends") }
+            item { ReviewRow("UNTIL", ReviewCopy.untilText(routine)) }
+            item { ReviewRow("RESTORE", ReviewCopy.restoreText(routine)) }
+
+            item { SectionLabel("What this cue does") }
             item { ReviewRow("WHEN", ReviewCopy.whenText(routine)) }
             item { ReviewRow("IF", ReviewCopy.ifText(routine)) }
             item { ReviewRow("DO", ReviewCopy.doText(routine)) }
-            item { ReviewRow("UNTIL", ReviewCopy.untilText(routine)) }
-            item { ReviewRow("RESTORE", ReviewCopy.restoreText(routine)) }
             item { ReviewRow("REPEAT", ReviewCopy.repeatText(routine)) }
 
+            item { SectionLabel("Action risk") }
+            items(routine.actions) { action -> ActionRiskRow(action.actionId) }
+
             item { SectionLabel("Required access") }
-            item {
-                AccessRow(routine.requiredCapabilities, missingCapabilities)
+            items(routine.requiredCapabilities.sortedBy { it.name }) { capability ->
+                PermissionCheckRow(capability, capability in missingCapabilities)
             }
 
             if (!review.validation.isValid || review.validation.warnings.isNotEmpty()) {
@@ -128,6 +136,35 @@ private fun ReviewRow(label: String, value: String) {
 }
 
 @Composable
+private fun TrustBoundaryCard() {
+    Surface(
+        color = cuesColors.bg300,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "After approval: no model, no network.",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Only this checked version can respond to its declared device events.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "Editing creates a new version that needs approval again.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun SectionLabel(text: String) {
     Text(
         text.uppercase(),
@@ -138,26 +175,54 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun AccessRow(required: Set<Capability>, missing: Set<Capability>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        // A simple wrap would need FlowRow (not in this version of Compose's
-        // foundation layout); a short capability list fits one row in
-        // practice, so this stays a Row rather than pulling in a new API.
-        required.forEach { capability ->
-            val isMissing = capability in missing
-            Surface(
-                color = if (isMissing) cuesColors.stopBg else cuesColors.bg300,
-                contentColor = if (isMissing) cuesColors.stop else cuesColors.ink200,
-                shape = RoundedCornerShape(999.dp),
-            ) {
-                Text(
-                    with(ReviewCopy) { capability.friendlyName() },
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
+private fun ActionRiskRow(actionId: com.cues.core.model.ActionId) {
+    val definition = ActionRegistry.definition(actionId) ?: return
+    Surface(color = cuesColors.bg300, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(definition.label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                with(ReviewCopy) { definition.risk.friendlyName() },
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+            )
         }
     }
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun PermissionCheckRow(capability: Capability, isMissing: Boolean) {
+    val copy = with(ReviewCopy) { capability.permissionCheckCopy() }
+    Surface(
+        color = if (isMissing) cuesColors.stopBg else cuesColors.bg300,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                with(ReviewCopy) { capability.friendlyName() },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (isMissing) cuesColors.stop else cuesColors.ink100,
+            )
+            Text(
+                copy.purpose,
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                copy.frequency,
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable

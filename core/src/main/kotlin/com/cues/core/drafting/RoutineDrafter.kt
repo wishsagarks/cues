@@ -40,6 +40,8 @@ sealed interface DraftResult {
         override val source: DraftSourceId,
         val question: String,
         val about: String,
+        /** Paired-device choices when [about] is `trigger.device`. */
+        val deviceCandidates: List<PairedDevice> = emptyList(),
         /**
          * Limitations that explain the question, when there are any.
          *

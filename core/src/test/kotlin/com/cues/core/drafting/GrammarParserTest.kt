@@ -103,6 +103,16 @@ class GrammarParserTest {
     }
 
     @Test
+    fun `a Jovi-style scheduled content request is refused rather than forced into a cue`() {
+        val result = parser().parse("every morning at 8 compile the news")
+
+        val clarification = assertIs<DraftResult.NeedsClarification>(result)
+        assertEquals("trigger", clarification.about)
+        assertEquals("Time-scheduled content tasks aren't supported.", clarification.question)
+        assertTrue(clarification.unsupported.isNotEmpty())
+    }
+
+    @Test
     fun `a missing action produces a question`() {
         val result = parser().parse("when my earbuds connect")
 
@@ -125,6 +135,7 @@ class GrammarParserTest {
         val clarification = assertIs<DraftResult.NeedsClarification>(result)
         assertTrue(clarification.question.contains(Fixtures.EARBUDS_LABEL))
         assertTrue(clarification.question.contains("Desk speaker"))
+        assertEquals(ambiguous, clarification.deviceCandidates)
     }
 
     @Test

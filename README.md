@@ -39,6 +39,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [FINAL_PROBLEM_STATEMENT.md](docs/FINAL_PROBLEM_STATEMENT.md) | The problem, the proposal and its boundaries |
 | [PRS.md](docs/PRS.md) | Product requirements, scope tiers and proposed evaluation |
 | [FDD.md](docs/FDD.md) | Functional design: architecture, session semantics, action registry |
+| [SPRINT_3.md](docs/SPRINT_3.md) | Revised six-hour plan for offline authoring, review and approval |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
@@ -57,7 +58,7 @@ Earlier versions are in the git history.
 
 ## Claim discipline
 
-Natural-language automation, persistent routines and end-of-routine actions all have established precedents, including Apple Shortcuts and Siri AI in iOS 27, Tasker's AI generator, and Samsung's Modes and Routines. This proposal does not claim to have invented them, nor to exceed a contextual assistant at inference.
+Natural-language automation, persistent routines and end-of-routine actions all have established precedents, including Apple Shortcuts and Siri AI in iOS 27, Tasker's AI generator, Samsung's Modes and Routines, and vivo/iQOO Jovi agent tasks with action confirmation in OriginOS 7. This proposal does not claim to have invented them, nor to exceed a contextual assistant at inference.
 
 The proposed contribution is a focused combination — offline authoring, bounded sessions with approved endings, rehearsal before activation, and receipts explaining each run — demonstrated on real device events. Claims withdrawn during research are tracked in private working notes that are not published here.
 
