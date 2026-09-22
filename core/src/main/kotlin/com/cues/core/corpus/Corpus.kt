@@ -2,6 +2,7 @@ package com.cues.core.corpus
 
 import com.cues.core.drafting.DraftResult
 import com.cues.core.model.*
+import com.cues.core.signals.SignalRegistry
 
 /**
  * One scored paraphrase: an input sentence and the meaning it must preserve.
@@ -104,12 +105,26 @@ object Corpus {
                     failures += "expected a bluetooth device trigger"
                 }
 
+                "network" -> if (routine.trigger !is Trigger.WifiConnection) {
+                    failures += "expected a Wi-Fi trigger"
+                }
+
                 "days" -> checkDays(routine.conditions, expected)?.let { failures += it }
                 "from" -> checkWindow(routine.conditions, start = expected)?.let { failures += it }
                 "to" -> checkWindow(routine.conditions, end = expected)?.let { failures += it }
                 "timer" -> checkTimer(routine.actions, expected.toInt())?.let { failures += it }
                 "dnd" -> if (routine.actions.none { it.actionId == ActionId.REQUEST_DND }) {
                     failures += "expected notifications to be quieted"
+                }
+
+                "pinned" -> if (routine.actions.none { it.actionId == ActionId.PINNED_NOTE }) {
+                    failures += "expected a pinned note"
+                }
+
+                "until" -> if (routine.endConditions.filterIsInstance<EndCondition.AtTime>()
+                        .none { it.time.toString() == expected }
+                ) {
+                    failures += "expected an at-time ending at $expected"
                 }
 
                 "endsOnDisconnect" -> if (EndCondition.TriggerReversed !in routine.endConditions) {
@@ -124,19 +139,7 @@ object Corpus {
     }
 
     private fun checkTrigger(trigger: Trigger, expected: String): String? {
-        val actual = when (trigger) {
-            is Trigger.BluetoothConnection -> when (trigger.transition) {
-                DeviceTransition.CONNECTED -> "bluetooth-connect"
-                DeviceTransition.DISCONNECTED -> "bluetooth-disconnect"
-            }
-
-            is Trigger.Charging -> when (trigger.transition) {
-                PowerTransition.PLUGGED_IN -> "charging-on"
-                PowerTransition.UNPLUGGED -> "charging-off"
-            }
-
-            Trigger.Manual -> "manual"
-        }
+        val actual = SignalRegistry.corpusKey(trigger)
         return if (actual == expected) null else "trigger was $actual, expected $expected"
     }
 

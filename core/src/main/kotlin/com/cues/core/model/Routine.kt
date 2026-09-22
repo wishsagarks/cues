@@ -101,6 +101,23 @@ sealed interface Trigger {
     @Serializable
     @SerialName("manual")
     data object Manual : Trigger
+
+    @Serializable
+    @SerialName("wifiConnection")
+    data class WifiConnection(
+        val transition: DeviceTransition,
+        val network: WifiNetwork = WifiNetwork.Any,
+    ) : Trigger
+
+    @Serializable
+    @SerialName("atTime")
+    data class AtTime(
+        val time: LocalTimeOfDay,
+        /** Empty means every local day. */
+        val days: Set<Day> = emptySet(),
+        /** The zone is part of the approved meaning, not ambient app state. */
+        val zoneId: String = "system",
+    ) : Trigger
 }
 
 @Serializable
@@ -139,6 +156,25 @@ sealed interface Condition {
     @Serializable
     @SerialName("chargingState")
     data class ChargingState(val charging: Boolean) : Condition
+
+    @Serializable
+    @SerialName("deviceConnected")
+    data class DeviceConnected(val deviceId: String, val deviceLabel: String = deviceId) : Condition
+
+    @Serializable
+    @SerialName("wifiConnected")
+    data class WifiConnected(val network: WifiNetwork = WifiNetwork.Any) : Condition
+}
+
+@Serializable
+sealed interface WifiNetwork {
+    @Serializable
+    @SerialName("any")
+    data object Any : WifiNetwork
+
+    @Serializable
+    @SerialName("named")
+    data class Named(val label: String) : WifiNetwork
 }
 
 @Serializable
@@ -185,6 +221,9 @@ enum class ActionId {
 
     /** Record a local, user-visible note of the outcome. */
     NOTIFY_RESULT,
+
+    /** Keep bounded user text visible while the session is active. */
+    PINNED_NOTE,
 }
 
 @Serializable
@@ -204,6 +243,10 @@ sealed interface ActionArgs {
     @Serializable
     @SerialName("none")
     data object None : ActionArgs
+
+    @Serializable
+    @SerialName("pinnedNote")
+    data class PinnedNote(val message: String) : ActionArgs
 }
 
 // ------------------------------------------------------------ end and exit
@@ -224,6 +267,15 @@ sealed interface EndCondition {
     @Serializable
     @SerialName("manualStop")
     data object ManualStop : EndCondition
+
+    @Serializable
+    @SerialName("atTime")
+    data class AtTime(
+        val time: LocalTimeOfDay,
+        /** Empty means the next occurrence on any local day. */
+        val days: Set<Day> = emptySet(),
+        val zoneId: String = "system",
+    ) : EndCondition
 }
 
 /**
@@ -266,4 +318,6 @@ enum class Capability {
     POST_NOTIFICATIONS,
     EXACT_ALARM,
     BATTERY_STATE,
+    NETWORK_STATE,
+    LOCATION_FOR_WIFI_NAME,
 }

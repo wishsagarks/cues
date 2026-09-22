@@ -118,6 +118,25 @@ object ActionRegistry {
                 }
             },
         ),
+
+        ActionDefinition(
+            id = ActionId.PINNED_NOTE,
+            label = "Keep a pinned note visible",
+            risk = ActionRisk.OWNED_AND_REVERSIBLE,
+            requiredCapabilities = setOf(Capability.POST_NOTIFICATIONS),
+            owns = OwnedResource.PINNED_NOTE,
+            validate = { args ->
+                when (args) {
+                    is ActionArgs.PinnedNote -> when {
+                        args.message.isBlank() -> ArgResult.Invalid("A pinned note cannot be empty.")
+                        args.message.length > MAX_NOTIFY_CHARS ->
+                            ArgResult.Invalid("A pinned note must be $MAX_NOTIFY_CHARS characters or fewer.")
+                        else -> ArgResult.Valid(args)
+                    }
+                    else -> ArgResult.Invalid("A pinned note needs bounded text.")
+                }
+            },
+        ),
     ).associateBy { it.id }
 
     fun definition(id: ActionId): ActionDefinition? = definitions[id]

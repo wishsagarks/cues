@@ -13,6 +13,9 @@ import com.cues.core.model.EventKind
 import com.cues.core.model.OwnedResource
 import com.cues.core.model.Routine
 import com.cues.core.model.TriggerEvent
+import com.cues.core.model.ContextSource
+import com.cues.core.model.ContextValue
+import com.cues.core.model.WifiState
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.ActionOutcome
 import com.cues.core.ports.CapabilityProvider
@@ -70,6 +73,7 @@ private suspend fun run(root: File) {
             setOf(
                 Capability.BLUETOOTH_CONNECT, Capability.NOTIFICATION_POLICY_ACCESS,
                 Capability.POST_NOTIFICATIONS, Capability.EXACT_ALARM,
+                Capability.NETWORK_STATE, Capability.BATTERY_STATE,
             )
         },
         drafter = GrammarParser(listOf(EARBUDS)),
@@ -108,6 +112,32 @@ private suspend fun run(root: File) {
     println()
     println("executor log:")
     executor.log.forEach { println("  $it") }
+
+    heading("8. Any Wi-Fi connects — starts the generic Wi-Fi cue")
+    val wifi = (service.draft("when I connect to wifi quiet notifications for an hour") as DraftResult.Drafted).routine
+    val armedWifi = (service.approveAndArm(wifi) as ArmResult.Ok).routine
+    report(
+        armedWifi,
+        service.onDeviceEvent(
+            TriggerEvent(EventKind.WIFI_CONNECTED, clock.now, connectionSessionId = "wifi-1"),
+            wifi = ContextValue.Known(WifiState(connected = true), ContextSource.REHEARSAL, clock.now),
+        ),
+    )
+
+    heading("9. Scheduled pinned note — exact time to cleanup")
+    val timed = (service.draft("at 10 pm pin a note focus mode until 7 am") as DraftResult.Drafted).routine
+    val armedTimed = (service.approveAndArm(timed) as ArmResult.Ok).routine
+    report(
+        armedTimed,
+        service.onDeviceEvent(
+            TriggerEvent(
+                EventKind.TIME_REACHED,
+                clock.at(22, 0),
+                localTime = com.cues.core.model.LocalTimeOfDay(22, 0),
+                zoneId = "Asia/Kolkata",
+            ),
+        ),
+    )
 }
 
 private fun heading(title: String) {
@@ -162,6 +192,7 @@ private class LoggingExecutor : ActionExecutor {
             ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
             ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
             ActionId.NOTIFY_RESULT -> null
+            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
         }
         return ActionOutcome(ActionState.SUCCEEDED, acquired = owns)
     }

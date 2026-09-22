@@ -5,6 +5,7 @@ import com.cues.core.eval.Reason
 import com.cues.core.eval.Truth
 import com.cues.core.model.*
 import com.cues.core.session.EngineResult
+import com.cues.core.signals.SignalRegistry
 
 /**
  * A plain account of one run: what was observed, what was decided, what
@@ -131,19 +132,17 @@ internal fun ActionId.friendly(): String = when (this) {
     ActionId.START_FOCUS_TIMER -> "Focus timer"
     ActionId.REQUEST_DND -> "Quiet notifications"
     ActionId.NOTIFY_RESULT -> "Result note"
+    ActionId.PINNED_NOTE -> "Pinned note"
 }
 
 internal fun OwnedResource.friendly(): String = when (this) {
     OwnedResource.FOCUS_TIMER -> "focus timer"
     OwnedResource.DND_CONTRIBUTION -> "quiet rule"
+    OwnedResource.PINNED_NOTE -> "pinned note"
 }
 
 internal fun Routine.timerMinutes(): Int? = actions
     .firstOrNull { it.actionId == ActionId.START_FOCUS_TIMER }
     ?.let { (it.args as? ActionArgs.FocusTimer)?.durationMinutes }
 
-internal fun Routine.triggerNoun(): String = when (val t = trigger) {
-    is Trigger.BluetoothConnection -> t.deviceLabel
-    is Trigger.Charging -> "the charger"
-    Trigger.Manual -> "the manual run"
-}
+internal fun Routine.triggerNoun(): String = SignalRegistry.noun(trigger)

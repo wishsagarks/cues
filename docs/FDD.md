@@ -116,14 +116,21 @@ Speech reference: [Android SpeechRecognizer](https://developer.android.com/refer
 
 ## Event and context adapters
 
-Register only what armed rules need. Use version-appropriate public APIs. The target-device spike decides which background delivery paths actually work; a receiver declaration alone is not proof.
+Register only what armed rules need. In `:core`, each closed trigger,
+condition and end subtype is implemented by a signal kit in `SignalRegistry`.
+The registry owns matching, reversal, semantic form, validation, capability
+derivation, review copy and rehearsal events. `:app` supplies `SignalAdapter`
+implementations and an `AdapterSupervisor`; neither is a runtime plugin system.
+Use version-appropriate public APIs. The target-device spike decides which
+background delivery paths actually work; a receiver declaration alone is not
+proof.
 
 | Adapter | Proposed input | Design constraint |
 |---|---|---|
 | Bluetooth | Selected paired device connection/disconnection | Resolve real identity, filter duplicates, test permissions and background delivery |
 | Charging | Connect/disconnect plus current charging state | Separate current state from history of having charged |
 | Time | Approved deadline or schedule | Select scheduling mechanism appropriate to accuracy and access |
-| Wi-Fi | Network change and permitted network identity | Unavailable or redacted identity is unknown, not a match |
+| Wi-Fi | Network change and permitted network identity | Any-Wi-Fi is core; unavailable or redacted identity is unknown, not a match; named networks wait for R7 |
 | Manual | Explicit user test/run | Record manual provenance separately from physical triggers |
 
 Each context value carries a source, observation time and known/unknown status. Each adapter defines its freshness rule. The evaluator returns MATCH, NO_MATCH or UNKNOWN with structured reasons. Missing data never grants permission to act.
@@ -140,7 +147,7 @@ After a confirmed exit, a future connection may create a new session under the a
 
 ## Action registry
 
-Core actions: start app focus timer, request owned DND contribution, record/show local result. Cleanup actions: complete/cancel the owned timer and release the owned DND contribution.
+Core actions: start app focus timer, request owned DND contribution, record/show local result and keep a bounded pinned note visible. Cleanup actions: complete/cancel the owned timer, remove the pinned note and release the owned DND contribution.
 
 Each adapter declares its required access, argument validator, execution method, capability limits, outcome verifier where possible, idempotency behavior and supported compensation. No model-supplied shell commands, code, packages or arbitrary intents reach an executor.
 

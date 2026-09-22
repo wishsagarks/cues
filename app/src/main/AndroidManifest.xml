@@ -18,6 +18,9 @@
     <!-- Showing the running session and its outcome. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Any-Wi-Fi observation does not require the SSID/location permission. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- The app-owned quiet rule (AutomaticZenRule). -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 

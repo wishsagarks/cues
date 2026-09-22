@@ -30,6 +30,7 @@ class AndroidCapabilityProvider(private val context: Context) : CapabilityProvid
         if (notificationPolicyAccessGranted()) add(Capability.NOTIFICATION_POLICY_ACCESS)
         if (postNotificationsGranted()) add(Capability.POST_NOTIFICATIONS)
         if (exactAlarmGranted()) add(Capability.EXACT_ALARM)
+        add(Capability.NETWORK_STATE)
         // Reading current charging state needs no special permission on
         // modern Android; granted whenever the BatteryManager service exists.
         add(Capability.BATTERY_STATE)

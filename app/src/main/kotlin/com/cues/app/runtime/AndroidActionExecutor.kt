@@ -3,6 +3,7 @@ package com.cues.app.runtime
 import android.app.AlarmManager
 import android.app.AutomaticZenRule
 import android.app.NotificationManager
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -54,11 +55,13 @@ class AndroidActionExecutor(
         ActionId.START_FOCUS_TIMER -> startFocusTimer(args, sessionId)
         ActionId.REQUEST_DND -> requestDnd(args, sessionId)
         ActionId.NOTIFY_RESULT -> notifyResult(args)
+        ActionId.PINNED_NOTE -> pinnedNote(args, sessionId)
     }
 
     override fun release(resource: OwnedResource, sessionId: String): ActionOutcome = when (resource) {
         OwnedResource.FOCUS_TIMER -> releaseFocusTimer(sessionId)
         OwnedResource.DND_CONTRIBUTION -> releaseDnd(sessionId)
+        OwnedResource.PINNED_NOTE -> releasePinnedNote(sessionId)
     }
 
     // ------------------------------------------------------------- timer
@@ -179,6 +182,35 @@ class AndroidActionExecutor(
         Uri.parse("condition://com.cues.android/session/$sessionId")
 
     // --------------------------------------------------------------- notify
+
+    private fun pinnedNote(args: ActionArgs, sessionId: String): ActionOutcome {
+        val message = (args as? ActionArgs.PinnedNote)?.message
+            ?: return ActionOutcome(ActionState.FAILED, "No pinned-note text was supplied.")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notifications.createNotificationChannel(
+                android.app.NotificationChannel("cues_pinned", "Cues pinned notes", NotificationManager.IMPORTANCE_LOW),
+            )
+        }
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(context, "cues_pinned")
+        } else Notification.Builder(context)
+        notifications.notify(
+            pinnedNotificationId(sessionId),
+            builder.setContentTitle("Cues")
+                .setContentText(message)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setOngoing(true)
+                .build(),
+        )
+        return ActionOutcome(ActionState.SUCCEEDED, "Pinned note is visible.")
+    }
+
+    private fun releasePinnedNote(sessionId: String): ActionOutcome {
+        notifications.cancel(pinnedNotificationId(sessionId))
+        return ActionOutcome(ActionState.SUCCEEDED)
+    }
+
+    private fun pinnedNotificationId(sessionId: String): Int = 10_000 + sessionId.hashCode().ushr(1) % 10_000
 
     private fun notifyResult(args: ActionArgs): ActionOutcome {
         val message = (args as? ActionArgs.Notify)?.message

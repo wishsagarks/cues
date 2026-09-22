@@ -32,3 +32,8 @@ node_modules/
 # Private working notes — competitive research, answer scripts, claim discipline.
 # Deliberately excluded from the public repository.
 private/
+
+# Video project: dependencies, renders and generated narration are build artefacts.
+video/node_modules/
+video/out/
+video/public/audio/

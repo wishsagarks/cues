@@ -25,8 +25,8 @@ The first target experience is a focus session triggered by selected earbuds, wi
 
 | Tier | Included |
 |---|---|
-| Core, 30-hour target | Offline speech and local rule drafting; device resolution; review; Bluetooth and charging; app timer and supported DND rule; exits; receipts; synthetic rehearsal |
-| Add only after core stability | Wi-Fi and time triggers, one charging-deadline reminder |
+| Core, generic | Offline speech and local rule drafting; closed signal kits; device resolution; review; Bluetooth, charging, any-Wi-Fi and bounded at-time sessions; app timer, pinned notes and supported DND rule; exits; receipts; synthetic rehearsal |
+| Add only after device checks | Named Wi-Fi networks, background delivery measurements and any platform behavior that still depends on OriginOS spikes |
 | Later | Opt-in event history and shadow mode, named contexts, opportunity queue, temporary patches, timetable import, geofencing, Office Kit integration |
 
 Do not build arbitrary app control, screen clicking, continuous ambient listening, automatic messaging or broad passive personal-data collection.
@@ -60,7 +60,8 @@ Work completed before the event covers the offline decision core — the routine
 | RV-03 | Bind approval to the exact normalized version. Any behavior change requires reapproval. | Core |
 | TR-01 | Support a selected Bluetooth device and charging transitions on the actual target phone. | Core |
 | TR-02 | Support day and local-time conditions. Show time zone and overnight interpretation if relevant. | Core |
-| TR-03 | Add Wi-Fi and schedule adapters only after their permissions and background behavior pass device checks. | Target addition |
+| TR-03 | Support any-Wi-Fi and bounded at-time signals through the closed core kits; add Android adapters only after permissions and background behavior pass device checks. | Core + target adapter |
+| MH-01 | Show whether each armed signal listener is live and report detected coverage gaps as receipts. | Target adapter |
 | AC-01 | Start an app-owned focus timer with a visible deadline and cancellation state. | Core |
 | AC-02 | Apply and release only a supported app-owned DND contribution after required access. | Core |
 | AC-03 | Show local outcomes in-app and through notifications when permitted. Notification denial is itself a visible condition. | Core |
@@ -73,7 +74,7 @@ Work completed before the event covers the offline decision core — the routine
 | EX-02 | Give a readable explanation for a nonmatch, unknown context, duplicate, blocked action or cleanup failure. | Core |
 | RH-01 | Use the same pure evaluator for synthetic rehearsal and runtime decisions. Simulations must never invoke action adapters. | Core |
 | RH-02 | Label sample events as synthetic. Do not imply access to historical events before installation or consent. | Core |
-| CT-01 | At one approved deadline, read current charging state and notify once if false. Unknown must not become “not charging.” | Stretch |
+| CT-01 | Compose an at-time trigger, `ChargingState(false)` condition and `NOTIFY_RESULT` action. At the approved deadline, notify once only when the observed state is false; unknown must not become “not charging.” | Core composition |
 
 ## Review example
 

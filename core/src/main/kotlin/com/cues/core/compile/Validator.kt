@@ -3,6 +3,7 @@ package com.cues.core.compile
 import com.cues.core.model.*
 import com.cues.core.registry.ActionRegistry
 import com.cues.core.registry.ArgResult
+import com.cues.core.signals.SignalRegistry
 
 /**
  * A problem that stops a routine being armed, or a note the user should see.
@@ -66,70 +67,17 @@ object Validator {
         return ValidationResult(findings)
     }
 
-    private fun validateTrigger(trigger: Trigger): List<Finding> = when (trigger) {
-        is Trigger.BluetoothConnection -> buildList {
-            // "My earbuds" has to become a specific paired device before arming.
-            // An unresolved entity is the classic way to arm a rule that then
-            // fires for the wrong thing, or never fires at all.
-            if (trigger.deviceId.isBlank()) {
-                add(Finding(Severity.ERROR, "trigger.deviceId", "Which device? Pick one from your paired devices."))
-            }
-            if (trigger.deviceLabel.isBlank()) {
-                add(Finding(Severity.WARNING, "trigger.deviceLabel", "This device has no name to show in the review."))
-            }
-        }
-
-        is Trigger.Charging -> emptyList()
-        Trigger.Manual -> emptyList()
-    }
+    private fun validateTrigger(trigger: Trigger): List<Finding> = SignalRegistry.validateTrigger(trigger)
 
     private fun validateConditions(conditions: List<Condition>): List<Finding> = buildList {
-        conditions.filterIsInstance<Condition.DaysOfWeek>().forEach { c ->
-            if (c.days.isEmpty()) {
-                add(
-                    Finding(
-                        Severity.ERROR,
-                        "conditions.days",
-                        "No days are selected, so this cue could never run.",
-                    ),
-                )
-            }
-        }
-
-        // Two day sets that cannot both hold, e.g. an edit that left
-        // "weekdays" in place while adding "weekends".
-        val daySets = conditions.filterIsInstance<Condition.DaysOfWeek>()
-        if (daySets.size > 1) {
-            val intersection = daySets.map { it.days }.reduce { a, b -> a intersect b }
-            if (intersection.isEmpty()) {
-                add(
-                    Finding(
-                        Severity.ERROR,
-                        "conditions.days",
-                        "The day conditions contradict each other, so no day can satisfy them both.",
-                    ),
-                )
-            }
-        }
-
-        val windows = conditions.filterIsInstance<Condition.TimeWindow>()
-        if (windows.size > 1) {
+        conditions.forEach { addAll(SignalRegistry.validateCondition(it)) }
+        addAll(SignalRegistry.validateConditionSets(conditions))
+        if (conditions.filterIsInstance<Condition.TimeWindow>().size > 1) {
             add(
                 Finding(
                     Severity.WARNING,
                     "conditions.time",
                     "There is more than one time window. All of them must hold at once.",
-                ),
-            )
-        }
-
-        val chargingStates = conditions.filterIsInstance<Condition.ChargingState>().map { it.charging }.toSet()
-        if (chargingStates.size > 1) {
-            add(
-                Finding(
-                    Severity.ERROR,
-                    "conditions.charging",
-                    "This cue requires the phone to be both charging and not charging.",
                 ),
             )
         }
@@ -184,6 +132,8 @@ object Validator {
                 ),
             )
         }
+
+        routine.endConditions.forEach { addAll(SignalRegistry.validateEnd(it)) }
 
         val timerMinutes = routine.actions
             .firstOrNull { it.actionId == ActionId.START_FOCUS_TIMER }

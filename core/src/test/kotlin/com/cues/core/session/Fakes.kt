@@ -5,6 +5,8 @@ import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.ActionOutcome
 import com.cues.core.ports.Clock
 import com.cues.core.ports.SessionStore
+import com.cues.core.ports.SignalAdapter
+import com.cues.core.ports.ListenerHealth
 
 /** A clock the test drives by hand, so lifecycle tests never sleep. */
 class FakeClock(var now: Long) : Clock {
@@ -24,6 +26,22 @@ class InMemorySessionStore : SessionStore {
     }
 
     val all: List<Session> get() = sessions.values.toList()
+}
+
+class FakeSignalAdapter(override val key: String) : SignalAdapter {
+    var startedWith: List<Routine> = emptyList()
+        private set
+    var running: Boolean = false
+        private set
+
+    override fun start(armed: List<Routine>) {
+        startedWith = armed
+        running = true
+    }
+
+    override fun stop() { running = false }
+
+    override fun health() = ListenerHealth(key, running)
 }
 
 /**
@@ -50,6 +68,7 @@ class RecordingExecutor(
             ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
             ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
             ActionId.NOTIFY_RESULT -> null
+            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
         }
         return ActionOutcome(ActionState.SUCCEEDED, acquired = owns)
     }

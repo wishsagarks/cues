@@ -1,7 +1,7 @@
 package com.cues.core.compile
 
 import com.cues.core.model.*
-import com.cues.core.registry.ActionRegistry
+import com.cues.core.signals.SignalRegistry
 import java.security.MessageDigest
 
 /**
@@ -30,7 +30,7 @@ object Normalizer {
             actions = actions,
             endConditions = routine.endConditions.distinct().sortedBy { it.sortKey() },
             // Derived, never trusted from a draft.
-            requiredCapabilities = ActionRegistry.capabilitiesFor(actions),
+            requiredCapabilities = SignalRegistry.capabilitiesFor(routine.copy(actions = actions)),
         )
     }
 
@@ -65,10 +65,10 @@ object Normalizer {
      */
     private fun Routine.semanticForm(): String = buildString {
         append("schema=").append(schemaVersion).append('\n')
-        append("trigger=").append(trigger.semanticForm()).append('\n')
-        conditions.forEach { append("condition=").append(it.semanticForm()).append('\n') }
+        append("trigger=").append(SignalRegistry.semanticForm(trigger)).append('\n')
+        conditions.forEach { append("condition=").append(SignalRegistry.semanticForm(it)).append('\n') }
         actions.forEach { append("action=").append(it.semanticForm()).append('\n') }
-        endConditions.forEach { append("end=").append(it.semanticForm()).append('\n') }
+        endConditions.forEach { append("end=").append(SignalRegistry.semanticForm(it)).append('\n') }
         append("cleanup=ownedOnly:").append(cleanupPolicy.releaseOwnedEffectsOnly)
             .append(",respectOverride:").append(cleanupPolicy.respectUserOverride).append('\n')
         append("rearm=grace:").append(rearmPolicy.reconnectGraceSeconds)
@@ -77,32 +77,15 @@ object Normalizer {
         requiredCapabilities.map { it.name }.sorted().forEach { append("capability=").append(it).append('\n') }
     }
 
-    private fun Trigger.semanticForm(): String = when (this) {
-        is Trigger.BluetoothConnection -> "bluetooth:$deviceId:${transition.name}"
-        is Trigger.Charging -> "charging:${transition.name}"
-        Trigger.Manual -> "manual"
-    }
-
-    private fun Condition.semanticForm(): String = when (this) {
-        is Condition.DaysOfWeek -> "days:" + Day.entries.filter { it in days }.joinToString(",") { it.name }
-        is Condition.TimeWindow -> "time:$startInclusive-$endExclusive"
-        is Condition.ChargingState -> "charging:$charging"
-    }
-
     private fun ActionSpec.semanticForm(): String = "${actionId.name}:" + when (val a = args) {
         is ActionArgs.FocusTimer -> "minutes=${a.durationMinutes}"
         is ActionArgs.Dnd -> "allowPriority=${a.allowPriority}"
         is ActionArgs.Notify -> "message=${a.message}"
+        is ActionArgs.PinnedNote -> "message=${a.message}"
         ActionArgs.None -> "none"
     }
 
-    private fun EndCondition.semanticForm(): String = when (this) {
-        EndCondition.TriggerReversed -> "triggerReversed"
-        is EndCondition.Duration -> "duration:$minutes"
-        EndCondition.ManualStop -> "manualStop"
-    }
+    private fun Condition.sortKey(): String = SignalRegistry.semanticForm(this)
 
-    private fun Condition.sortKey(): String = semanticForm()
-
-    private fun EndCondition.sortKey(): String = semanticForm()
+    private fun EndCondition.sortKey(): String = SignalRegistry.semanticForm(this)
 }

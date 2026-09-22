@@ -6,6 +6,7 @@ import com.cues.core.model.ContextValue
 import com.cues.core.model.Day
 import com.cues.core.model.LocalTimeOfDay
 import com.cues.core.model.UnknownReason
+import com.cues.core.model.WifiState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -29,6 +30,7 @@ object SnapshotBuilder {
         zoneId: ZoneId,
         charging: ContextValue<Boolean> = unreadCharging(),
         connectedDeviceIds: ContextValue<Set<String>> = unreadDevices(),
+        wifi: ContextValue<WifiState> = unreadWifi(),
     ): ContextSnapshot {
         val local = ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), zoneId)
 
@@ -43,12 +45,14 @@ object SnapshotBuilder {
             zoneId = zoneId.id,
             charging = charging,
             connectedDeviceIds = connectedDeviceIds,
+            wifi = wifi,
         )
     }
 
     /** The day and time are never in question; only the readings a caller has to supply can be. */
     private fun unreadCharging() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.BATTERY_MANAGER)
     private fun unreadDevices() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.BLUETOOTH_ADAPTER)
+    private fun unreadWifi() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.WIFI_MANAGER)
 
     private fun java.time.DayOfWeek.toCuesDay(): Day = when (this) {
         java.time.DayOfWeek.MONDAY -> Day.MON

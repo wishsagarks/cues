@@ -25,7 +25,14 @@ sealed interface ContextValue<out T> {
 }
 
 @Serializable
-enum class ContextSource { BLUETOOTH_ADAPTER, BATTERY_MANAGER, SYSTEM_CLOCK, USER, REHEARSAL }
+enum class ContextSource {
+    BLUETOOTH_ADAPTER,
+    BATTERY_MANAGER,
+    WIFI_MANAGER,
+    SYSTEM_CLOCK,
+    USER,
+    REHEARSAL,
+}
 
 @Serializable
 enum class UnknownReason {
@@ -57,6 +64,10 @@ data class ContextSnapshot(
         UnknownReason.NEVER_OBSERVED,
         ContextSource.BLUETOOTH_ADAPTER,
     ),
+    val wifi: ContextValue<WifiState> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED,
+        ContextSource.WIFI_MANAGER,
+    ),
 )
 
 /**
@@ -73,6 +84,10 @@ data class TriggerEvent(
     val atMillis: Long,
     val deviceId: String? = null,
     val connectionSessionId: String? = null,
+    /** Supplied by time adapters when a trigger is scheduled in a visible zone. */
+    val localTime: LocalTimeOfDay? = null,
+    val zoneId: String? = null,
+    val networkLabel: String? = null,
     val provenance: EventProvenance = EventProvenance.PHYSICAL,
 )
 
@@ -85,8 +100,19 @@ enum class EventKind {
     MANUAL_RUN,
     MANUAL_STOP,
     DEADLINE_REACHED,
+    WIFI_CONNECTED,
+    WIFI_DISCONNECTED,
+    TIME_REACHED,
 }
 
 /** Kept distinct so a receipt can never present a rehearsal as something that happened. */
 @Serializable
 enum class EventProvenance { PHYSICAL, MANUAL, REHEARSAL }
+
+/** A redacted SSID is represented by the outer ContextValue.Unknown instead. */
+@Serializable
+data class WifiState(
+    val connected: Boolean,
+    /** Null is valid for the any-network signal; named matching needs a value. */
+    val networkLabel: String? = null,
+)

@@ -23,6 +23,7 @@ import com.cues.core.ports.SessionStore
 import com.cues.core.receipt.Receipts
 import com.cues.core.session.EngineResult
 import com.cues.core.session.SessionEngine
+import com.cues.core.signals.SignalRegistry
 import java.time.ZoneId
 
 /**
@@ -159,8 +160,15 @@ class CueService(
         event: TriggerEvent,
         charging: ContextValue<Boolean> = unread(UnknownReason.NEVER_OBSERVED),
         connectedDeviceIds: ContextValue<Set<String>> = unread(UnknownReason.NEVER_OBSERVED),
+        wifi: ContextValue<com.cues.core.model.WifiState> = unread(UnknownReason.NEVER_OBSERVED),
     ): List<EngineResult> {
-        val snapshot = SnapshotBuilder.build(event.atMillis, zoneId(), charging, connectedDeviceIds)
+        val snapshot = SnapshotBuilder.build(
+            nowMillis = event.atMillis,
+            zoneId = zoneId(),
+            charging = charging,
+            connectedDeviceIds = connectedDeviceIds,
+            wifi = wifi,
+        )
 
         return routines.armed().flatMap { routine ->
             val results = mutableListOf<EngineResult>()
@@ -182,22 +190,9 @@ class CueService(
     }
 
     /** True when [routine]'s trigger is even the right shape for this event — same kind, same device. */
-    private fun TriggerEvent.couldStart(routine: Routine): Boolean = when (val t = routine.trigger) {
-        is com.cues.core.model.Trigger.BluetoothConnection -> {
-            val wantedKind = when (t.transition) {
-                com.cues.core.model.DeviceTransition.CONNECTED -> EventKind.BLUETOOTH_CONNECTED
-                com.cues.core.model.DeviceTransition.DISCONNECTED -> EventKind.BLUETOOTH_DISCONNECTED
-            }
-            kind == wantedKind && deviceId == t.deviceId
-        }
-
-        is com.cues.core.model.Trigger.Charging -> kind == when (t.transition) {
-            com.cues.core.model.PowerTransition.PLUGGED_IN -> EventKind.POWER_CONNECTED
-            com.cues.core.model.PowerTransition.UNPLUGGED -> EventKind.POWER_DISCONNECTED
-        }
-
-        com.cues.core.model.Trigger.Manual -> kind == EventKind.MANUAL_RUN
-    }
+    private fun TriggerEvent.couldStart(routine: Routine): Boolean =
+        SignalRegistry.listensFor(routine.trigger, kind) &&
+            SignalRegistry.match(routine.trigger, this).truth == com.cues.core.eval.Truth.MATCH
 
     /**
      * The exact-alarm callback for one session's deadline.

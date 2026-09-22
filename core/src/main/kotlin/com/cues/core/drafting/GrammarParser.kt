@@ -3,6 +3,7 @@ package com.cues.core.drafting
 import com.cues.core.compile.Normalizer
 import com.cues.core.model.*
 import com.cues.core.registry.ActionRegistry
+import com.cues.core.signals.SignalRegistry
 
 /** A paired device the parser is allowed to resolve "my earbuds" to. */
 data class PairedDevice(
@@ -65,7 +66,16 @@ class GrammarParser(
         }
 
         val endConditions = parseEndConditions(normalized, consumed, actions, resolvedTrigger)
-        val unsupported = findUnsupported(normalized, consumed)
+        val unsupported = findUnsupported(normalized, consumed) + namedWifiUnsupported(resolvedTrigger, normalized)
+
+        if (resolvedTrigger is Trigger.WifiConnection && resolvedTrigger.network is WifiNetwork.Named) {
+            return DraftResult.NeedsClarification(
+                id,
+                question = "Named Wi-Fi needs location access on this build; use any Wi-Fi until the device spike is decided.",
+                about = "trigger.network",
+                unsupported = unsupported,
+            )
+        }
 
         val routine = Normalizer.normalize(
             Routine(
@@ -120,6 +130,33 @@ class GrammarParser(
 
     private fun parseTrigger(text: String, consumed: MutableList<IntRange>): TriggerParse? {
         val availableDevices = pairedDeviceProvider?.invoke() ?: pairedDevices
+
+        // Preserve the existing boundary: scheduled content is not a cue just
+        // because it contains a clock phrase.
+        if (Regex("\\b(?:every|each)\\s+(?:morning|evening|night|day|week)\\b").containsMatchIn(text) &&
+            Regex("\\b(?:compile|news|content|summari[sz]e)\\b").containsMatchIn(text)
+        ) return null
+
+        Regex("\\b(?:at|around)\\s+($TIME)\\b").find(text)?.let { m ->
+            val time = parseTime(m.groupValues[1]) ?: return@let
+            consumed += m.range
+            val days = parseScheduledDays(text, consumed)
+            return ResolvedTrigger(Trigger.AtTime(time, days, "system"))
+        }
+
+        Regex("\\b(?:join|connect|disconnect|leave|lose)\\b[^.]{0,30}\\bwi-?fi\\b").find(text)?.let { m ->
+            val disconnects = Regex("\\b(disconnect\\w*|leave|lose)\\b").containsMatchIn(m.value)
+            val named = Regex("\\b([a-z][a-z0-9_-]{1,24})\\s+wi-?fi\\b").find(m.value)
+                ?.groupValues?.get(1)
+                ?.takeUnless { it in setOf("to", "my", "the", "a") }
+            consumed += m.range
+            return ResolvedTrigger(
+                Trigger.WifiConnection(
+                    if (disconnects) DeviceTransition.DISCONNECTED else DeviceTransition.CONNECTED,
+                    named?.let { WifiNetwork.Named(it) } ?: WifiNetwork.Any,
+                ),
+            )
+        }
         CHARGER_WORDS.forEach { word ->
             val match = Regex("\\b($word)\\b").find(text) ?: return@forEach
             val unplugged = Regex("\\b(unplug\\w*|disconnect\\w*|stop\\w* charging|off charge)\\b").containsMatchIn(text)
@@ -165,6 +202,35 @@ class GrammarParser(
     private fun parseConditions(text: String, consumed: MutableList<IntRange>): List<Condition> = buildList {
         parseDays(text, consumed)?.let { add(it) }
         parseTimeWindow(text, consumed)?.let { add(it) }
+        Regex("\\b(?:the )?phone (?:is )?(?:not |isn't |isnt )?charging\\b").find(text)?.let { match ->
+            val notCharging = Regex("\\b(?:not|isn't|isnt)\\b").containsMatchIn(match.value)
+            consumed += match.range
+            add(Condition.ChargingState(!notCharging))
+        }
+        Regex("\\b(?:device|phone)\\s+connected\\b").find(text)?.let { match ->
+            // The grammar cannot resolve a device from this shorthand. It is
+            // intentionally left as an unsupported clause rather than guessed.
+            consumed += match.range
+        }
+        pairedDevices.firstOrNull { device ->
+            device.aliases.any { alias ->
+                Regex("\\b${Regex.escape(alias)}\\b\\s+(?:is\\s+)?connected\\b").containsMatchIn(text)
+            }
+        }?.let { device ->
+            val match = Regex(
+                "\\b(?:${device.aliases.joinToString("|") { Regex.escape(it) }})\\b\\s+(?:is\\s+)?connected\\b",
+            ).find(text)
+            if (match != null) {
+                consumed += match.range
+                add(Condition.DeviceConnected(device.id, device.label))
+            }
+        }
+    }
+
+    private fun parseScheduledDays(text: String, consumed: MutableList<IntRange>): Set<Day> {
+        val match = Regex("\\b(?:on\\s+)?(weekdays?|weekends?)\\b").find(text) ?: return emptySet()
+        consumed += match.range
+        return if (match.value.contains("weekend")) WEEKEND else WEEKDAYS
     }
 
     private fun parseDays(text: String, consumed: MutableList<IntRange>): Condition.DaysOfWeek? {
@@ -202,7 +268,7 @@ class GrammarParser(
             return Condition.TimeWindow(start, LocalTimeOfDay(0, 0))
         }
 
-        Regex("\\b(?:before|until|till)\\s+($TIME)\\b").find(text)?.let { m ->
+        Regex("\\b(?:before|till)\\s+($TIME)\\b").find(text)?.let { m ->
             val end = parseTime(m.groupValues[1]) ?: return@let
             consumed += m.range
             return Condition.TimeWindow(LocalTimeOfDay(0, 0), end)
@@ -252,6 +318,19 @@ class GrammarParser(
             Regex("\\bnotifications?\\b").find(text)?.let { n -> consumed += n.range }
             add(ActionSpec(ActionId.REQUEST_DND, ActionArgs.Dnd()))
         }
+
+        Regex("\\b(?:remind me to charge|remind me about charging)\\b").find(text)?.let {
+            consumed += it.range
+            add(ActionSpec(ActionId.NOTIFY_RESULT, ActionArgs.Notify("The phone is not charging.")))
+        }
+
+        Regex("\\b(?:pin|pinned|keep)\\s+(?:a\\s+)?(?:note|message)\\b(?:[: ]+(.+?))?(?=\\s+until\\b|$)")
+            .find(text)?.let { match ->
+            consumed += match.range
+            val message = match.groups[1]?.value?.trim()?.trim('"', '\\'')?.takeIf { it.isNotBlank() }
+                ?: "Cues session is active."
+            add(ActionSpec(ActionId.PINNED_NOTE, ActionArgs.PinnedNote(message)))
+        }
     }
 
     // ------------------------------------------------------------- endings
@@ -270,6 +349,28 @@ class GrammarParser(
             ?.let { (it.args as? ActionArgs.FocusTimer)?.durationMinutes }
         if (timerMinutes != null) add(EndCondition.Duration(timerMinutes))
 
+        val duration = Regex("\\bfor\\s+($TIME|half an hour|an hour|one hour)\\b").find(text)?.let { match ->
+            consumed += match.range
+            parseTimeAsDuration(match.groupValues[1])
+        }
+        if (duration != null && timerMinutes == null) add(EndCondition.Duration(duration))
+
+        Regex("\\b(?:until|till)\\s+($TIME)\\b").find(text)?.let { match ->
+            parseTime(match.groupValues[1])?.let { time ->
+                consumed += match.range
+                add(EndCondition.AtTime(time, zoneId = "system"))
+            }
+        }
+
+        if (trigger is Trigger.AtTime &&
+            actions.any { it.actionId == ActionId.NOTIFY_RESULT } &&
+            none { it is EndCondition.AtTime || it is EndCondition.Duration }
+        ) {
+            // A one-shot reminder is still a bounded session; it must not leave
+            // an active record behind forever after the notification is shown.
+            add(EndCondition.Duration(1))
+        }
+
         val saysDisconnect = Regex(
             "\\b(end|stop|finish)\\b[^.]{0,40}\\b(disconnect\\w*|unplug\\w*|remove\\w*|take\\w* (them )?out)\\b",
         ).find(text)
@@ -277,7 +378,9 @@ class GrammarParser(
         if (saysDisconnect != null) {
             consumed += saysDisconnect.range
             add(EndCondition.TriggerReversed)
-        } else if (trigger is Trigger.BluetoothConnection && trigger.transition == DeviceTransition.CONNECTED) {
+        } else if (trigger is Trigger.BluetoothConnection && trigger.transition == DeviceTransition.CONNECTED ||
+            trigger is Trigger.WifiConnection && trigger.transition == DeviceTransition.CONNECTED
+        ) {
             // A connection-started cue ending when the connection goes away is
             // the expectation. It is added as a visible proposed default, shown
             // in the review, not smuggled in.
@@ -312,15 +415,28 @@ class GrammarParser(
             actions.any { it.actionId == ActionId.REQUEST_DND } -> "Quiet"
             else -> "Cue"
         }
-        val whenPart = when (trigger) {
-            is Trigger.BluetoothConnection -> "when ${trigger.deviceLabel} ${
-                trigger.transition.name.lowercase()
-            }"
-
-            is Trigger.Charging -> "when ${if (trigger.transition == PowerTransition.PLUGGED_IN) "charging" else "unplugged"}"
-            Trigger.Manual -> "on demand"
-        }
+        val whenPart = "when ${SignalRegistry.describe(trigger)}"
         return "$what $whenPart"
+    }
+
+    private fun parseTimeAsDuration(raw: String): Int? {
+        val normalized = raw.trim()
+        if (normalized == "half an hour") return 30
+        if (normalized == "an hour" || normalized == "one hour") return 60
+        val match = Regex("^(\\d{1,3})(?:\\s*)(minute|min|hour|hr)s?$").find(normalized) ?: return null
+        val value = match.groupValues[1].toIntOrNull() ?: return null
+        return if (match.groupValues[2].startsWith("h")) value * 60 else value
+    }
+
+    private fun namedWifiUnsupported(trigger: Trigger, text: String): List<Unsupported> {
+        val wifi = trigger as? Trigger.WifiConnection ?: return emptyList()
+        if (wifi.network !is WifiNetwork.Named) return emptyList()
+        return listOf(
+            Unsupported(
+                text,
+                "Named Wi-Fi needs location access on this build; use any Wi-Fi until the device spike is decided.",
+            ),
+        )
     }
 
     private companion object {

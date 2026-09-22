@@ -12,16 +12,18 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Offline core implemented and tested; Android runtime written but unverified; no measured results.**
+**Offline generic signal core implemented and tested; Android runtime written but unverified; no measured results.**
 
 The decision core is built and tested: the routine model, the three-valued
 evaluator, the compiler and approval digest, the closed action registry, the
-grammar-based drafting path, the session engine and the receipts. It is pure
-Kotlin/JVM with no Android dependency, so `./dev t` runs its suite on any
-machine with a JDK.
+grammar-based drafting path, the closed signal-kit registry, any-Wi-Fi and
+bounded at-time sessions, device-connected conditions, pinned notes, the session
+engine and the receipts. It is pure Kotlin/JVM with no Android dependency, so
+`./dev t` runs its suite on any machine with a JDK.
 
-The Android runtime — the action executor, the Bluetooth and power adapters,
-the owned Do Not Disturb rule, the timer service and the Compose screens — is
+The Android runtime — the action executor, Bluetooth/power adapters, the
+signal-adapter port for Wi-Fi/time, the owned Do Not Disturb rule, the timer
+service and the Compose screens — is
 written against real Android APIs and wired end to end, but none of it has
 compiled or run anywhere: this environment has no Android SDK (see
 [CLEANUP.md](CLEANUP.md) CL-04). Proving each call against the actual OS, on
@@ -59,6 +61,7 @@ Earlier versions are in the git history.
 - **Unknown context stays unknown.** A device connection does not establish location or intent. Missing data never grants permission to act.
 - **Context is declared, not inferred.** A routine uses only the signals a user explicitly attaches, each shown with its source and age.
 - **A routine has an ending.** Cleanup releases only the app's own effects and respects a later user choice or another active mode.
+- **Signals are closed and composable.** A new signal is a reviewed core kit plus an app adapter; runtime plugins and model-created capabilities are not part of the vocabulary.
 
 ## Claim discipline
 

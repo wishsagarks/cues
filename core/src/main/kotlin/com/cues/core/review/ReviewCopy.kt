@@ -3,6 +3,7 @@ package com.cues.core.review
 import com.cues.core.model.*
 import com.cues.core.registry.ActionRisk
 import com.cues.core.receipt.friendly
+import com.cues.core.signals.SignalRegistry
 
 /**
  * Renders the WHEN / IF / DO / UNTIL / RESTORE review — and its surrounding
@@ -20,37 +21,11 @@ object ReviewCopy {
         val frequency: String,
     )
 
-    fun whenText(routine: Routine): String = when (val t = routine.trigger) {
-        is Trigger.BluetoothConnection -> when (t.transition) {
-            DeviceTransition.CONNECTED -> "${t.deviceLabel} connects"
-            DeviceTransition.DISCONNECTED -> "${t.deviceLabel} disconnects"
-        }
-
-        is Trigger.Charging -> when (t.transition) {
-            PowerTransition.PLUGGED_IN -> "the charger is plugged in"
-            PowerTransition.UNPLUGGED -> "the charger is unplugged"
-        }
-
-        Trigger.Manual -> "you run it by hand"
-    }
+    fun whenText(routine: Routine): String = SignalRegistry.reviewText(routine.trigger)
 
     fun ifText(routine: Routine): String {
         if (routine.conditions.isEmpty()) return "always"
-        return routine.conditions.joinToString(", ") { condition ->
-            when (condition) {
-                is Condition.DaysOfWeek -> condition.days.describeDays()
-                // The normalization is shown, never hidden: "after 6 PM" became a
-                // window running to midnight, and the user gets to disagree.
-                is Condition.TimeWindow -> if (condition.endExclusive.minutesOfDay == 0) {
-                    "at or after ${condition.startInclusive} local time"
-                } else {
-                    "${condition.startInclusive} to ${condition.endExclusive} local time"
-                }
-
-                is Condition.ChargingState ->
-                    if (condition.charging) "the phone is charging" else "the phone is not charging"
-            }
-        }
+        return routine.conditions.joinToString(", ") { SignalRegistry.reviewText(it) }
     }
 
     fun doText(routine: Routine): String = routine.actions.joinToString(", ") { spec ->
@@ -58,16 +33,14 @@ object ReviewCopy {
             is ActionArgs.FocusTimer -> "start a ${args.durationMinutes}-minute focus timer"
             is ActionArgs.Dnd -> "request our quiet-notifications rule"
             is ActionArgs.Notify -> "show \"${args.message}\""
+            is ActionArgs.PinnedNote -> "keep \"${args.message}\" pinned"
             ActionArgs.None -> spec.actionId.friendly().lowercase()
         }
     }
 
     fun untilText(routine: Routine): String = routine.endConditions.joinToString(", ") { end ->
-        when (end) {
-            is EndCondition.Duration -> "${end.minutes} minutes have passed"
-            EndCondition.TriggerReversed -> "${triggerNounFor(routine)} goes away"
-            EndCondition.ManualStop -> "you stop it"
-        }
+        if (end == EndCondition.TriggerReversed) "${triggerNounFor(routine)} ${SignalRegistry.reviewText(end)}"
+        else SignalRegistry.reviewText(end)
     }
 
     fun restoreText(routine: Routine): String {
@@ -76,6 +49,7 @@ object ReviewCopy {
                 ActionId.START_FOCUS_TIMER -> "end our timer"
                 ActionId.REQUEST_DND -> "release our quiet rule"
                 ActionId.NOTIFY_RESULT -> null
+                ActionId.PINNED_NOTE -> "remove our pinned note"
             }
         }
         if (owned.isEmpty()) return "nothing to release"
@@ -96,18 +70,7 @@ object ReviewCopy {
     fun accessText(routine: Routine): String =
         routine.requiredCapabilities.joinToString(", ") { it.friendlyName() }.ifEmpty { "none" }
 
-    fun triggerNounFor(routine: Routine): String = when (val t = routine.trigger) {
-        is Trigger.BluetoothConnection -> t.deviceLabel
-        is Trigger.Charging -> "the charger"
-        Trigger.Manual -> "the run"
-    }
-
-    private fun Set<Day>.describeDays(): String = when (this) {
-        WEEKDAYS -> "Monday to Friday"
-        WEEKEND -> "Saturday and Sunday"
-        else -> Day.entries.filter { it in this }
-            .joinToString(", ") { it.name.lowercase().replaceFirstChar(Char::uppercase) }
-    }
+    fun triggerNounFor(routine: Routine): String = SignalRegistry.noun(routine.trigger)
 
     fun Capability.friendlyName(): String = when (this) {
         Capability.BLUETOOTH_CONNECT -> "Bluetooth"
@@ -115,6 +78,8 @@ object ReviewCopy {
         Capability.POST_NOTIFICATIONS -> "notifications"
         Capability.EXACT_ALARM -> "exact alarms"
         Capability.BATTERY_STATE -> "battery state"
+        Capability.NETWORK_STATE -> "network state"
+        Capability.LOCATION_FOR_WIFI_NAME -> "location for a Wi-Fi name"
     }
 
     /** Explains the actual, bounded use of each requested capability before approval. */
@@ -142,6 +107,16 @@ object ReviewCopy {
         Capability.BATTERY_STATE -> PermissionCheckCopy(
             purpose = "Read the current charging state when an approved power event arrives.",
             frequency = "Read only at charging events or an approved charging check; Cues does not infer charging history.",
+        )
+
+        Capability.NETWORK_STATE -> PermissionCheckCopy(
+            purpose = "Observe whether Wi-Fi connects or disconnects for this cue.",
+            frequency = "Used only for the approved Wi-Fi signals; Cues does not inspect unrelated traffic.",
+        )
+
+        Capability.LOCATION_FOR_WIFI_NAME -> PermissionCheckCopy(
+            purpose = "Resolve a named Wi-Fi network when the operating system permits it.",
+            frequency = "Not currently armable until the named-network device spike is complete.",
         )
     }
 

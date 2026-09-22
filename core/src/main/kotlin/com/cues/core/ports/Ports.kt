@@ -91,6 +91,20 @@ fun interface CapabilityProvider {
     fun granted(): Set<Capability>
 }
 
+/** One OS-facing signal listener, selected from the signals armed routines need. */
+interface SignalAdapter {
+    val key: String
+    fun start(armed: List<Routine>)
+    fun stop()
+    fun health(): ListenerHealth
+}
+
+data class ListenerHealth(
+    val key: String,
+    val running: Boolean,
+    val detail: String? = null,
+)
+
 /**
  * Speech-to-text, kept behind a port so `:core` never depends on Android's
  * `SpeechRecognizer`.

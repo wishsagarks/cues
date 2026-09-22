@@ -11,6 +11,7 @@ import com.cues.core.ports.SessionStore
 import com.cues.core.receipt.Receipts
 import com.cues.core.session.EngineResult
 import com.cues.core.session.SessionEngine
+import com.cues.core.signals.SignalRegistry
 
 /** One labelled scenario and what the cue did in it. */
 data class RehearsalRow(
@@ -38,6 +39,7 @@ private class MockExecutor : ActionExecutor {
             ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
             ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
             ActionId.NOTIFY_RESULT -> null
+            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
         }
         return ActionOutcome(ActionState.SUCCEEDED, detail = "sample", acquired = owns)
     }
@@ -202,15 +204,23 @@ object Rehearsal {
             localTime = ContextValue.Known(time, ContextSource.REHEARSAL, now),
             zoneId = "local",
             charging = ContextValue.Known(charging, ContextSource.REHEARSAL, now),
-            connectedDeviceIds = ContextValue.Known(emptySet(), ContextSource.REHEARSAL, now),
+            connectedDeviceIds = ContextValue.Known(
+                routine.conditions.filterIsInstance<Condition.DeviceConnected>().map { it.deviceId }.toSet(),
+                ContextSource.REHEARSAL,
+                now,
+            ),
+            wifi = ContextValue.Known(
+                WifiState(
+                    connected = routine.conditions.any { it is Condition.WifiConnected },
+                    networkLabel = (routine.conditions.filterIsInstance<Condition.WifiConnected>().firstOrNull()?.network as? WifiNetwork.Named)?.label,
+                ),
+                ContextSource.REHEARSAL,
+                now,
+            ),
         )
     }
 
-    private fun Routine.triggerLabel(): String = when (val t = trigger) {
-        is Trigger.BluetoothConnection -> "${t.deviceLabel} connection"
-        is Trigger.Charging -> "charger connection"
-        Trigger.Manual -> "manual run"
-    }
+    private fun Routine.triggerLabel(): String = SignalRegistry.describe(trigger)
 
     /**
      * The event that would start this cue, built from its own trigger.
@@ -219,40 +229,9 @@ object Rehearsal {
      * it is rejected as "a different device", which would make every rehearsal
      * row read as a non-match for the wrong reason.
      */
-    private fun connect(routine: Routine, now: Long): TriggerEvent = when (val t = routine.trigger) {
-        is Trigger.BluetoothConnection -> TriggerEvent(
-            kind = when (t.transition) {
-                DeviceTransition.CONNECTED -> EventKind.BLUETOOTH_CONNECTED
-                DeviceTransition.DISCONNECTED -> EventKind.BLUETOOTH_DISCONNECTED
-            },
-            atMillis = now,
-            deviceId = t.deviceId,
-            connectionSessionId = "sample-connection",
-            provenance = EventProvenance.REHEARSAL,
-        )
+    private fun connect(routine: Routine, now: Long): TriggerEvent =
+        SignalRegistry.triggerKit(routine.trigger).rehearsalEvents(routine.trigger, now).single()
 
-        is Trigger.Charging -> TriggerEvent(
-            kind = when (t.transition) {
-                PowerTransition.PLUGGED_IN -> EventKind.POWER_CONNECTED
-                PowerTransition.UNPLUGGED -> EventKind.POWER_DISCONNECTED
-            },
-            atMillis = now,
-            connectionSessionId = "sample-connection",
-            provenance = EventProvenance.REHEARSAL,
-        )
-
-        Trigger.Manual -> TriggerEvent(EventKind.MANUAL_RUN, now, provenance = EventProvenance.REHEARSAL)
-    }
-
-    private fun reverse(routine: Routine, now: Long): TriggerEvent = when (val t = routine.trigger) {
-        is Trigger.BluetoothConnection -> TriggerEvent(
-            EventKind.BLUETOOTH_DISCONNECTED,
-            now,
-            deviceId = t.deviceId,
-            connectionSessionId = "sample-connection",
-            provenance = EventProvenance.REHEARSAL,
-        )
-
-        else -> TriggerEvent(EventKind.POWER_DISCONNECTED, now, provenance = EventProvenance.REHEARSAL)
-    }
+    private fun reverse(routine: Routine, now: Long): TriggerEvent =
+        requireNotNull(SignalRegistry.reversalEvent(routine.trigger, now))
 }

@@ -1,0 +1,28 @@
+{
+  "name": "cues-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "voices": "node --env-file=../.env.local scripts/voices.mjs",
+    "tts": "node --env-file=../.env.local scripts/tts.mjs",
+    "tts:placeholder": "node scripts/tts.mjs --placeholder",
+    "typecheck": "tsc --noEmit",
+    "still": "remotion still src/index.ts Cues out/still.png --frame=120",
+    "render": "remotion render src/index.ts Cues out/cues-4k.mp4 --scale=2 --codec=h264 --crf=16 --audio-codec=aac",
+    "prerender": "node scripts/guard.mjs",
+    "make": "npm run tts && npm run render",
+    "render:test": "remotion render src/index.ts Cues out/test.mp4 --scale=2 --codec=h264 --crf=16 --audio-codec=aac --frames=0-59"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.526",
+    "@remotion/google-fonts": "4.0.526",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.526"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

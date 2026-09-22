@@ -103,4 +103,5 @@ data class CleanupObligation(
 enum class OwnedResource {
     FOCUS_TIMER,
     DND_CONTRIBUTION,
+    PINNED_NOTE,
 }

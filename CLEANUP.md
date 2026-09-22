@@ -148,3 +148,48 @@ of this is knowable from a container.
 **Remove when:** each is tested on the loaner and the result recorded — as a
 working implementation, or as a documented limitation. A limitation that is
 written down is closed; one that is quietly hoped about is not.
+
+---
+
+## CL-07 — Named Wi-Fi requires a device decision
+
+**Status:** open · **Raised:** 22 Sep 2026
+
+The core accepts `WifiNetwork.Named` as a typed value so the vocabulary does
+not need to change after the device spike, but the validator rejects it with a
+needs-location answer until R7 establishes whether OriginOS exposes the SSID
+without location access. Any-Wi-Fi is the supported generic path now.
+
+**Remove when:** R7 is run with location granted and revoked, and the result is
+recorded in Diagnostics and the Sprint 4/5 register.
+
+---
+
+## CL-08 — Pre-event signal framework disclosure
+
+**Status:** open · **Raised:** 22 Sep 2026
+
+The sealed signal kits and the `PINNED_NOTE` action were added before the event
+to keep the core generic. They do not enable runtime plugins or model-created
+capabilities; the registry is closed and compile-time checked. The Android
+Wi-Fi and time adapters remain unverified until R7/R8.
+
+**Remove when:** the rulebook disclosure is checked against the final deck and
+submission copy, and the device adapter results are recorded.
+
+---
+
+## CL-09 — Signal-framework merge went to `main` without a local build or test run
+
+**Status:** open · **Raised:** 22 Sep 2026
+
+The commit that merged the `SignalRegistry` refactor (`CueService`, `SessionEngine`,
+`Evaluator`, `Normalizer`, `Validator`, `GrammarParser`, the new `signals/` package,
+and their tests) was pushed to `main` from an environment with no working JDK, so
+`./dev t` could not be run and none of it has compiled anywhere. This is a stronger
+claim gap than CL-04: that entry is about unverified *version pins*, this one is
+about unverified *compilation*. Treat everything under `core/.../signals/` and every
+file this merge touched as unverified until the first real build.
+
+**Remove when:** `./dev t` is run on a machine with a JDK (or on the loaner) and its
+result — pass or the specific failure — is recorded here.

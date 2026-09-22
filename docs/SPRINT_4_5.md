@@ -10,6 +10,18 @@
 
 The ordering is deliberate. Sprint 4 proves the promise that matters when nobody is watching. Sprint 5 adds what makes the promise *visible*. If hour 23 arrives with the hero loop still unreliable, Sprint 5 shrinks to 5.7 and 5.8 only (see *What to cut*).
 
+## Pre-event Sprint 3.5: signal framework (Sep 23–25)
+
+The core now has a closed `SignalRegistry` of typed trigger, condition and end
+kits. Bluetooth, charging and manual behavior dispatch through the same kit
+interfaces as any-Wi-Fi, device-connected and at-time signals. This is generic
+source code, not a runtime plugin system: every subtype is sealed, registered
+and covered by an exhaustiveness check. Existing semantic forms retain the
+approved digest, and `PINNED_NOTE` is an app-owned, reversible action.
+
+The event still proves delivery on the phone. No Android adapter is considered
+healthy until it reports its listener status and its result is recorded.
+
 ---
 
 ## R&D register
@@ -24,6 +36,8 @@ Every open question here has a method, a pass condition, and a fallback that the
 | **R4** | Does the merged APK request **no `INTERNET` permission**? | `./dev perms` (new, task 4.0) dumps the merged manifest, because MediaPipe and other libraries can merge `INTERNET` in. (10 min) | `INTERNET` absent, or removed with `tools:node="remove"` while the app still works | If a required library needs it, drop the structural claim and fall back to an observed claim: the receipt records connectivity state. |
 | **R5** | Which on-device runtime drafts a cue fastest and most correctly on this phone? | The bake-off in task 5.0. It runs over `corpus/paraphrases.txt` plus 15 unseen paraphrases written by a teammate who has not read the grammar. (60 min, Sprint 5) | Beats the parser on unseen items, has zero *wrong-meaning* accepts, and p50 latency is at most 4 s | Keep the parser only and say so plainly (CL-03). A parser shown as AI is the one outcome that is ruled out. |
 | **R6** | Can a missed event be *detected*, even if it cannot be prevented? | On resume and on every received event, compare the adapter's current connected set with the last recorded transition. (Inside task 4.6) | A disconnect made while the process was dead appears as a coverage gap on the next resume | Monitoring health says "not checked" rather than "healthy". |
+| **R7** | Does OriginOS expose a usable Wi-Fi name with and without location access? | Compare any-network and named-network callbacks with location granted and revoked. (30 min) | Named matching is stable without an unjustified permission claim | Keep any-Wi-Fi only; named Wi-Fi remains a readable needs-location answer. |
+| **R8** | Does an at-time callback arrive with the screen off? | Schedule three bounded sessions, screen off, and compare delivery with the persisted zone/deadline. (20 min) | All three callbacks arrive within the measured tolerance | Keep at-time semantics in core, report delivery as unverified and cut the Android adapter. |
 
 Candidate runtimes for R5, in the order to try them:
 1. MediaPipe LLM Inference, already in the catalogue but unverified.
@@ -46,6 +60,7 @@ Model files are side-loaded, never downloaded by the app (see R4). No NPU claims
 | 4.5 | **Reconcile after death.** Replace the in-memory `zenRuleIds` map by reconciling against `NotificationManager.automaticZenRules`, matched by owner and rule name, on process start and on boot. If an expired session is found, cleanup runs and nothing restarts. Retires the first CL-02 bullet. | 0.75h | LC-03, LC-05 |
 | 4.6 | **Monitoring health and coverage gaps (R6).** Home shows three things: when the last event was received, whether each armed trigger's listener is live, and any *coverage gap*. A gap means the device state changed while Cues was not listening, and it gets its own receipt line from a new reason code `COVERAGE_GAP`. A missed event is never recorded as "nothing happened". | 0.5h | LC-05, EX-02 |
 | 4.7 | **Live receipts and permission re-check on resume.** The receipts list observes the store instead of `remember { … }`. The review and arm preflight re-read capabilities in `onResume`. Retires the other two CL-02 bullets. | 0.25h | AC-03, RV-01 |
+| 5.A | **Wi-Fi and time adapters plus `AdapterSupervisor`.** Register only adapters required by armed kits, feed listener health to MH-01, and route callbacks through `CueService` with unknown/redacted readings preserved. | 1.75h | TR-03, MH-01, EX-02 |
 
 ### Sprint 4 test cases (on the loaner, not in :core)
 
@@ -77,7 +92,7 @@ The features in this sprint are the reason Cues is its own kind of app, not a ru
 | 5.3 | **Clause accounting.** Every word of the request is classified as *mapped* (to a WHEN/IF/DO/UNTIL/RESTORE field), *filler* (from a closed list of words like "please" and "the"), or *unaccounted*. The review underlines the source text by class, and anything unaccounted blocks approval until it is resolved or deleted by the user. This mechanically enforces "never drop a clause". It starts with the grammar parser, which knows its spans. For the model path the accounting is recomputed deterministically and never taken from the model. | 1h | CP-03, RV-01 |
 | 5.4 | **"What would happen right now?"** A one-tap dry run of an armed cue against the *live* context snapshot, using the same pure evaluator with the mock executor that rehearsal uses. The result is labeled "Dry run: nothing was changed". This is a single evaluation, not shadow mode, and it structurally cannot touch the phone (RH-01). | 0.5h | RH-01, RH-02, EX-02 |
 | 5.5 | **Nearest-miss receipts.** When a cue is skipped, the receipt names the *one* failing condition with the observed value that failed it, for example: "Skipped: 17:52 is before 18:00. Everything else matched." The line is rendered from reason codes plus observed values, never generated. | 0.5h | EX-02 |
-| 5.6 | **Stretch: expected state at a deadline (CT-01).** At an approved time, read the charging state once. If it is `false`, send one reminder. If it is `true`, record that no reminder was needed. If it is `Unknown`, record that no reliable check was possible. Deduplicate by rule version plus occurrence. Build it only if 5.0–5.5 are done by hour 28. | 0.75h | CT-01 |
+| 5.6 | **Composition demo (CT-01).** Compose an `AtTime` trigger, `ChargingState(false)` condition and `NOTIFY_RESULT` action. At the approved deadline, false notifies once; true and unknown produce truthful receipts. | 0.75h | CT-01 |
 | 5.7 | **Measurement run.** Run the hero cue 5× (match), 3× (nonmatch) and 2× (exit by deadline), and measure authoring latency, event-to-start delay and exit-to-release delay. Each row in `docs/MEASUREMENTS.md` records the date, the device, OS build, the method and any caveat. Update README, SUBMISSION and the deck **only** from this file. | 1h | All "Proposed evaluation" items in PRS |
 | 5.8 | **Demo lock.** The demo script uses the *visibly approved* weekend rule. The short timer is an explicit edit in the review, not a hidden shortcut. Record backup footage and label it "recorded" on screen. Rehearse the demo twice, once from the physical device and once from the footage. Close or re-date every CLEANUP entry. | 1h | — |
 
@@ -113,9 +128,9 @@ These would join [PRS.md](PRS.md) once the corresponding task lands, and not bef
 
 ## What to cut, in order
 
-1. 5.6 (CT-01 stretch).
+1. 5.2 (differential drafting). It disappears anyway if 5.0 drops the model.
 2. 5.4 (dry run). Rehearsal already covers the logic; this only makes it live.
-3. 5.2 (differential drafting). It disappears anyway if 5.0 drops the model.
+3. 5.6 (CT-01 composition demo).
 4. Clause accounting for the model path. Keep it for the parser, which knows its spans.
 5. The CDM spike R1b. Accept the documented limitation instead.
 6. The charging adapter (4.2). Keep Bluetooth as the only physical trigger.

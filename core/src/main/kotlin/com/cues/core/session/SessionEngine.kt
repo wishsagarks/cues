@@ -10,6 +10,7 @@ import com.cues.core.model.*
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.Clock
 import com.cues.core.ports.SessionStore
+import com.cues.core.signals.SignalRegistry
 
 /** What the engine did, and why, in a form a receipt can render without interpreting. */
 sealed interface EngineResult {
@@ -118,9 +119,6 @@ class SessionEngine(
         admissionKey: String,
     ): Session {
         val now = clock.nowMillis()
-        val durationMinutes = routine.endConditions.filterIsInstance<EndCondition.Duration>()
-            .minByOrNull { it.minutes }?.minutes
-
         // Persisted before a single side effect runs. If the process dies in
         // the middle of starting, the record of what might need releasing
         // already exists.
@@ -132,8 +130,11 @@ class SessionEngine(
             admissionKey = admissionKey,
             observedInputs = context,
             state = SessionState.STARTING,
-            deadlineMillis = durationMinutes?.let { now + it * 60_000L },
+            deadlineMillis = null,
             actions = routine.actions.map { ActionRecord(it.actionId, ActionState.NOT_STARTED) },
+        )
+        session = session.copy(
+            deadlineMillis = routine.endConditions.mapNotNull { SignalRegistry.schedule(it, session) }.minOrNull(),
         )
         store.save(session)
 
@@ -343,13 +344,8 @@ class SessionEngine(
         return "${routine.id}:v${routine.version}:${event.kind}:$connection"
     }
 
-    private fun isReversal(routine: Routine, event: TriggerEvent): Boolean = when (val t = routine.trigger) {
-        is Trigger.BluetoothConnection ->
-            event.kind == EventKind.BLUETOOTH_DISCONNECTED && event.deviceId == t.deviceId
-
-        is Trigger.Charging -> event.kind == EventKind.POWER_DISCONNECTED
-        Trigger.Manual -> false
-    }
+    private fun isReversal(routine: Routine, event: TriggerEvent): Boolean =
+        SignalRegistry.reverses(routine.trigger, event)
 
     private fun withinGrace(routine: Routine, session: Session, event: TriggerEvent): Boolean {
         val exitAt = session.pendingExitAtMillis ?: return false
