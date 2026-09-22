@@ -199,24 +199,35 @@ class CueService(
         com.cues.core.model.Trigger.Manual -> kind == EventKind.MANUAL_RUN
     }
 
-    /** The exact-alarm callback for one session's deadline. */
-    fun onDeadline(routineId: String, sessionId: String): EngineResult? =
-        exitFor(routineId, sessionId, EventKind.DEADLINE_REACHED)
+    /**
+     * The exact-alarm callback for one session's deadline.
+     *
+     * Takes only the session id, not a routine id — that is deliberately all
+     * the alarm's own PendingIntent has to carry. The routine is looked up
+     * from the session record itself, which is also simpler at every real
+     * call site: an alarm, a grace-window timer and a manual stop button all
+     * naturally know which session they're about, never which routine.
+     */
+    fun onDeadline(sessionId: String): EngineResult? = exitFor(sessionId, EventKind.DEADLINE_REACHED)
 
     /** The reconnect grace window for one session has elapsed without a reconnect. */
-    fun onGraceElapsed(routineId: String, sessionId: String): EngineResult? {
-        val routine = routines.findRoutine(routineId) ?: return null
+    fun onGraceElapsed(sessionId: String): EngineResult? {
+        val routine = routineForSession(sessionId) ?: return null
         return engine.onGraceElapsed(routine, sessionId).also { recordReceipt(routine, it) }
     }
 
     /** The user's own stop control for a running session. */
-    fun onManualStop(routineId: String, sessionId: String): EngineResult? =
-        exitFor(routineId, sessionId, EventKind.MANUAL_STOP)
+    fun onManualStop(sessionId: String): EngineResult? = exitFor(sessionId, EventKind.MANUAL_STOP)
 
-    private fun exitFor(routineId: String, sessionId: String, kind: EventKind): EngineResult? {
-        val routine = routines.findRoutine(routineId) ?: return null
+    private fun exitFor(sessionId: String, kind: EventKind): EngineResult? {
+        val routine = routineForSession(sessionId) ?: return null
         val event = TriggerEvent(kind, clock.nowMillis())
         return engine.onExitEvent(routine, event, sessionId).also { recordReceipt(routine, it) }
+    }
+
+    private fun routineForSession(sessionId: String): Routine? {
+        val session = sessions.find(sessionId) ?: return null
+        return routines.findRoutine(session.routineId)
     }
 
     /**

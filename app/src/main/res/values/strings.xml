@@ -2,4 +2,8 @@
 <resources>
     <string name="app_name">Cues</string>
     <string name="tagline">Context you declare. Behaviour that ends.</string>
+
+    <string name="session_channel_name">Active cue</string>
+    <string name="session_notification_title">Focus session running</string>
+    <string name="session_notification_remaining">%1$d minutes left</string>
 </resources>

@@ -103,7 +103,7 @@ private suspend fun run(root: File) {
 
     heading("7. The 45-minute timer runs out — ends, releases its own effects")
     clock.advanceMinutes(45)
-    report(armed, listOfNotNull(service.onDeadline(armed.id, sessionId)))
+    report(armed, listOfNotNull(service.onDeadline(sessionId)))
 
     println()
     println("executor log:")

@@ -96,7 +96,7 @@ class CueServiceTest {
         assertEquals(SessionState.ACTIVE, started.session.state)
 
         clock.advanceMinutes(45)
-        val ended = service.onDeadline(armed.id, started.session.id)
+        val ended = service.onDeadline(started.session.id)
         assertEquals(SessionState.COMPLETED, assertIs<EngineResult.Ended>(ended).session.state)
     }
 
@@ -173,7 +173,7 @@ class CueServiceTest {
         assertIs<DeleteResult.Blocked>(service.delete(armed.id))
 
         val session = store.activeFor(armed.id).single()
-        service.onManualStop(armed.id, session.id)
+        service.onManualStop(session.id)
 
         assertEquals(DeleteResult.Ok, service.delete(armed.id))
         assertNull(store.findRoutine(armed.id))
