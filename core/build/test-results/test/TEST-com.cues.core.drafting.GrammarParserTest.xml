@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.cues.core.drafting.GrammarParserTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-22T04:57:42.990Z" hostname="vm" time="0.075">
+  <properties/>
+  <testcase name="an unsupported clause is reported and never silently dropped()" classname="com.cues.core.drafting.GrammarParserTest" time="0.003"/>
+  <testcase name="an unresolvable device produces a question rather than a wrong device()" classname="com.cues.core.drafting.GrammarParserTest" time="0.001"/>
+  <testcase name="two matching devices produce a question()" classname="com.cues.core.drafting.GrammarParserTest" time="0.001"/>
+  <testcase name="the hero sentence compiles to the reviewed routine()" classname="com.cues.core.drafting.GrammarParserTest" time="0.002"/>
+  <testcase name="a request to message someone is refused rather than ignored()" classname="com.cues.core.drafting.GrammarParserTest" time="0.002"/>
+  <testcase name="every drafted routine passes independent validation()" classname="com.cues.core.drafting.GrammarParserTest" time="0.025"/>
+  <testcase name="a numeric hour duration is converted()" classname="com.cues.core.drafting.GrammarParserTest" time="0.002"/>
+  <testcase name="a missing trigger produces a question rather than a guess()" classname="com.cues.core.drafting.GrammarParserTest" time="0.002"/>
+  <testcase name="hours are converted to minutes()" classname="com.cues.core.drafting.GrammarParserTest" time="0.002"/>
+  <testcase name="every result names the parser as its source()" classname="com.cues.core.drafting.GrammarParserTest" time="0.003"/>
+  <testcase name="time formats are all understood()" classname="com.cues.core.drafting.GrammarParserTest" time="0.005"/>
+  <testcase name="the parser preserves meaning across the corpus()" classname="com.cues.core.drafting.GrammarParserTest" time="0.015"/>
+  <testcase name="a missing action produces a question()" classname="com.cues.core.drafting.GrammarParserTest" time="0.001"/>
+  <testcase name="a cue always gets a manual stop()" classname="com.cues.core.drafting.GrammarParserTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

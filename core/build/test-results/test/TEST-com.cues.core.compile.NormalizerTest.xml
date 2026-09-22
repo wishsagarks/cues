@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.cues.core.compile.NormalizerTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-22T04:57:42.748Z" hostname="vm" time="0.055">
+  <properties/>
+  <testcase name="correcting the transcript does not change the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.028"/>
+  <testcase name="approval does not carry over to an edited routine()" classname="com.cues.core.compile.NormalizerTest" time="0.003"/>
+  <testcase name="reordering conditions does not change the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.003"/>
+  <testcase name="changing the trigger device changes the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.003"/>
+  <testcase name="normalization is idempotent()" classname="com.cues.core.compile.NormalizerTest" time="0.001"/>
+  <testcase name="changing the timer duration changes the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.002"/>
+  <testcase name="an unapproved routine never matches approval()" classname="com.cues.core.compile.NormalizerTest" time="0.0"/>
+  <testcase name="approval holds for the routine that was approved()" classname="com.cues.core.compile.NormalizerTest" time="0.002"/>
+  <testcase name="moving the time window changes the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.002"/>
+  <testcase name="renaming a cue does not change the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.002"/>
+  <testcase name="capabilities are recomputed rather than trusted()" classname="com.cues.core.compile.NormalizerTest" time="0.0"/>
+  <testcase name="changing the reconnect grace changes the digest()" classname="com.cues.core.compile.NormalizerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

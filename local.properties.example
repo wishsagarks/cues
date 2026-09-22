@@ -1,0 +1,10 @@
+# Copy to local.properties on a machine that has the Android SDK.
+# local.properties is gitignored: it holds a machine-specific path.
+#
+# Without this (and without ANDROID_HOME), the build silently drops :app and
+# :core still builds and tests normally. That is the supported cloud/CI mode.
+
+# macOS:   sdk.dir=/Users/<you>/Library/Android/sdk
+# Linux:   sdk.dir=/home/<you>/Android/Sdk
+# Windows: sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+sdk.dir=/path/to/Android/sdk

@@ -1,0 +1,92 @@
+package com.cues.core.model
+
+import kotlinx.serialization.Serializable
+
+/**
+ * One observed fact, carrying where it came from and when it was seen.
+ *
+ * Cues never stores a bare value. "Charging: false" and "charging: we could
+ * not tell" are different facts that lead to different behaviour, and a plain
+ * Boolean cannot hold that difference. Absent readings stay [Unknown] all the
+ * way through evaluation and into the receipt.
+ */
+@Serializable
+sealed interface ContextValue<out T> {
+    @Serializable
+    data class Known<out T>(
+        val value: T,
+        val source: ContextSource,
+        /** Epoch millis at observation. Compared against each adapter's freshness rule. */
+        val observedAtMillis: Long,
+    ) : ContextValue<T>
+
+    @Serializable
+    data class Unknown(val reason: UnknownReason, val source: ContextSource) : ContextValue<Nothing>
+}
+
+@Serializable
+enum class ContextSource { BLUETOOTH_ADAPTER, BATTERY_MANAGER, SYSTEM_CLOCK, USER, REHEARSAL }
+
+@Serializable
+enum class UnknownReason {
+    PERMISSION_DENIED,
+    ADAPTER_UNAVAILABLE,
+    NEVER_OBSERVED,
+    STALE,
+    REDACTED_BY_OS,
+}
+
+/**
+ * Everything the evaluator is allowed to look at, gathered at trigger time.
+ *
+ * The snapshot is the enforcement point for "context is declared, not
+ * inferred": if a signal is not in here, no condition can reach it. There is
+ * no escape hatch to the live device from inside evaluation.
+ */
+@Serializable
+data class ContextSnapshot(
+    val nowMillis: Long,
+    val localDay: ContextValue<Day>,
+    val localTime: ContextValue<LocalTimeOfDay>,
+    val zoneId: String,
+    val charging: ContextValue<Boolean> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED,
+        ContextSource.BATTERY_MANAGER,
+    ),
+    val connectedDeviceIds: ContextValue<Set<String>> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED,
+        ContextSource.BLUETOOTH_ADAPTER,
+    ),
+)
+
+/**
+ * A real or rehearsed occurrence that may start or end a session.
+ *
+ * [connectionSessionId] identifies one unbroken connection as the OS sees it.
+ * Keying admission on it, rather than on a clock bucket, is what makes
+ * duplicate callbacks for the same physical connection collapse into one
+ * session while a genuine reconnect still counts as new.
+ */
+@Serializable
+data class TriggerEvent(
+    val kind: EventKind,
+    val atMillis: Long,
+    val deviceId: String? = null,
+    val connectionSessionId: String? = null,
+    val provenance: EventProvenance = EventProvenance.PHYSICAL,
+)
+
+@Serializable
+enum class EventKind {
+    BLUETOOTH_CONNECTED,
+    BLUETOOTH_DISCONNECTED,
+    POWER_CONNECTED,
+    POWER_DISCONNECTED,
+    MANUAL_RUN,
+    MANUAL_STOP,
+    DEADLINE_REACHED,
+}
+
+/** Kept distinct so a receipt can never present a rehearsal as something that happened. */
+@Serializable
+enum class EventProvenance { PHYSICAL, MANUAL, REHEARSAL }

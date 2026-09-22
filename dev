@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# Cues task runner, built for a phone keyboard.
+#
+# Roughly ten and a half of the event's nineteen build hours are Red Light:
+# iQOO only, the laptop reachable through Office Kit. Every character typed in
+# that mode costs, so every verb here is one or two letters and every command
+# prints something that fits a phone screen.
+#
+#   ./dev t              core tests            (no Android SDK needed)
+#   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
+#   ./dev b              assemble debug APK
+#   ./dev i              install on the connected device
+#   ./dev r              install and launch
+#   ./dev w [host:port]  wireless adb: pair / connect
+#   ./dev l              logcat, Cues tags only
+#   ./dev s              short git status
+#   ./dev save "msg"     add, commit, push to the current branch
+#   ./dev h              this help
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+APP_ID="com.cues.android"
+LAUNCH="$APP_ID/com.cues.app.MainActivity"
+GW="./gradlew --console=plain"
+
+# The help text is the header comment, so the two can never drift apart.
+usage() { awk 'NR>=3 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"; }
+
+red()  { printf '\033[31m%s\033[0m\n' "$*"; }
+ok()   { printf '\033[32m%s\033[0m\n' "$*"; }
+info() { printf '\033[36m%s\033[0m\n' "$*"; }
+
+# :app only exists when an SDK does. Say so plainly instead of letting Gradle
+# fail with "task not found", which reads badly on a small screen.
+need_sdk() {
+  if [ -n "${ANDROID_HOME:-}" ] && [ -d "${ANDROID_HOME}" ]; then return 0; fi
+  if [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "${ANDROID_SDK_ROOT}" ]; then return 0; fi
+  if [ -f local.properties ] && grep -q '^sdk.dir=' local.properties; then return 0; fi
+  red "No Android SDK. ':app' is not in this build."
+  info "Set ANDROID_HOME, or copy local.properties.example to local.properties."
+  info "'./dev t' and './dev d' work without it."
+  exit 1
+}
+
+need_adb() {
+  command -v adb >/dev/null 2>&1 || { red "adb not on PATH."; exit 1; }
+  if [ -z "$(adb devices | sed -n '2p')" ]; then
+    red "No device. Try './dev w' for wireless debugging."
+    exit 1
+  fi
+}
+
+cmd="${1:-h}"; shift || true
+
+case "$cmd" in
+  t)
+    $GW :core:test "$@"
+    ok "core tests passed"
+    ;;
+
+  d)
+    [ $# -ge 1 ] || { red 'Usage: ./dev d "When my earbuds connect after 6 PM..."'; exit 1; }
+    # -q keeps Gradle's own chatter out of the review table.
+    $GW -q :core:demo -Pq="$1"
+    ;;
+
+  b) need_sdk; $GW :app:assembleDebug "$@"; ok "APK built" ;;
+
+  i) need_sdk; need_adb; $GW :app:installDebug "$@"; ok "installed" ;;
+
+  r)
+    need_sdk; need_adb
+    $GW :app:installDebug
+    adb shell am start -n "$LAUNCH" >/dev/null
+    ok "running"
+    ;;
+
+  w)
+    command -v adb >/dev/null 2>&1 || { red "adb not on PATH."; exit 1; }
+    if [ $# -ge 1 ]; then
+      adb connect "$1" && ok "connected $1"
+    else
+      info "On the phone: Settings > Developer options > Wireless debugging."
+      info "Pair once:   adb pair <host>:<pair-port>"
+      info "Then:        ./dev w <host>:<connect-port>"
+      adb devices
+    fi
+    ;;
+
+  l)
+    need_adb
+    adb logcat -v brief -s Cues:V CuesSession:V CuesDraft:V CuesDnd:V AndroidRuntime:E
+    ;;
+
+  s) git status -sb ;;
+
+  save)
+    [ $# -ge 1 ] || { red 'Usage: ./dev save "message"'; exit 1; }
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    git add -A
+    git commit -m "$1" || { info "nothing to commit"; exit 0; }
+    # Venue wifi is not to be trusted. Back off and retry rather than
+    # leaving a commit stranded on the phone.
+    delay=2
+    for attempt in 1 2 3 4 5; do
+      if git push -u origin "$branch"; then ok "pushed to $branch"; exit 0; fi
+      [ "$attempt" = 5 ] && { red "push failed after 5 attempts"; exit 1; }
+      info "push failed, retrying in ${delay}s"
+      sleep "$delay"; delay=$((delay * 2))
+    done
+    ;;
+
+  h|--help|-h) usage ;;
+
+  *) red "Unknown: $cmd"; usage; exit 1 ;;
+esac

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.cues.core.eval.EvaluatorTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-22T04:57:43.067Z" hostname="vm" time="0.016">
+  <properties/>
+  <testcase name="conditions are not evaluated for an event that is not ours()" classname="com.cues.core.eval.EvaluatorTest" time="0.0"/>
+  <testcase name="a connection before the window does not start the session()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="unknown context never grants permission to act()" classname="com.cues.core.eval.EvaluatorTest" time="0.002"/>
+  <testcase name="unknown is reported as unknown rather than silently read as false()" classname="com.cues.core.eval.EvaluatorTest" time="0.0"/>
+  <testcase name="a disconnect does not satisfy a connect trigger()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="saturday is reported as outside monday to friday()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="eligible weekday evening connection matches()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="another device connecting does not trigger this cue()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="a stale reading becomes unknown rather than being believed()" classname="com.cues.core.eval.EvaluatorTest" time="0.001"/>
+  <testcase name="a definite non-match wins over an unknown()" classname="com.cues.core.eval.EvaluatorTest" time="0.0"/>
+  <testcase name="an overnight window wraps past midnight()" classname="com.cues.core.eval.EvaluatorTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.cues.core.session.SessionEngineTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-09-22T04:57:42.580Z" hostname="vm" time="0.166">
+  <properties/>
+  <testcase name="a blocked action produces a partial session rather than a reported success()" classname="com.cues.core.session.SessionEngineTest" time="0.115"/>
+  <testcase name="a zero grace period ends on disconnect immediately()" classname="com.cues.core.session.SessionEngineTest" time="0.005"/>
+  <testcase name="a disconnect schedules an exit rather than ending immediately()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="a session whose routine is gone is left alone rather than guessed at()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="the grace period does not elapse early()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a skipped condition is explained rather than silently ignored()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="a release that throws does not abort the remaining cleanup()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="a session is persisted before any side effect runs()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="a cooldown suppresses an immediate restart()" classname="com.cues.core.session.SessionEngineTest" time="0.005"/>
+  <testcase name="a disconnect past the grace window ends the session()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a manual stop ends the session()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="an expired session is cleaned up and never replayed()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="an eligible connection starts one session and runs its actions()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a user override stands down cleanup rather than overriding the user()" classname="com.cues.core.session.SessionEngineTest" time="0.0"/>
+  <testcase name="a session still within its deadline survives a restart()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="ending twice is idempotent()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a paused cue does not run()" classname="com.cues.core.session.SessionEngineTest" time="0.003"/>
+  <testcase name="a grace window that elapsed while the process was dead ends the session()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="the deadline ends the session and releases what it owns()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a new connection after a confirmed exit starts a new session()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a duplicate callback for the same connection does not start a second session()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="a reconnect inside the grace window resumes without restarting the timer()" classname="com.cues.core.session.SessionEngineTest" time="0.002"/>
+  <testcase name="an alarm that fires early does not shorten the timer()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="one failed release does not strand the other resource()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <testcase name="pending cleanup can be retried()" classname="com.cues.core.session.SessionEngineTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

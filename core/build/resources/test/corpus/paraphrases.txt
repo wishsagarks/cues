@@ -1,0 +1,47 @@
+# Shared paraphrase corpus.
+#
+# Both drafting paths are scored against this same file: the grammar parser in
+# :core tests, and the on-device model at the event through the same harness.
+# That is the only way "the model is better than the parser" becomes a claim
+# with evidence behind it rather than an impression.
+#
+# Format: one case per line.
+#   <input sentence> | <expected semantic assertions, comma separated>
+#
+# Assertions are deliberately about *meaning*, not about exact JSON: what must
+# be preserved is the device, the gate, the effect and the ending. Two drafters
+# may legitimately produce different titles for the same cue.
+#
+# Keys: trigger, device, days, from, to, timer, dnd, endsOnDisconnect,
+#       clarify, unsupported
+
+# --- the hero routine and its paraphrases ---
+When my earbuds connect after 6 PM on weekdays, start a 45-minute focus timer and quiet notifications. End it if I disconnect. | trigger=bluetooth-connect, device=earbuds, days=weekdays, from=18:00, timer=45, dnd=true, endsOnDisconnect=true
+Whenever I connect my earbuds after 6pm on a weekday start a 45 minute focus session and silence notifications until I take them out | trigger=bluetooth-connect, device=earbuds, days=weekdays, from=18:00, timer=45, dnd=true, endsOnDisconnect=true
+on weekdays after 18:00 when the earbuds connect, quiet notifications and run a 45 min timer | trigger=bluetooth-connect, device=earbuds, days=weekdays, from=18:00, timer=45, dnd=true
+earbuds connect in the evening after 7 pm, do not disturb and a 30 minute focus timer | trigger=bluetooth-connect, device=earbuds, from=19:00, timer=30, dnd=true
+
+# --- shorter and looser phrasings ---
+when my headphones connect start a 25 minute focus timer | trigger=bluetooth-connect, device=earbuds, timer=25
+connect earbuds, mute notifications | trigger=bluetooth-connect, device=earbuds, dnd=true
+when the buds connect on monday and wednesday start a 50 minute timer | trigger=bluetooth-connect, device=earbuds, days=mon+wed, timer=50
+earbuds connect between 9am and 5pm, focus for an hour | trigger=bluetooth-connect, device=earbuds, from=09:00, to=17:00, timer=60
+
+# --- charging trigger ---
+when I plug in the charger quiet notifications for 20 minutes | trigger=charging-on, timer=20, dnd=true
+when the phone is charging after 11pm start a 15 minute timer | trigger=charging-on, from=23:00, timer=15
+
+# --- weekend, for the live demo (the event falls on a weekend) ---
+when my earbuds connect on the weekend start a 10 minute focus timer and quiet notifications | trigger=bluetooth-connect, device=earbuds, days=weekend, timer=10, dnd=true
+
+# --- must ask rather than guess ---
+start a focus timer | clarify=trigger
+when my earbuds connect | clarify=actions
+when my earbuds connect after 6pm, do the usual | clarify=actions
+
+# --- must report what it cannot do, never silently drop it ---
+when my earbuds connect start a 45 minute timer unless I am on a call | trigger=bluetooth-connect, device=earbuds, timer=45, unsupported=true
+when I get to the office quiet notifications | unsupported=true
+when my earbuds connect text my wife and start a 30 minute timer | trigger=bluetooth-connect, device=earbuds, timer=30, unsupported=true
+when I join my home wifi start a 45 minute focus timer | unsupported=true
+every morning at 7 start a 45 minute focus timer | unsupported=true

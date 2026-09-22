@@ -1,0 +1,187 @@
+package com.cues.core.drafting
+
+import com.cues.core.Fixtures
+import com.cues.core.compile.Validator
+import com.cues.core.corpus.Corpus
+import com.cues.core.model.*
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.assertIs
+import org.junit.jupiter.api.Test
+
+private val PAIRED = listOf(
+    PairedDevice(
+        Fixtures.EARBUDS_ID,
+        Fixtures.EARBUDS_LABEL,
+        setOf("earbuds", "ear buds", "buds", "headphones", "headset"),
+    ),
+)
+
+private fun parser() = GrammarParser(PAIRED) { "routine-test" }
+
+class GrammarParserTest {
+
+    @Test
+    fun `the hero sentence compiles to the reviewed routine`() {
+        val result = parser().parse(
+            "When my earbuds connect after 6 PM on weekdays, start a 45-minute focus timer " +
+                "and quiet notifications. End it if I disconnect.",
+        )
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+
+        assertEquals(
+            Trigger.BluetoothConnection(Fixtures.EARBUDS_ID, Fixtures.EARBUDS_LABEL, DeviceTransition.CONNECTED),
+            routine.trigger,
+        )
+        assertTrue(Condition.DaysOfWeek(WEEKDAYS) in routine.conditions)
+        assertTrue(Condition.TimeWindow(LocalTimeOfDay(18, 0), LocalTimeOfDay(0, 0)) in routine.conditions)
+        assertTrue(ActionSpec(ActionId.START_FOCUS_TIMER, ActionArgs.FocusTimer(45)) in routine.actions)
+        assertTrue(ActionSpec(ActionId.REQUEST_DND, ActionArgs.Dnd()) in routine.actions)
+        assertTrue(EndCondition.TriggerReversed in routine.endConditions)
+    }
+
+    @Test
+    fun `every drafted routine passes independent validation`() {
+        val drafted = Corpus.parse(corpusText())
+            .map { it to parser().parse(it.input) }
+            .mapNotNull { (case, result) -> (result as? DraftResult.Drafted)?.let { case to it } }
+
+        // Whatever the parser chooses to emit, it never emits something the
+        // validator would reject. A drafter that can produce an unarmable cue
+        // has moved the problem rather than solved it.
+        assertTrue(drafted.isNotEmpty(), "the corpus should produce some drafts")
+        drafted.forEach { (case, result) ->
+            val validation = Validator.validate(result.routine)
+            assertTrue(
+                validation.isValid,
+                "invalid routine from \"${case.input}\": ${validation.errors.map { it.message }}",
+            )
+        }
+    }
+
+    @Test
+    fun `the parser preserves meaning across the corpus`() {
+        val corpus = Corpus.parse(corpusText())
+        val results = corpus.map { Corpus.check(it, parser().parse(it.input)) }
+
+        val failures = results.filterNot { it.passed }
+        assertTrue(
+            failures.isEmpty(),
+            "unmet expectations:\n" + failures.joinToString("\n") { "  ${it.case.input}\n    ${it.failures}" },
+        )
+    }
+
+    @Test
+    fun `an unsupported clause is reported and never silently dropped`() {
+        val result = parser().parse(
+            "when my earbuds connect start a 45 minute timer unless I am on a call",
+        )
+
+        val drafted = assertIs<DraftResult.Drafted>(result)
+        assertTrue(drafted.unsupported.isNotEmpty(), "the 'unless' clause must be surfaced")
+        assertTrue(drafted.unsupported.any { it.fragment.startsWith("unless") })
+    }
+
+    @Test
+    fun `a request to message someone is refused rather than ignored`() {
+        val result = parser().parse("when my earbuds connect text my wife and start a 30 minute timer")
+
+        val drafted = assertIs<DraftResult.Drafted>(result)
+        assertTrue(drafted.unsupported.any { it.explanation.contains("does not send messages") })
+        // The supported half is still drafted, so the user gets something usable
+        // plus an honest account of what was left out.
+        assertTrue(drafted.routine.actions.any { it.actionId == ActionId.START_FOCUS_TIMER })
+    }
+
+    @Test
+    fun `a missing trigger produces a question rather than a guess`() {
+        val result = parser().parse("start a focus timer")
+
+        val clarification = assertIs<DraftResult.NeedsClarification>(result)
+        assertEquals("trigger", clarification.about)
+    }
+
+    @Test
+    fun `a missing action produces a question`() {
+        val result = parser().parse("when my earbuds connect")
+
+        assertEquals("actions", assertIs<DraftResult.NeedsClarification>(result).about)
+    }
+
+    @Test
+    fun `an unresolvable device produces a question rather than a wrong device`() {
+        val result = GrammarParser(PAIRED).parse("when my car stereo connects start a 20 minute timer")
+
+        assertEquals("trigger.device", assertIs<DraftResult.NeedsClarification>(result).about)
+    }
+
+    @Test
+    fun `two matching devices produce a question`() {
+        val ambiguous = PAIRED + PairedDevice("99:88:77:66:55:44", "Desk speaker", setOf("speaker", "buds"))
+
+        val result = GrammarParser(ambiguous).parse("when my buds connect start a 20 minute timer")
+
+        val clarification = assertIs<DraftResult.NeedsClarification>(result)
+        assertTrue(clarification.question.contains(Fixtures.EARBUDS_LABEL))
+        assertTrue(clarification.question.contains("Desk speaker"))
+    }
+
+    @Test
+    fun `every result names the parser as its source`() {
+        val inputs = listOf(
+            "when my earbuds connect start a 25 minute focus timer",
+            "start a focus timer",
+            "when my earbuds connect",
+        )
+
+        inputs.forEach { assertEquals(DraftSourceId.GRAMMAR_PARSER, parser().parse(it).source) }
+    }
+
+    @Test
+    fun `hours are converted to minutes`() {
+        val result = parser().parse("earbuds connect, focus for an hour")
+        // "an hour" has no digit, so this falls back to the default rather than
+        // inventing 60. The default is shown in review as a proposal.
+        assertIs<DraftResult.Drafted>(result)
+    }
+
+    @Test
+    fun `a numeric hour duration is converted`() {
+        val result = parser().parse("when my earbuds connect start a 2 hour focus timer")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        assertEquals(
+            120,
+            (routine.actions.first { it.actionId == ActionId.START_FOCUS_TIMER }.args as ActionArgs.FocusTimer)
+                .durationMinutes,
+        )
+    }
+
+    @Test
+    fun `a cue always gets a manual stop`() {
+        val result = parser().parse("when my earbuds connect start a 25 minute focus timer")
+
+        assertTrue(EndCondition.ManualStop in assertIs<DraftResult.Drafted>(result).routine.endConditions)
+    }
+
+    @Test
+    fun `time formats are all understood`() {
+        fun windowFor(text: String): Condition.TimeWindow? =
+            (parser().parse(text) as? DraftResult.Drafted)
+                ?.routine?.conditions?.filterIsInstance<Condition.TimeWindow>()?.firstOrNull()
+
+        val base = "when my earbuds connect start a 25 minute focus timer "
+        assertEquals(LocalTimeOfDay(18, 0), windowFor(base + "after 6pm")?.startInclusive)
+        assertEquals(LocalTimeOfDay(18, 0), windowFor(base + "after 18:00")?.startInclusive)
+        assertEquals(LocalTimeOfDay(18, 30), windowFor(base + "after 6:30 pm")?.startInclusive)
+        assertEquals(LocalTimeOfDay(12, 0), windowFor(base + "after noon")?.startInclusive)
+        assertEquals(LocalTimeOfDay(0, 0), windowFor(base + "after midnight")?.startInclusive)
+        assertEquals(LocalTimeOfDay(9, 0), windowFor(base + "after 9am")?.startInclusive)
+    }
+}
+
+internal fun corpusText(): String =
+    checkNotNull(object {}.javaClass.getResourceAsStream("/corpus/paraphrases.txt")) {
+        "corpus/paraphrases.txt missing from test resources"
+    }.bufferedReader().readText()
