@@ -98,7 +98,21 @@ class SessionService : Service() {
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setContentIntent(openAppIntent())
+        .addAction(0, getString(R.string.session_notification_stop), stopIntent())
         .build()
+
+    /**
+     * The notification's own stop action (4.4). Broadcasts to
+     * [StopSessionReceiver] rather than calling [com.cues.core.CueService]
+     * directly — this service only hosts the visible countdown, it never
+     * makes lifecycle decisions itself.
+     */
+    private fun stopIntent(): PendingIntent {
+        val intent = Intent(this, StopSessionReceiver::class.java)
+            .putExtra(StopSessionReceiver.EXTRA_SESSION_ID, sessionId)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(this, sessionId.hashCode(), intent, flags)
+    }
 
     private fun remainingText(): String {
         val remainingMinutes = ((deadlineMillis - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0)

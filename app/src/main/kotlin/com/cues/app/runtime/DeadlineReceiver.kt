@@ -21,6 +21,9 @@ class DeadlineReceiver : BroadcastReceiver() {
 
         val app = context.applicationContext as CuesApplication
         val result = app.cueService.onDeadline(sessionId)
+        // Idempotent even if no grace window was ever pending for this
+        // session — cancelling an alarm that was never scheduled is a no-op.
+        GraceScheduler.cancel(context, sessionId)
         Log.i(TAG, "deadline for $sessionId -> $result")
     }
 

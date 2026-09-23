@@ -6,4 +6,5 @@
     <string name="session_channel_name">Active cue</string>
     <string name="session_notification_title">Focus session running</string>
     <string name="session_notification_remaining">%1$d minutes left</string>
+    <string name="session_notification_stop">Stop</string>
 </resources>

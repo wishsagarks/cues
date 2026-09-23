@@ -116,5 +116,11 @@
 
         <receiver android:name=".runtime.DeadlineReceiver" android:exported="false" />
 
+        <!-- Fires when a pending disconnect's reconnect-grace window elapses. -->
+        <receiver android:name=".runtime.GraceReceiver" android:exported="false" />
+
+        <!-- The session notification's own stop action (4.4). -->
+        <receiver android:name=".runtime.StopSessionReceiver" android:exported="false" />
+
     </application>
 </manifest>

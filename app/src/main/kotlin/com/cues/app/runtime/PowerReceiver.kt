@@ -31,6 +31,7 @@ class PowerReceiver : BroadcastReceiver() {
         val charging = Readings.charging(context, atMillis)
 
         val app = context.applicationContext as CuesApplication
-        app.cueService.onDeviceEvent(event, charging = charging)
+        val results = app.cueService.onDeviceEvent(event, charging = charging)
+        GraceScheduler.apply(context, results)
     }
 }

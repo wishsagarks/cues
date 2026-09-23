@@ -16,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.cues.app.runtime.GraceScheduler
 import com.cues.app.ui.CuesTheme
 import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.HomeScreen
@@ -95,6 +97,7 @@ private fun CuesApp(
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
 
+    val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -212,6 +215,7 @@ private fun CuesApp(
                             onManualStop = activeSessionId?.let { sessionId ->
                                 {
                                     cueService.onManualStop(sessionId)
+                                    GraceScheduler.cancel(context, sessionId)
                                     refresh()
                                 }
                             },
