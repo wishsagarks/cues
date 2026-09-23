@@ -32,6 +32,8 @@ import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.GraceScheduler
 import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.runtime.LiveSnapshot
+import com.cues.app.ui.AvailableSignal
+import com.cues.app.ui.ContextsScreen
 import com.cues.app.ui.CuesTheme
 import com.cues.app.ui.cuesColors
 import com.cues.app.ui.DiagnosticsScreen
@@ -39,19 +41,29 @@ import com.cues.app.ui.HomeScreen
 import com.cues.app.ui.ReceiptScreen
 import com.cues.app.ui.ReviewScreen
 import com.cues.app.ui.RoutineDetailScreen
+import com.cues.app.ui.TodayScreen
 import com.cues.core.CueService
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.DeleteResult
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.PairedDevice
+import com.cues.core.model.AudioKind
 import com.cues.core.model.Capability
+import com.cues.core.model.Condition
+import com.cues.core.model.ContextValue
+import com.cues.core.model.NamedContext
+import com.cues.core.model.Place
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
+import com.cues.core.model.WifiNetwork
 import com.cues.core.rehearsal.Rehearsal
+import com.cues.core.review.forecastToday
 import com.cues.core.session.isLive
 import com.cues.core.store.JsonFileStore
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import kotlinx.coroutines.launch
+import java.time.ZoneId
+import java.util.UUID
 
 /**
  * Single-activity host for the four surfaces the PRS describes.
@@ -102,6 +114,36 @@ private sealed interface Screen {
     data class Detail(val routineId: String) : Screen
     data object Receipts : Screen
     data object Diagnostics : Screen
+    data object Today : Screen
+    data object Contexts : Screen
+}
+
+/**
+ * What a named context can be built from: signals actually readable right
+ * now, never a signal Cues merely hopes is true. [ContextValue.Unknown] is
+ * simply not offered — the FDD's "capture selected current signals only
+ * after permission" line, applied literally.
+ */
+private fun availableSignalsNow(context: android.content.Context): List<AvailableSignal> {
+    val snapshot = LiveSnapshot.current(context)
+    return buildList {
+        (snapshot.charging as? ContextValue.Known)?.let { known ->
+            add(AvailableSignal("Phone is ${if (known.value) "charging" else "not charging"} right now", Condition.ChargingState(known.value)))
+        }
+        (snapshot.wifi as? ContextValue.Known)?.let { known ->
+            if (known.value.connected) add(AvailableSignal("Wi-Fi is connected right now", Condition.WifiConnected(WifiNetwork.Any)))
+        }
+        (snapshot.connectedDeviceIds as? ContextValue.Known)?.let { known ->
+            known.value.forEach { deviceId ->
+                add(AvailableSignal("$deviceId is connected right now", Condition.DeviceConnected(deviceId)))
+            }
+        }
+        (snapshot.audioOutputs as? ContextValue.Known)?.let { known ->
+            known.value.filter { it != AudioKind.ANY }.forEach { kind ->
+                add(AvailableSignal("${kind.name.lowercase().replaceFirstChar(Char::uppercase)} audio output is active", Condition.AudioOutputActive(kind)))
+            }
+        }
+    }
 }
 
 @Composable
@@ -213,6 +255,8 @@ private fun CuesApp(
                     onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },
                     onOpenReceipts = { screen = Screen.Receipts },
                     onOpenDiagnostics = { screen = Screen.Diagnostics },
+                    onOpenToday = { screen = Screen.Today },
+                    onOpenContexts = { screen = Screen.Contexts },
                     onStartVoice = { onTranscript, onUnavailable ->
                         localSpeechInput.start(onTranscript, onUnavailable)
                     },
@@ -294,6 +338,19 @@ private fun CuesApp(
                                 Rehearsal.dryRun(routine, LiveSnapshot.current(context, now), now)
                             },
                             deleteBlockedReason = null,
+                            activePatch = cueService.currentPatch(routine.id),
+                            onSkipToday = {
+                                cueService.skipToday(routine.id)
+                                refresh()
+                            },
+                            onPauseUntil = { epochMillis ->
+                                cueService.pauseUntil(routine.id, epochMillis)
+                                refresh()
+                            },
+                            onClearPatch = {
+                                cueService.clearPatch(routine.id)
+                                refresh()
+                            },
                         )
                     }
                 }
@@ -324,6 +381,52 @@ private fun CuesApp(
                     bakeOffReport = bakeOffReport,
                     onRunBakeOff = ::runBakeOffNow,
                 )
+
+                Screen.Today -> {
+                    val forecast = remember(routines) {
+                        forecastToday(
+                            routines = routines,
+                            patches = store.allPatches(),
+                            snapshot = LiveSnapshot.current(context),
+                            zone = ZoneId.systemDefault(),
+                            contexts = store,
+                        )
+                    }
+                    TodayScreen(
+                        items = forecast,
+                        titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
+                        onBack = { screen = Screen.Home },
+                    )
+                }
+
+                Screen.Contexts -> {
+                    var contexts by remember { mutableStateOf(store.allContexts()) }
+                    var places by remember { mutableStateOf(store.allPlaces()) }
+                    ContextsScreen(
+                        contexts = contexts,
+                        places = places,
+                        availableSignals = remember { availableSignalsNow(context) },
+                        onSaveContext = { label, predicates ->
+                            store.saveContext(
+                                NamedContext(id = "context-" + UUID.randomUUID(), label = label, version = 1, predicates = predicates),
+                            )
+                            contexts = store.allContexts()
+                        },
+                        onDeleteContext = { id ->
+                            store.deleteContext(id)
+                            contexts = store.allContexts()
+                        },
+                        onSavePlace = { label, lat, lng, radius ->
+                            store.savePlace(Place(id = "place-" + UUID.randomUUID(), label = label, version = 1, latitude = lat, longitude = lng, radiusMeters = radius))
+                            places = store.allPlaces()
+                        },
+                        onDeletePlace = { id ->
+                            store.deletePlace(id)
+                            places = store.allPlaces()
+                        },
+                        onBack = { screen = Screen.Home },
+                    )
+                }
             } }
         }
     }

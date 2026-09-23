@@ -193,6 +193,9 @@ class CueService(
 
     fun clearPatch(routineId: String) = patches?.clearPatch(routineId)
 
+    /** The routine's active patch, if any — read, never inferred, for the detail screen. */
+    fun currentPatch(routineId: String): Patch? = patches?.findPatch(routineId)
+
     // -------------------------------------------------------------- runtime
 
     /**

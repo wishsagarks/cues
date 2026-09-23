@@ -39,6 +39,7 @@ fun DiagnosticsScreen(
     onRunBakeOff: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
+    androidx.activity.compose.BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Device checks", style = MaterialTheme.typography.headlineSmall)

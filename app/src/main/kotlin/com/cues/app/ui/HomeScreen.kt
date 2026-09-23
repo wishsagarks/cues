@@ -54,9 +54,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.cues.app.runtime.AdapterStatus
 import com.cues.app.R
+import androidx.compose.foundation.lazy.LazyRow
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.Routine
 import com.cues.core.review.ReviewCopy
+import com.cues.core.review.Template
+import com.cues.core.review.Templates
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,6 +78,8 @@ fun HomeScreen(
     onOpenRoutine: (Routine) -> Unit,
     onOpenReceipts: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenToday: () -> Unit,
+    onOpenContexts: () -> Unit,
     onStartVoice: (onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) -> Unit,
     deviceCandidates: List<PairedDevice>?,
     onSelectDevice: (PairedDevice) -> Unit,
@@ -181,6 +186,16 @@ fun HomeScreen(
                     color = cuesColors.ink200,
                     modifier = Modifier.padding(top = 12.dp),
                 )
+                Row(modifier = Modifier.padding(top = 6.dp)) {
+                    TextButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onOpenToday()
+                    }) { Text("Today") }
+                    TextButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onOpenContexts()
+                    }) { Text("Contexts & places") }
+                }
             }
         }
 
@@ -193,6 +208,8 @@ fun HomeScreen(
             placeholder = { Text("When my earbuds connect after 6 PM on weekdays...") },
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(10.dp))
+        TemplateGallery(onPick = { template -> text = template.sentence })
         Spacer(Modifier.height(12.dp))
         androidx.compose.material3.OutlinedButton(
             onClick = {
@@ -322,6 +339,45 @@ private fun MonitoringCard(statuses: List<AdapterStatus>) {
 }
 
 private val MONITORING_TIME_FORMAT = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
+
+/**
+ * Curated starting sentences. Tapping one fills the input, exactly what
+ * typing it by hand would do — it still goes through the same drafter,
+ * validator and review, and the review still names whichever drafter ran.
+ * A template is a suggestion for what to type, never a shortcut around them.
+ */
+@Composable
+private fun TemplateGallery(onPick: (Template) -> Unit) {
+    val templates = remember { Templates.load() }
+    if (templates.isEmpty()) return
+    val haptics = LocalHapticFeedback.current
+    Column {
+        Text(
+            "TRY A TEMPLATE",
+            style = MaterialTheme.typography.labelSmall,
+            color = cuesColors.ink200,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(templates, key = { it.label }) { template ->
+                Surface(
+                    color = cuesColors.bg300,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.clickable {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onPick(template)
+                    },
+                ) {
+                    Text(
+                        template.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun DevicePickerDialog(

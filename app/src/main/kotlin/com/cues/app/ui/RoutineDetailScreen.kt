@@ -1,5 +1,6 @@
 package com.cues.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,11 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,9 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import com.cues.core.model.Patch
+import com.cues.core.model.PatchKind
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
 import com.cues.core.review.ReviewCopy
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Routine detail: the approved version, its current status, the next
@@ -39,9 +48,15 @@ fun RoutineDetailScreen(
     onManualStop: (() -> Unit)?,
     onDryRun: () -> com.cues.core.rehearsal.RehearsalRow,
     deleteBlockedReason: String?,
+    activePatch: Patch? = null,
+    onSkipToday: (() -> Unit)? = null,
+    /** Absolute epoch millis this pause should hold until. */
+    onPauseUntil: ((epochMillis: Long) -> Unit)? = null,
+    onClearPatch: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
+    BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize().padding(16.dp).animateContentSize()) {
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column {
@@ -99,6 +114,31 @@ fun RoutineDetailScreen(
             Spacer(Modifier.height(10.dp))
         }
 
+        if (routine.status == RoutineStatus.ARMED && onSkipToday != null && onPauseUntil != null) {
+            TemporaryPatchCard(
+                patch = activePatch,
+                onSkipToday = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSkipToday()
+                },
+                onPauseThreeHours = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPauseUntil(System.currentTimeMillis() + 3 * 60 * 60 * 1000L)
+                },
+                onPauseUntilTomorrow = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPauseUntil(tomorrowMorningMillis())
+                },
+                onClear = onClearPatch?.let {
+                    {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        it()
+                    }
+                },
+            )
+            Spacer(Modifier.height(10.dp))
+        }
+
         OutlinedButton(
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -132,4 +172,64 @@ private fun DetailRow(label: String, value: String) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
         Text(value, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/**
+ * A visible, self-expiring override — never a second copy of the routine.
+ *
+ * [Patch] deliberately does not touch [Routine.approvedDigest]: skipping today
+ * or pausing until a time is a temporary read the session engine consults
+ * before it evaluates the trigger at all, not a rule edit. It disappears on
+ * its own once it expires, and an edit to the routine's own version drops it
+ * rather than silently carrying a stale skip forward (`CueService.patchReason`).
+ */
+@Composable
+private fun TemporaryPatchCard(
+    patch: Patch?,
+    onSkipToday: () -> Unit,
+    onPauseThreeHours: () -> Unit,
+    onPauseUntilTomorrow: () -> Unit,
+    onClear: (() -> Unit)?,
+) {
+    Surface(color = cuesColors.bg300, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text("TEMPORARY PATCH", style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+            if (patch != null) {
+                Text(patch.describe(), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                if (onClear != null) {
+                    TextButton(onClick = onClear, modifier = Modifier.padding(top = 4.dp)) { Text("Clear") }
+                }
+            } else {
+                Text(
+                    "Skip just today, or pause without changing the approved rule.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = onSkipToday, modifier = Modifier.weight(1f)) { Text("Skip today") }
+                    OutlinedButton(onClick = onPauseThreeHours, modifier = Modifier.weight(1f)) { Text("Pause 3h") }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onPauseUntilTomorrow, modifier = Modifier.fillMaxWidth()) { Text("Pause until tomorrow morning") }
+            }
+        }
+    }
+}
+
+private val PATCH_TIME_FORMAT = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
+
+private fun Patch.describe(): String = when (val kind = kind) {
+    is PatchKind.SkipOccurrence -> "Skipped today (${kind.date})."
+    is PatchKind.SkipUntil -> "Paused until ${PATCH_TIME_FORMAT.format(Date(kind.epochMillis))}."
+}
+
+private fun tomorrowMorningMillis(): Long {
+    val calendar = java.util.Calendar.getInstance()
+    calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+    calendar.set(java.util.Calendar.HOUR_OF_DAY, 8)
+    calendar.set(java.util.Calendar.MINUTE, 0)
+    calendar.set(java.util.Calendar.SECOND, 0)
+    calendar.set(java.util.Calendar.MILLISECOND, 0)
+    return calendar.timeInMillis
 }

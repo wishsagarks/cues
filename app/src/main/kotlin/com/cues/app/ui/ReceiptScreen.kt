@@ -48,6 +48,7 @@ import kotlinx.coroutines.isActive
 fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
     var receipts by remember { mutableStateOf(loadReceipts()) }
     val haptics = LocalHapticFeedback.current
+    androidx.activity.compose.BackHandler(onBack = onBack)
     LaunchedEffect(Unit) {
         while (isActive) {
             delay(RECEIPTS_POLL_MILLIS)

@@ -46,6 +46,7 @@ fun ReviewScreen(
     onBack: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
+    androidx.activity.compose.BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(16.dp),
