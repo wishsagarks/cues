@@ -31,6 +31,9 @@ fun DiagnosticsScreen(
     onRecordJoviMicOrAssist: (ManualObservation) -> Unit,
     onRecordPermissionMonitor: (ManualObservation) -> Unit,
     onBack: () -> Unit,
+    isBakingOff: Boolean = false,
+    bakeOffReport: String? = null,
+    onRunBakeOff: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -77,6 +80,34 @@ fun DiagnosticsScreen(
             observation = diagnostics.permissionMonitor,
             onRecord = onRecordPermissionMonitor,
         )
+
+        if (onRunBakeOff != null) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "R5 drafter bake-off",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Scores the grammar parser and the on-device model against the checked-in corpus, " +
+                    "on this phone. Not a substitute for docs/MEASUREMENTS.md — record the numbers there by hand.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            Button(
+                onClick = onRunBakeOff,
+                enabled = !isBakingOff,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (isBakingOff) "Running…" else "Run bake-off") }
+            bakeOffReport?.let { report ->
+                Text(
+                    report,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
     }
 }
 

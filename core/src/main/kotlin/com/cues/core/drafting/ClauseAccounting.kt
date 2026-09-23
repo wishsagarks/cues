@@ -6,11 +6,27 @@ package com.cues.core.drafting
  * of a parsed clause nor harmless connective language cannot be approved.
  */
 object ClauseAccounting {
+    /**
+     * Grammatical connectives only — words like "please" and "the" that carry
+     * no meaning of their own. Domain words (timer, quiet, charging, connect,
+     * pin, remind, ...) belong here only if GrammarParser genuinely cannot be
+     * made to mark them `consumed`; every one that could be fixed at the
+     * source was, so a parsing gap for those words surfaces as UNACCOUNTED
+     * instead of being waved through.
+     *
+     * "plug" is the one proven exception: `parseTrigger`'s CHARGER_WORDS scan
+     * stops at the first matching word in its list, so "plug in the charger"
+     * consumes only "charger" and never reaches "plugged in"/"plug in" — see
+     * corpus/paraphrases.txt's "when I plug in the charger..." line.
+     */
     private val filler = setOf(
-        "a", "an", "and", "at", "after", "before", "by", "connect", "disconnect", "do", "end", "for", "from",
+        "a", "an", "and", "at", "after", "before", "by", "do", "end", "for", "from",
         "i", "if", "in", "is", "it", "me", "my", "of", "on", "out", "please", "run", "start", "take", "the",
-        "then", "to", "until", "when", "with", "focus", "timer", "minute", "minutes", "quiet", "notifications",
-        "notification", "silence", "charging", "charger", "plug", "remind", "about", "pin", "note",
+        "then", "to", "until", "when", "whenever", "with", "about", "plug",
+        // Decorative time-of-day flavor, never the sole time specifier — the
+        // grammar only ever derives an actual time from a clock value
+        // ("after 7 pm", "before 9am"), never from these words alone.
+        "morning", "afternoon", "evening", "night",
     )
 
     fun classify(text: String, consumed: List<IntRange>): List<ClauseSpan> =

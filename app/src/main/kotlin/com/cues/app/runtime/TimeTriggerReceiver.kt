@@ -17,6 +17,10 @@ class TimeTriggerReceiver : BroadcastReceiver() {
         GraceScheduler.apply(app, app.cueService.onDeviceEvent(
             TriggerEvent(EventKind.TIME_REACHED, now), charging = Readings.charging(app, now), wifi = WifiReadings.current(app, now),
         ))
+        // This one-shot alarm just consumed itself; its trigger data is
+        // unchanged, so without this the adapter's own diff would treat it
+        // as still current and skip rescheduling its next occurrence.
+        app.timeAdapter.fired(id)
         app.adapterSupervisor.sync(app.cueService.list().filter { it.status == com.cues.core.model.RoutineStatus.ARMED })
     }
     companion object { const val EXTRA_ROUTINE_ID = "com.cues.android.EXTRA_ROUTINE_ID" }

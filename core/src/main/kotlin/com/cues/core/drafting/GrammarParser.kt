@@ -117,14 +117,15 @@ class GrammarParser(
      * user's time and hides the real answer, so the limitation leads.
      */
     private fun noTriggerResult(text: String): DraftResult {
-        val unsupported = findUnsupported(text, consumed = emptyList())
+        val consumed = mutableListOf<IntRange>()
+        val unsupported = findUnsupported(text, consumed)
         return DraftResult.NeedsClarification(
             id,
             question = unsupported.firstOrNull()?.explanation
                 ?: "What should start this cue? Try naming a device connecting, or the charger.",
             about = "trigger",
             unsupported = unsupported,
-            clauses = ClauseAccounting.classify(text, emptyList()),
+            clauses = ClauseAccounting.classify(text, consumed),
         )
     }
 
@@ -188,8 +189,13 @@ class GrammarParser(
                 device.aliases.forEach { alias ->
                     Regex("\\b${Regex.escape(alias)}\\b").find(text)?.let { consumed += it.range }
                 }
-                val disconnects = Regex("\\b(disconnect\\w*|unpair\\w*|remove\\w*)\\b").containsMatchIn(text) &&
-                    !Regex("\\bconnect\\w*\\b").containsMatchIn(text)
+                val disconnectMatch = Regex("\\b(disconnect\\w*|unpair\\w*|remove\\w*)\\b").find(text)
+                val connectMatch = Regex("\\bconnect\\w*\\b").find(text)
+                val disconnects = disconnectMatch != null && connectMatch == null
+                // The connect/disconnect keyword itself is part of what the
+                // trigger means, not decoration — it must be marked consumed
+                // like the Wi-Fi and charger branches above already do.
+                (if (disconnects) disconnectMatch else connectMatch)?.let { consumed += it.range }
                 ResolvedTrigger(
                     Trigger.BluetoothConnection(
                         device.id,
@@ -311,8 +317,7 @@ class GrammarParser(
 
     private fun parseActions(text: String, consumed: MutableList<IntRange>): List<ActionSpec> = buildList {
         val timerMatch = Regex("\\b(\\d{1,3})[\\s-]*(minute|min|hour|hr)s?\\b").find(text)
-        val wantsTimer = timerMatch != null ||
-            Regex("\\b(focus|timer|pomodoro|deep work)\\b").containsMatchIn(text)
+        val wantsTimer = timerMatch != null || TIMER_WORD.containsMatchIn(text)
 
         if (wantsTimer) {
             val minutes = timerMatch?.let { m ->
@@ -320,7 +325,10 @@ class GrammarParser(
                 if (m.groupValues[2].startsWith("h")) n * 60 else n
             } ?: wordedDuration(text, consumed) ?: DEFAULT_FOCUS_MINUTES
             timerMatch?.let { consumed += it.range }
-            Regex("\\b(focus|timer|pomodoro|deep work)\\b").find(text)?.let { consumed += it.range }
+            // findAll, not find: "a 45-minute focus timer" says both "focus"
+            // and "timer" — a single find() only consumed the first and left
+            // the other to be silently waved through as filler.
+            TIMER_WORD.findAll(text).forEach { consumed += it.range }
             add(ActionSpec(ActionId.START_FOCUS_TIMER, ActionArgs.FocusTimer(minutes)))
         }
 
@@ -382,8 +390,11 @@ class GrammarParser(
             add(EndCondition.Duration(1))
         }
 
+        // "until" covers phrasing like "...until I take them out", which
+        // means the same ending as "end when I disconnect" but without an
+        // end/stop/finish verb of its own.
         val saysDisconnect = Regex(
-            "\\b(end|stop|finish)\\b[^.]{0,40}\\b(disconnect\\w*|unplug\\w*|remove\\w*|take\\w* (them )?out)\\b",
+            "\\b(end|stop|finish|until)\\b[^.]{0,40}\\b(disconnect\\w*|unplug\\w*|remove\\w*|take\\w* (them )?out)\\b",
         ).find(text)
 
         if (saysDisconnect != null) {
@@ -409,7 +420,15 @@ class GrammarParser(
      * understand" on filler is noise; a missed "unless" is a rule that quietly
      * does the wrong thing.
      */
-    private fun findUnsupported(text: String, consumed: List<IntRange>): List<Unsupported> =
+    /**
+     * A fragment reported here is disclosed, not dropped — [Unsupported] is
+     * shown in the review with its explanation, so ClauseAccounting must not
+     * *also* flag the same words as a blocking UNACCOUNTED clause. The match
+     * span is added to [consumed] as a side effect so the two mechanisms
+     * agree: text is either mapped, decorative filler, disclosed-but-unsupported,
+     * or genuinely unaccounted — never disclosed *and* silently re-flagged.
+     */
+    private fun findUnsupported(text: String, consumed: MutableList<IntRange>): List<Unsupported> =
         UNSUPPORTED_PATTERNS.mapNotNull { (pattern, explanation) ->
             val match = pattern.find(text) ?: return@mapNotNull null
             // Test the keyword, not the greedy tail. The tail deliberately runs
@@ -417,6 +436,7 @@ class GrammarParser(
             // would otherwise overlap every range the parser already consumed.
             val keyword = match.groups[1]?.range ?: match.range
             if (consumed.any { it.overlaps(keyword) }) return@mapNotNull null
+            consumed += match.range
             Unsupported(match.value.trim(), explanation)
         }.distinctBy { it.explanation }
 
@@ -455,6 +475,7 @@ class GrammarParser(
         const val TIME = "\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?|noon|midday|midnight"
 
         val CHARGER_WORDS = listOf("charger", "charging", "plugged in", "plug in", "on charge")
+        val TIMER_WORD = Regex("\\b(focus|timer|pomodoro|deep work|session)\\b")
         val DEVICE_WORDS = listOf(
             "earbuds", "ear buds", "buds", "headphones", "headset",
             "airpods", "speaker", "watch", "car",
@@ -474,6 +495,13 @@ class GrammarParser(
                 "\\b(?:when|once|if) i(?:'m| am)?\\s+" +
                     "(get to|getting to|reach|arrive|arriving|leave|leaving|at|in|near)\\b[^.]*",
             ) to "Location is not available in this build.",
+            // A second device named in a condition ("if my watch is
+            // connected") that isn't in the paired-device list above never
+            // reaches `Condition.DeviceConnected` — without this, it was
+            // silently dropped rather than disclosed. The keyword-overlap
+            // check above already skips this when the device WAS resolved.
+            Regex("\\bif\\s+(?:my\\s+)?(\\w+)\\s+(?:is\\s+)?connected\\b[^.]*") to
+                "Cues can only condition on a paired device it already recognizes.",
             Regex("\\b(text|message|call|email|whatsapp|remind)\\s+(?:my|him|her|them|the)\\b[^.]*") to
                 "Cues does not send messages or make calls.",
             Regex("\\b(open|launch)\\s+(?:the )?(?:app|spotify|youtube|maps)\\b[^.]*") to

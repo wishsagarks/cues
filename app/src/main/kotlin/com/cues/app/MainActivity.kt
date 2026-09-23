@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                     monitoring = app.monitoring,
                     adapterHealth = { app.adapterSupervisor.health() },
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
+                    runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices()) },
                     localSpeechInput = localSpeechInput,
                 )
             }
@@ -99,6 +100,7 @@ private fun CuesApp(
     monitoring: MonitoringRepository,
     adapterHealth: () -> List<com.cues.core.ports.ListenerHealth>,
     syncAdapters: () -> Unit,
+    runBakeOff: suspend () -> com.cues.core.corpus.BakeOffReport,
     localSpeechInput: LocalSpeechInput,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
@@ -106,6 +108,8 @@ private fun CuesApp(
     var isDrafting by remember { mutableStateOf(false) }
     var missingCapabilities by remember { mutableStateOf<Set<Capability>>(emptySet()) }
     var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
+    var isBakingOff by remember { mutableStateOf(false) }
+    var bakeOffReport by remember { mutableStateOf<String?>(null) }
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
@@ -141,6 +145,14 @@ private fun CuesApp(
 
     fun notify(message: String) {
         scope.launch { snackbarHost.showSnackbar(message) }
+    }
+
+    fun runBakeOffNow() {
+        isBakingOff = true
+        scope.launch {
+            bakeOffReport = runBakeOff().render()
+            isBakingOff = false
+        }
     }
 
     fun draft(text: String) {
@@ -285,6 +297,9 @@ private fun CuesApp(
                         diagnostics = deviceDiagnostics.recordPermissionMonitor(observation)
                     },
                     onBack = { screen = Screen.Home },
+                    isBakingOff = isBakingOff,
+                    bakeOffReport = bakeOffReport,
+                    onRunBakeOff = ::runBakeOffNow,
                 )
             }
         }

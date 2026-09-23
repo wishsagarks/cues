@@ -67,8 +67,16 @@ class CueService(
     suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text)) {
         is DraftResult.Drafted -> {
             // Accounting is always derived locally from the submitted request;
-            // a model never gets to assert that it understood a clause.
-            val clauses = if (result.clauses.isEmpty()) ClauseAccounting.classify(text, emptyList()) else result.clauses
+            // a model never gets to assert that it understood a clause. Only
+            // the deterministic parser's own span data is trustworthy — that
+            // check is on the source, never on whether the returned list
+            // happens to be empty, so a future drafter can't earn trust by
+            // accident just because it left `clauses` unset.
+            val clauses = if (result.source == DraftSourceId.GRAMMAR_PARSER) {
+                result.clauses
+            } else {
+                ClauseAccounting.classify(text, emptyList())
+            }
             result.copy(
                 clauses = clauses,
                 routine = result.routine.copy(

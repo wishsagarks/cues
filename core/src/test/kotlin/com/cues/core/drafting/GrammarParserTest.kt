@@ -177,6 +177,22 @@ class GrammarParserTest {
     }
 
     @Test
+    fun `no corpus sentence leaves real vocabulary unaccounted`() {
+        // GrammarParser.parse() alone never populates Routine.unaccountedClauses
+        // — CueService.draft() derives that from `consumed` after the fact —
+        // so this recomputes it the same way, over the whole corpus. Without
+        // this, a parser change that stops marking some real word `consumed`
+        // ships silently instead of being caught here.
+        Corpus.parse(corpusText()).forEach { case ->
+            val result = parser().parse(case.input)
+            if (result is DraftResult.Drafted) {
+                val unaccounted = ClauseAccounting.unaccounted(case.input, result.consumed)
+                assertTrue(unaccounted.isEmpty(), "\"${case.input}\" left $unaccounted unaccounted")
+            }
+        }
+    }
+
+    @Test
     fun `time formats are all understood`() {
         fun windowFor(text: String): Condition.TimeWindow? =
             (parser().parse(text) as? DraftResult.Drafted)

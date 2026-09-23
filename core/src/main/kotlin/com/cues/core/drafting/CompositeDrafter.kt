@@ -8,6 +8,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Runs the on-device model first and falls back to the grammar parser.
  *
+ * Not the app's current live wiring — `CuesApplication` builds
+ * [DifferentialDrafter] instead, which runs both to completion and asks when
+ * they disagree rather than picking whichever answered first. This class is
+ * kept as the simpler race-and-fallback strategy it still documents and
+ * tests correctly; it is candidate prior art if a real model's latency ever
+ * makes racing preferable to comparing, not dead code to delete on sight.
+ *
  * The two drafting paths are carried at equal weight on purpose. The model
  * covers phrasing the grammar will never anticipate; the grammar is the path
  * that still works when the model is slow, cold, thermally throttled or simply

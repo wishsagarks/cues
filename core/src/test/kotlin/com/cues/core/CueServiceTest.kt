@@ -75,6 +75,36 @@ class CueServiceTest {
     }
 
     @Test
+    fun `a non-parser drafter's own clause accounting is never trusted`() = runTest {
+        // A model that claims (falsely) it accounted for everything, on a
+        // routine that never mentions the "text Mum" clause at all. Only the
+        // deterministic parser's own span data may be trusted; anything else
+        // must be recomputed against the real request text.
+        val dishonestModel = object : com.cues.core.drafting.RoutineDrafter {
+            override val id = DraftSourceId.ON_DEVICE_LLM
+            override suspend fun draft(text: String) = DraftResult.Drafted(
+                source = DraftSourceId.ON_DEVICE_LLM,
+                routine = Fixtures.heroRoutine(),
+                clauses = listOf(
+                    com.cues.core.drafting.ClauseSpan(text, text.indices, com.cues.core.drafting.ClauseKind.MAPPED),
+                ),
+            )
+        }
+        val serviceWithLyingModel = CueService(
+            routines = store, sessions = store, receipts = store, executor = executor,
+            clock = clock, capabilities = ALL_GRANTED, drafter = dishonestModel,
+            zoneId = { ZoneId.of("Asia/Kolkata") },
+        )
+
+        val result = assertIs<DraftResult.Drafted>(serviceWithLyingModel.draft("when earbuds connect text Mum"))
+
+        assertTrue(
+            result.routine.unaccountedClauses.isNotEmpty(),
+            "a model-sourced draft's self-reported 'nothing unaccounted' must be recomputed, not trusted",
+        )
+    }
+
+    @Test
     fun `the full lifecycle - draft, approve, arm, connect, end - works through the facade`() = runTest {
         val drafted = assertIs<DraftResult.Drafted>(service.draft(HERO)).routine
 

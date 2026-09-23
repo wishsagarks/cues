@@ -11,7 +11,7 @@ import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.runtime.TimeAdapter
 import com.cues.app.runtime.WifiAdapter
 import com.cues.core.CueService
-import com.cues.core.drafting.CompositeDrafter
+import com.cues.core.drafting.DifferentialDrafter
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.ports.Clock
@@ -78,17 +78,21 @@ class CuesApplication : Application() {
     private val capabilities by lazy { AndroidCapabilityProvider(this) }
 
     /**
-     * Both drafting paths, model first, parser behind it.
+     * Both drafting paths, run and cross-checked rather than raced.
      *
      * Whichever answers, the result names the drafter that actually
      * produced it — [CueService.draft] stamps [com.cues.core.model.Routine.draftedBy]
      * from it — so the diagnostics screen shows what really ran, never what
-     * was hoped for.
+     * was hoped for. Today the model is an honest stub that fails instantly,
+     * so this degrades to exactly the parser's own answer; once 5.0's
+     * bake-off says the model earns its slot, this is what starts asking
+     * "which is intended?" the moment the two disagree, instead of quietly
+     * running only the winner going forward.
      */
     private val drafter by lazy {
-        CompositeDrafter(
-            primary = OnDeviceLlmDrafter(),
-            fallback = GrammarParser(pairedDeviceProvider = ::pairedDevices),
+        DifferentialDrafter(
+            first = OnDeviceLlmDrafter(),
+            second = GrammarParser(pairedDeviceProvider = ::pairedDevices),
         )
     }
 
@@ -105,8 +109,10 @@ class CuesApplication : Application() {
         )
     }
 
+    val timeAdapter by lazy { TimeAdapter(this) }
+
     val adapterSupervisor by lazy {
-        AdapterSupervisor(mapOf("wifi" to WifiAdapter(this), "time" to TimeAdapter(this)))
+        AdapterSupervisor(mapOf("wifi" to WifiAdapter(this), "time" to timeAdapter))
     }
 
     /**
@@ -119,7 +125,7 @@ class CuesApplication : Application() {
      * the correct behaviour for an unresolved reference anyway — the parser
      * asks which device is meant rather than guessing.
      */
-    private fun pairedDevices(): List<PairedDevice> {
+    internal fun pairedDevices(): List<PairedDevice> {
         val adapter = (getSystemService(BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
             ?: return emptyList()
 
