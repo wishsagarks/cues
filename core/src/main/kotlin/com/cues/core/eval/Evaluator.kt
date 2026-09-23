@@ -1,6 +1,10 @@
 package com.cues.core.eval
 
+import com.cues.core.model.Condition
 import com.cues.core.model.ContextSnapshot
+import com.cues.core.model.ContextValue
+import com.cues.core.model.Day
+import com.cues.core.model.LocalTimeOfDay
 import com.cues.core.model.Routine
 import com.cues.core.model.TriggerEvent
 import com.cues.core.model.UnknownReason

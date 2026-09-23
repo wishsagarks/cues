@@ -327,7 +327,7 @@ class GrammarParser(
         Regex("\\b(?:pin|pinned|keep)\\s+(?:a\\s+)?(?:note|message)\\b(?:[: ]+(.+?))?(?=\\s+until\\b|$)")
             .find(text)?.let { match ->
             consumed += match.range
-            val message = match.groups[1]?.value?.trim()?.trim('"', '\\'')?.takeIf { it.isNotBlank() }
+            val message = match.groups[1]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
                 ?: "Cues session is active."
             add(ActionSpec(ActionId.PINNED_NOTE, ActionArgs.PinnedNote(message)))
         }
