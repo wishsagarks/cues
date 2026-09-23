@@ -121,6 +121,7 @@ class NormalizerTest {
 
         assertEquals(
             setOf(
+                Capability.BLUETOOTH_CONNECT,
                 Capability.EXACT_ALARM,
                 Capability.POST_NOTIFICATIONS,
                 Capability.NOTIFICATION_POLICY_ACCESS,

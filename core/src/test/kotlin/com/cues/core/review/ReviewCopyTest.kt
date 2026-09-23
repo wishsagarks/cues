@@ -61,7 +61,7 @@ class ReviewCopyTest {
         val derived = Normalizer.normalize(Fixtures.heroRoutine())
 
         assertEquals(
-            "exact alarms, notifications, Do Not Disturb access",
+            "exact alarms, notifications, Do Not Disturb access, Bluetooth",
             ReviewCopy.accessText(derived),
         )
     }

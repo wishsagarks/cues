@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Compose tokens for the iQOO-inspired design system published alongside
+ * Compose tokens for the Cues design system published alongside
  * this app (see the "iQOO Design System" artifact: color, type, spacing,
  * radius, shadow — this file carries the same values into Kotlin).
  *

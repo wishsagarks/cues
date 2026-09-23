@@ -4,9 +4,15 @@ import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
 import com.cues.core.model.Session
 import com.cues.core.model.SessionState
+import com.cues.core.model.NamedContext
+import com.cues.core.model.Patch
+import com.cues.core.model.Place
 import com.cues.core.ports.ReceiptSink
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
+import com.cues.core.ports.NamedContextStore
+import com.cues.core.ports.PatchStore
+import com.cues.core.ports.PlaceStore
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -39,12 +45,15 @@ data class ReceiptEntry(val sessionId: String, val atMillis: Long, val text: Str
 class JsonFileStore(
     root: File,
     private val maxReceiptFiles: Int = 200,
-) : RoutineStore, SessionStore, ReceiptSink {
+) : RoutineStore, SessionStore, ReceiptSink, NamedContextStore, PatchStore, PlaceStore {
 
     private val routinesDir = File(root, "routines").apply { mkdirs() }
     private val sessionsDir = File(root, "sessions").apply { mkdirs() }
     private val quarantineDir = File(root, "quarantine").apply { mkdirs() }
     private val receiptsDir = File(root, "receipts").apply { mkdirs() }
+    private val contextsDir = File(root, "contexts").apply { mkdirs() }
+    private val patchesDir = File(root, "patches").apply { mkdirs() }
+    private val placesDir = File(root, "places").apply { mkdirs() }
 
     private val json = Json {
         prettyPrint = true
@@ -64,6 +73,23 @@ class JsonFileStore(
     override fun delete(id: String) {
         File(routinesDir, "$id.json").delete()
     }
+
+    // ---------------------------------------------------- contextual state
+
+    override fun findContext(id: String): NamedContext? = readContext(File(contextsDir, "$id.json"))
+    override fun allContexts(): List<NamedContext> = contextsDir.listJsonFiles().mapNotNull { readContext(it) }
+    override fun saveContext(context: NamedContext) = writeAtomic(File(contextsDir, "${context.id}.json"), context)
+    override fun deleteContext(id: String) { File(contextsDir, "$id.json").delete() }
+
+    override fun findPatch(routineId: String): Patch? = readPatch(File(patchesDir, "$routineId.json"))
+    override fun allPatches(): List<Patch> = patchesDir.listJsonFiles().mapNotNull { readPatch(it) }
+    override fun savePatch(patch: Patch) = writeAtomic(File(patchesDir, "${patch.routineId}.json"), patch)
+    override fun clearPatch(routineId: String) { File(patchesDir, "$routineId.json").delete() }
+
+    override fun findPlace(id: String): Place? = readPlace(File(placesDir, "$id.json"))
+    override fun allPlaces(): List<Place> = placesDir.listJsonFiles().mapNotNull { readPlace(it) }
+    override fun savePlace(place: Place) = writeAtomic(File(placesDir, "${place.id}.json"), place)
+    override fun deletePlace(id: String) { File(placesDir, "$id.json").delete() }
 
     // -------------------------------------------------------- SessionStore
 
@@ -147,6 +173,9 @@ class JsonFileStore(
     private fun readRoutine(file: File): Routine? = readOrQuarantine(file) { json.decodeFromString(it) }
 
     private fun readSession(file: File): Session? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readContext(file: File): NamedContext? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readPatch(file: File): Patch? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readPlace(file: File): Place? = readOrQuarantine(file) { json.decodeFromString(it) }
 
     private inline fun <T> readOrQuarantine(file: File, decode: (String) -> T): T? {
         if (!file.isFile) return null

@@ -11,6 +11,10 @@ import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.*
 import com.cues.core.rehearsal.Rehearsal
 import com.cues.core.review.ReviewCopy
+import com.cues.core.review.forecastToday
+import com.cues.core.review.FORECAST_LABEL
+import com.cues.core.signals.ContextualStores
+import com.cues.core.ports.NamedContextStore
 import kotlin.system.exitProcess
 
 /**
@@ -39,7 +43,17 @@ private const val HERO =
         "and quiet notifications. End it if I disconnect."
 
 fun main(args: Array<String>) {
+    ContextualStores.contexts = CliContexts
     val sentence = args.firstOrNull()?.takeIf { it.isNotBlank() } ?: HERO
+
+    if (sentence == "--today") {
+        println(FORECAST_LABEL)
+        forecastToday(listOf(FixturesForCli.routine()), emptyList(), FixturesForCli.snapshot(), java.time.ZoneId.systemDefault()).forEach {
+            println("- ${it.window}: ${it.status.name.lowercase().replace('_', ' ')}")
+            it.reasons.forEach { reason -> println("  $reason") }
+        }
+        return
+    }
 
     if (sentence.trim() == "--corpus") {
         printCorpus()
@@ -51,7 +65,7 @@ fun main(args: Array<String>) {
     println("  \"$sentence\"")
     println()
 
-    when (val result = GrammarParser(SAMPLE_DEVICES).parse(sentence)) {
+    when (val result = GrammarParser(SAMPLE_DEVICES, contextsProvider = { CliContexts.allContexts() }).parse(sentence)) {
         is DraftResult.NeedsClarification -> {
             println(bold("Cues needs to ask"))
             println("  ${result.question}")
@@ -73,6 +87,11 @@ fun main(args: Array<String>) {
             printRehearsal(result.routine)
         }
     }
+}
+
+private object FixturesForCli {
+    fun routine() = Routine("today-fixture", 1, sourceText = HERO, title = "Focus", trigger = Trigger.BluetoothConnection("AA:BB", "earbuds", DeviceTransition.CONNECTED), conditions = emptyList(), actions = listOf(ActionSpec(ActionId.NOTIFY_RESULT, ActionArgs.Notify("Ready"))), endConditions = listOf(EndCondition.ManualStop), cleanupPolicy = CleanupPolicy(), rearmPolicy = RearmPolicy(), requiredCapabilities = emptySet())
+    fun snapshot() = com.cues.core.context.SnapshotBuilder.build(System.currentTimeMillis(), java.time.ZoneId.systemDefault())
 }
 
 private fun printReview(result: DraftResult.Drafted) {
@@ -128,7 +147,7 @@ private fun printCorpus() {
         "corpus/paraphrases.txt is missing from resources"
     }.bufferedReader().readText()
 
-    val parser = GrammarParser(SAMPLE_DEVICES)
+    val parser = GrammarParser(SAMPLE_DEVICES, contextsProvider = { CliContexts.allContexts() })
     val startedAt = System.currentTimeMillis()
     val results = Corpus.parse(text).map { Corpus.check(it, parser.parse(it.input)) }
     val report = CorpusReport(results, System.currentTimeMillis() - startedAt)
@@ -156,3 +175,11 @@ private fun bold(text: String) = if (colour) "\u001B[1m$text\u001B[0m" else text
 private fun dim(text: String) = if (colour) "\u001B[2m$text\u001B[0m" else text
 
 private fun row(label: String, value: String) = println("  ${label.padEnd(8)} $value")
+
+private object CliContexts : NamedContextStore {
+    private val desk = NamedContext("desk", "Desk", 1, listOf(Condition.ChargingState(true)))
+    override fun findContext(id: String) = desk.takeIf { it.id == id }
+    override fun allContexts() = listOf(desk)
+    override fun saveContext(context: NamedContext) = Unit
+    override fun deleteContext(id: String) = Unit
+}

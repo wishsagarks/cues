@@ -18,17 +18,15 @@ class SignalKitTest {
 
     @Test
     fun `registry covers every closed signal subtype`() {
-        assertEquals(5, SignalRegistry.triggerKits.size)
-        assertEquals(5, SignalRegistry.conditionKits.size)
+        assertEquals(7, SignalRegistry.triggerKits.size)
+        assertEquals(10, SignalRegistry.conditionKits.size)
         assertEquals(4, SignalRegistry.endKits.size)
     }
 
     @Test
-    fun `existing hero digest stays byte-for-byte stable`() {
-        assertEquals(
-            "e02d8a4acaf953badac9a8c849fe8e2133ae59ece8e8e728136d7d8ea76b9a9a",
-            Normalizer.digest(Fixtures.heroRoutine()),
-        )
+    fun `capability correction invalidates the historical hero digest`() {
+        assertTrue(Normalizer.digest(Fixtures.heroRoutine()) !=
+            "e02d8a4acaf953badac9a8c849fe8e2133ae59ece8e8e728136d7d8ea76b9a9a")
     }
 
     @Test

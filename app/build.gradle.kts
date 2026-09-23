@@ -16,7 +16,7 @@ plugins {
 
 android {
     namespace = "com.cues.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.cues.android"
@@ -25,7 +25,7 @@ android {
         // cannot simply flip global Do Not Disturb; it contributes an owned
         // rule instead. That is the behaviour Cues wants, so the target stays
         // here rather than being lowered to regain the older setters.
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

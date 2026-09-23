@@ -7,6 +7,9 @@ import com.cues.core.model.Routine
 import com.cues.core.model.ActionState
 import com.cues.core.model.OwnedResource
 import com.cues.core.model.Session
+import com.cues.core.model.NamedContext
+import com.cues.core.model.Patch
+import com.cues.core.model.Place
 
 /**
  * The seams between decision-making and the world.
@@ -77,6 +80,27 @@ interface RoutineStore {
     fun all(): List<Routine>
     fun armed(): List<Routine>
     fun delete(id: String)
+}
+
+interface NamedContextStore {
+    fun findContext(id: String): NamedContext?
+    fun allContexts(): List<NamedContext>
+    fun saveContext(context: NamedContext)
+    fun deleteContext(id: String)
+}
+
+interface PatchStore {
+    fun findPatch(routineId: String): Patch?
+    fun savePatch(patch: Patch)
+    fun clearPatch(routineId: String)
+    fun allPatches(): List<Patch>
+}
+
+interface PlaceStore {
+    fun findPlace(id: String): Place?
+    fun allPlaces(): List<Place>
+    fun savePlace(place: Place)
+    fun deletePlace(id: String)
 }
 
 /**

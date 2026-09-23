@@ -46,6 +46,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [FDD.md](docs/FDD.md) | Functional design: architecture, session semantics, action registry |
 | [SPRINT_3.md](docs/SPRINT_3.md) | Revised six-hour plan for offline authoring, review and approval |
 | [SPRINT_4_5.md](docs/SPRINT_4_5.md) | Hours 16–30: unattended device proof, R&D spikes, measured drafting choice and demo |
+| [SPRINT_6.md](docs/SPRINT_6.md) | Declared named contexts, temporary patches, forecast and contextual signal kits |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |

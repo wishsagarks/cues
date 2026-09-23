@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Kept intentionally quiet: Compose owns the screen design after launch. -->
-    <style name="Theme.Cues" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#F5F7FB</item>
-        <item name="android:navigationBarColor">#F5F7FB</item>
-        <item name="android:windowLightNavigationBar">true</item>
+    <style name="Theme.Cues" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">?android:attr/isLightTheme</item>
+        <item name="android:windowLightNavigationBar">?android:attr/isLightTheme</item>
+        <item name="android:windowActionModeOverlay">true</item>
     </style>
 
     <!-- A proper system splash, not a branding Activity. The compat library

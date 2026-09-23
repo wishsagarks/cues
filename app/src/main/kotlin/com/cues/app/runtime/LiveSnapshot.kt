@@ -10,6 +10,8 @@ object LiveSnapshot {
         nowMillis = atMillis,
         zoneId = ZoneId.systemDefault(),
         charging = Readings.charging(context, atMillis),
+        batteryPercent = Readings.batteryPercent(context, atMillis),
+        audioOutputs = AudioOutputAdapter.currentOutputs(context, atMillis),
         connectedDeviceIds = com.cues.core.model.ContextValue.Known(
             BluetoothCoverage.currentlyConnectedDeviceIds(context),
             com.cues.core.model.ContextSource.BLUETOOTH_ADAPTER,

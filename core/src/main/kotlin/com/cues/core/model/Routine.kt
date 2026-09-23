@@ -120,6 +120,19 @@ sealed interface Trigger {
         /** The zone is part of the approved meaning, not ambient app state. */
         val zoneId: String = "system",
     ) : Trigger
+
+    @Serializable
+    @SerialName("audioOutput")
+    data class AudioOutput(val transition: AudioTransition, val kind: AudioKind = AudioKind.ANY) : Trigger
+
+    @Serializable
+    @SerialName("placeTransition")
+    data class PlaceTransition(
+        val placeId: String,
+        val placeVersion: Int,
+        val label: String,
+        val transition: PlaceTransitionKind,
+    ) : Trigger
 }
 
 @Serializable
@@ -127,6 +140,15 @@ enum class DeviceTransition { CONNECTED, DISCONNECTED }
 
 @Serializable
 enum class PowerTransition { PLUGGED_IN, UNPLUGGED }
+
+@Serializable
+enum class AudioTransition { ADDED, REMOVED }
+
+@Serializable
+enum class AudioKind { ANY, WIRED, BLUETOOTH }
+
+@Serializable
+enum class PlaceTransitionKind { ENTER, EXIT }
 
 // -------------------------------------------------------------- conditions
 
@@ -166,6 +188,26 @@ sealed interface Condition {
     @Serializable
     @SerialName("wifiConnected")
     data class WifiConnected(val network: WifiNetwork = WifiNetwork.Any) : Condition
+
+    @Serializable
+    @SerialName("inContext")
+    data class InContext(val contextId: String, val contextVersion: Int, val label: String) : Condition
+
+    @Serializable
+    @SerialName("audioOutputActive")
+    data class AudioOutputActive(val kind: AudioKind = AudioKind.ANY) : Condition
+
+    @Serializable
+    @SerialName("batteryBelow")
+    data class BatteryBelow(val percent: Int) : Condition
+
+    @Serializable
+    @SerialName("batteryAtLeast")
+    data class BatteryAtLeast(val percent: Int) : Condition
+
+    @Serializable
+    @SerialName("atPlace")
+    data class AtPlace(val placeId: String, val placeVersion: Int, val label: String) : Condition
 }
 
 @Serializable
@@ -322,4 +364,6 @@ enum class Capability {
     BATTERY_STATE,
     NETWORK_STATE,
     LOCATION_FOR_WIFI_NAME,
+    LOCATION_FOREGROUND,
+    LOCATION_BACKGROUND,
 }

@@ -23,10 +23,19 @@ import com.cues.core.ports.Clock
 import com.cues.core.ports.ReceiptSink
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
+import com.cues.core.ports.NamedContextStore
+import com.cues.core.ports.PatchStore
+import com.cues.core.ports.PlaceStore
 import com.cues.core.receipt.Receipts
 import com.cues.core.session.EngineResult
 import com.cues.core.session.SessionEngine
 import com.cues.core.signals.SignalRegistry
+import com.cues.core.signals.ContextualStores
+import com.cues.core.model.Patch
+import com.cues.core.model.PatchKind
+import com.cues.core.eval.Reason
+import com.cues.core.eval.ReasonCode
+import com.cues.core.eval.Truth
 import java.time.ZoneId
 
 /**
@@ -49,9 +58,17 @@ class CueService(
     private val capabilities: CapabilityProvider,
     private val drafter: RoutineDrafter,
     private val zoneId: () -> ZoneId = { ZoneId.systemDefault() },
+    private val patches: PatchStore? = null,
+    contexts: NamedContextStore? = null,
+    places: PlaceStore? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock)
+
+    init {
+        contexts?.let { ContextualStores.contexts = it }
+        places?.let { ContextualStores.places = it }
+    }
 
     // ------------------------------------------------------------ authoring
 
@@ -161,6 +178,21 @@ class CueService(
         }
     }
 
+    /** Skip just this local calendar day; the record remains visible and self-expires. */
+    fun skipToday(routineId: String): Patch? {
+        val routine = routines.findRoutine(routineId) ?: return null
+        val date = java.time.Instant.ofEpochMilli(clock.nowMillis()).atZone(zoneId()).toLocalDate().toString()
+        return Patch(routineId, routine.version, PatchKind.SkipOccurrence(date), clock.nowMillis()).also { patches?.savePatch(it) }
+    }
+
+    fun pauseUntil(routineId: String, millis: Long): Patch? {
+        val routine = routines.findRoutine(routineId) ?: return null
+        require(millis > clock.nowMillis()) { "Pause expiry must be in the future." }
+        return Patch(routineId, routine.version, PatchKind.SkipUntil(millis), clock.nowMillis()).also { patches?.savePatch(it) }
+    }
+
+    fun clearPatch(routineId: String) = patches?.clearPatch(routineId)
+
     // -------------------------------------------------------------- runtime
 
     /**
@@ -195,6 +227,9 @@ class CueService(
         charging: ContextValue<Boolean> = unread(UnknownReason.NEVER_OBSERVED),
         connectedDeviceIds: ContextValue<Set<String>> = unread(UnknownReason.NEVER_OBSERVED),
         wifi: ContextValue<com.cues.core.model.WifiState> = unread(UnknownReason.NEVER_OBSERVED),
+        audioOutputs: ContextValue<Set<com.cues.core.model.AudioKind>> = unread(UnknownReason.NEVER_OBSERVED),
+        batteryPercent: ContextValue<Int> = unread(UnknownReason.NEVER_OBSERVED),
+        insidePlaces: ContextValue<Set<String>> = unread(UnknownReason.NEVER_OBSERVED),
     ): List<EngineResult> {
         val snapshot = SnapshotBuilder.build(
             nowMillis = event.atMillis,
@@ -202,6 +237,9 @@ class CueService(
             charging = charging,
             connectedDeviceIds = connectedDeviceIds,
             wifi = wifi,
+            audioOutputs = audioOutputs,
+            batteryPercent = batteryPercent,
+            insidePlaces = insidePlaces,
         )
 
         return routines.armed().flatMap { routine ->
@@ -214,12 +252,36 @@ class CueService(
             }
 
             if (event.couldStart(routine)) {
+                patchReason(routine, event.atMillis)?.let { reason ->
+                    val skipped = EngineResult.Skipped(listOf(reason))
+                    recordReceipt(routine, skipped)
+                    results += skipped
+                    return@flatMap results
+                }
                 val start = engine.onTriggerEvent(routine, event, snapshot)
                 recordReceipt(routine, start)
                 results += start
             }
 
             results
+        }
+    }
+
+    private fun patchReason(routine: Routine, atMillis: Long): Reason? {
+        val patch = patches?.findPatch(routine.id) ?: return null
+        if (patch.baseVersion != routine.version) {
+            patches?.clearPatch(routine.id)
+            return null
+        }
+        return when (val kind = patch.kind) {
+            is PatchKind.SkipUntil -> if (atMillis < kind.epochMillis) Reason(
+                ReasonCode.PATCH_SKIPPED_UNTIL, Truth.NO_MATCH, "Paused until ${java.time.Instant.ofEpochMilli(kind.epochMillis).atZone(zoneId()).toLocalDateTime()}.",
+            ) else { patches?.clearPatch(routine.id); null }
+            is PatchKind.SkipOccurrence -> {
+                val date = java.time.Instant.ofEpochMilli(atMillis).atZone(zoneId()).toLocalDate().toString()
+                if (date == kind.date) Reason(ReasonCode.PATCH_SKIPPED_TODAY, Truth.NO_MATCH, "Skipped for today by your temporary patch.")
+                else if (date > kind.date) { patches?.clearPatch(routine.id); null } else null
+            }
         }
     }
 

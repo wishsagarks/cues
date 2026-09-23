@@ -5,6 +5,7 @@ import android.util.Log
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
+import com.cues.app.runtime.AudioOutputAdapter
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import com.cues.app.runtime.MonitoringRepository
@@ -92,7 +93,11 @@ class CuesApplication : Application() {
     private val drafter by lazy {
         DifferentialDrafter(
             first = OnDeviceLlmDrafter(),
-            second = GrammarParser(pairedDeviceProvider = ::pairedDevices),
+            second = GrammarParser(
+                pairedDeviceProvider = ::pairedDevices,
+                contextsProvider = { store.allContexts() },
+                placesProvider = { store.allPlaces() },
+            ),
         )
     }
 
@@ -106,13 +111,20 @@ class CuesApplication : Application() {
             capabilities = capabilities,
             drafter = drafter,
             zoneId = { ZoneId.systemDefault() },
+            patches = store,
+            contexts = store,
+            places = store,
         )
     }
 
     val timeAdapter by lazy { TimeAdapter(this) }
 
     val adapterSupervisor by lazy {
-        AdapterSupervisor(mapOf("wifi" to WifiAdapter(this), "time" to timeAdapter))
+        AdapterSupervisor(mapOf(
+            "wifi" to WifiAdapter(this),
+            "time" to timeAdapter,
+            "audio-output" to AudioOutputAdapter(this),
+        ))
     }
 
     /**

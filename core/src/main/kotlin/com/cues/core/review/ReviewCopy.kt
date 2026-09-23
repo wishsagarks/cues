@@ -80,6 +80,8 @@ object ReviewCopy {
         Capability.BATTERY_STATE -> "battery state"
         Capability.NETWORK_STATE -> "network state"
         Capability.LOCATION_FOR_WIFI_NAME -> "location for a Wi-Fi name"
+        Capability.LOCATION_FOREGROUND -> "foreground location"
+        Capability.LOCATION_BACKGROUND -> "background location"
     }
 
     /** Explains the actual, bounded use of each requested capability before approval. */
@@ -117,6 +119,16 @@ object ReviewCopy {
         Capability.LOCATION_FOR_WIFI_NAME -> PermissionCheckCopy(
             purpose = "Resolve a named Wi-Fi network when the operating system permits it.",
             frequency = "Not currently armable until the named-network device spike is complete.",
+        )
+
+        Capability.LOCATION_FOREGROUND -> PermissionCheckCopy(
+            purpose = "Read one location after you save a declared place, or check that declared place.",
+            frequency = "Only for places you explicitly save; Cues never guesses Home or another place.",
+        )
+
+        Capability.LOCATION_BACKGROUND -> PermissionCheckCopy(
+            purpose = "Receive an arrival or exit for a place-trigger cue you approved.",
+            frequency = "Only while an armed cue uses that declared place transition.",
         )
     }
 

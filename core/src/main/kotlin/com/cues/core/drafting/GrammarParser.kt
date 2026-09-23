@@ -29,6 +29,8 @@ class GrammarParser(
     private val pairedDevices: List<PairedDevice> = emptyList(),
     /** Re-reads bonded devices after the user grants Bluetooth access. */
     private val pairedDeviceProvider: (() -> List<PairedDevice>)? = null,
+    private val contextsProvider: () -> List<NamedContext> = { emptyList() },
+    private val placesProvider: () -> List<Place> = { emptyList() },
     private val idGenerator: () -> String = { "routine-" + java.util.UUID.randomUUID() },
 ) : RoutineDrafter {
 
@@ -41,8 +43,7 @@ class GrammarParser(
         val normalized = text.lowercase().replace(Regex("[\\u2018\\u2019]"), "'")
         val consumed = mutableListOf<IntRange>()
 
-        val trigger = parseTrigger(normalized, consumed)
-            ?: return noTriggerResult(normalized)
+        var trigger = parseTrigger(normalized, consumed)
 
         if (trigger is AmbiguousDevice) {
             return DraftResult.NeedsClarification(
@@ -55,8 +56,15 @@ class GrammarParser(
             )
         }
 
-        val resolvedTrigger = (trigger as ResolvedTrigger).trigger
         val conditions = parseConditions(normalized, consumed)
+        // A named context is a gate, never an inferred trigger. In the terse
+        // "while in Desk, start …" form the only honest event is the user's
+        // explicit manual run; the review makes that visible.
+        if (trigger == null && conditions.any { it is Condition.InContext || it is Condition.AtPlace }) {
+            trigger = ResolvedTrigger(Trigger.Manual)
+        }
+        if (trigger == null) return noTriggerResult(normalized)
+        val resolvedTrigger = (trigger as ResolvedTrigger).trigger
         val actions = parseActions(normalized, consumed)
 
         if (actions.isEmpty()) {
@@ -149,6 +157,26 @@ class GrammarParser(
             Regex("\\b(?:compile|news|content|summari[sz]e)\\b").containsMatchIn(text)
         ) return null
 
+        Regex("\\b(?:plug|unplug|connect|disconnect)\\w*\\s+(?:my )?(wired|bluetooth|any )?(?:headphones|headset|audio)\\b").find(text)?.let { m ->
+            val removed = Regex("\\b(unplug|disconnect)").containsMatchIn(m.value)
+            val kind = when {
+                m.value.contains("wired") -> AudioKind.WIRED
+                m.value.contains("bluetooth") -> AudioKind.BLUETOOTH
+                else -> AudioKind.ANY
+            }
+            consumed += m.range
+            return ResolvedTrigger(Trigger.AudioOutput(if (removed) AudioTransition.REMOVED else AudioTransition.ADDED, kind))
+        }
+
+        Regex("\\b(?:arrive at|leave)\\s+([a-z][a-z0-9 _-]{0,30})").find(text)?.let { m ->
+            val label = m.groupValues[1].trim().trimEnd('.', ',')
+            val place = placesProvider().firstOrNull { it.label.equals(label, ignoreCase = true) }
+            if (place != null) {
+                consumed += m.range
+                return ResolvedTrigger(Trigger.PlaceTransition(place.id, place.version, place.label, if (m.value.startsWith("leave")) PlaceTransitionKind.EXIT else PlaceTransitionKind.ENTER))
+            }
+        }
+
         Regex("\\b(?:at|around)\\s+($TIME)\\b").find(text)?.let { m ->
             val time = parseTime(m.groupValues[1]) ?: return@let
             consumed += m.range
@@ -217,6 +245,33 @@ class GrammarParser(
     // ---------------------------------------------------------- conditions
 
     private fun parseConditions(text: String, consumed: MutableList<IntRange>): List<Condition> = buildList {
+        Regex("\\b(?:while\\s+in|while i'm at|when i'm at)\\s+([a-z][a-z0-9 _-]{0,30}?)(?=\\s+(?:start|quiet|end|and)\\b|[.,]|$)").find(text)?.let { match ->
+            val label = match.groupValues[1].trim().trimEnd('.', ',')
+            val context = contextsProvider().firstOrNull { it.label.equals(label, ignoreCase = true) }
+            if (context != null) {
+                consumed += match.range
+                add(Condition.InContext(context.id, context.version, context.label))
+            }
+        }
+        Regex("\\bwhile i'm at\\s+([a-z][a-z0-9 _-]{0,30}?)(?=\\s+(?:start|quiet|end|and)\\b|[.,]|$)").find(text)?.let { match ->
+            val label = match.groupValues[1].trim().trimEnd('.', ',')
+            val place = placesProvider().firstOrNull { it.label.equals(label, ignoreCase = true) }
+            if (place != null) {
+                consumed += match.range
+                add(Condition.AtPlace(place.id, place.version, place.label))
+            }
+        }
+        Regex("\\b(?:wired|bluetooth|any )?(?:headphones|headset|audio) (?:is )?active\\b").find(text)?.let { match ->
+            consumed += match.range
+            val kind = when { match.value.contains("wired") -> AudioKind.WIRED; match.value.contains("bluetooth") -> AudioKind.BLUETOOTH; else -> AudioKind.ANY }
+            add(Condition.AudioOutputActive(kind))
+        }
+        Regex("\\bbattery (?:is )?(?:below|under) (\\d{1,3})%?\\b").find(text)?.let { match ->
+            consumed += match.range; add(Condition.BatteryBelow(match.groupValues[1].toInt()))
+        }
+        Regex("\\bbattery (?:is )?(?:at least|above) (\\d{1,3})%?\\b").find(text)?.let { match ->
+            consumed += match.range; add(Condition.BatteryAtLeast(match.groupValues[1].toInt()))
+        }
         parseDays(text, consumed)?.let { add(it) }
         parseTimeWindow(text, consumed)?.let { add(it) }
         Regex("\\b(?:the )?phone (?:is )?(?:not |isn't |isnt )?charging\\b").find(text)?.let { match ->

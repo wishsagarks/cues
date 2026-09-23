@@ -33,4 +33,13 @@ object Readings {
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         return ContextValue.Known(charging, ContextSource.BATTERY_MANAGER, atMillis)
     }
+
+    fun batteryPercent(context: Context, atMillis: Long): ContextValue<Int> {
+        val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            ?: return ContextValue.Unknown(UnknownReason.ADAPTER_UNAVAILABLE, ContextSource.BATTERY_MANAGER)
+        val level = sticky.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = sticky.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return ContextValue.Unknown(UnknownReason.ADAPTER_UNAVAILABLE, ContextSource.BATTERY_MANAGER)
+        return ContextValue.Known((level * 100 / scale).coerceIn(0, 100), ContextSource.BATTERY_MANAGER, atMillis)
+    }
 }

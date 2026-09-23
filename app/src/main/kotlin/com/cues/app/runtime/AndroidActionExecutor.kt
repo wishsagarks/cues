@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.AutomaticZenRule
 import android.app.NotificationManager
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.service.notification.ZenPolicy
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import com.cues.core.model.ActionArgs
 import com.cues.core.model.ActionId
 import com.cues.core.model.ActionState
@@ -161,7 +163,11 @@ class AndroidActionExecutor(
 
     private fun releaseFocusTimer(sessionId: String): ActionOutcome {
         alarms.cancel(deadlinePendingIntent(sessionId))
-        context.stopService(Intent(context, SessionService::class.java))
+        // The app may have sessions from different cues. Only the service that
+        // displays this session is allowed to stop itself.
+        context.startService(Intent(context, SessionService::class.java)
+            .setAction(SessionService.ACTION_STOP_SESSION)
+            .putExtra(SessionService.EXTRA_SESSION_ID, sessionId))
         // Cancelling an alarm that already fired, or a service already
         // stopped, is not an error — the recovery path calls this
         // unconditionally and must not be punished for arriving late.
@@ -337,15 +343,29 @@ class AndroidActionExecutor(
             return ActionOutcome(ActionState.BLOCKED, "Notifications are disabled.")
         }
 
-        Log.i(TAG, "result: $message")
-        // The actual posted notification (channel, builder, id) belongs with
-        // the rest of the notification UI work, not the action registry's
-        // executor. Logged here so the outcome is truthful about what has and
-        // has not happened yet.
-        return ActionOutcome(ActionState.BLOCKED, "Result notifications are not wired up yet.")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notifications.createNotificationChannel(NotificationChannel(
+                RESULT_CHANNEL_ID, "Cues results", NotificationManager.IMPORTANCE_DEFAULT,
+            ))
+        }
+        val id = RESULT_NOTIFICATION_ID
+        val notification = NotificationCompat.Builder(context, RESULT_CHANNEL_ID)
+            .setSmallIcon(com.cues.app.R.drawable.ic_stat_cue)
+            .setContentTitle("Cues")
+            .setContentText(message)
+            .setAutoCancel(true)
+            .build()
+        notifications.notify(id, notification)
+        return if (notifications.activeNotifications.any { it.id == id && it.tag == null }) {
+            ActionOutcome(ActionState.SUCCEEDED, "Result notification posted.")
+        } else {
+            ActionOutcome(ActionState.BLOCKED, "The result notification could not be confirmed as posted.")
+        }
     }
 
     private companion object {
         const val TAG = "CuesSession"
+        const val RESULT_CHANNEL_ID = "cues_result"
+        const val RESULT_NOTIFICATION_ID = 20_001
     }
 }

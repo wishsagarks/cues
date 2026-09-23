@@ -55,6 +55,10 @@ class SessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_SESSION) {
+            if (intent.getStringExtra(EXTRA_SESSION_ID) == sessionId) stopSelf()
+            return START_NOT_STICKY
+        }
         sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: sessionId
         deadlineMillis = intent?.getLongExtra(EXTRA_DEADLINE_MILLIS, deadlineMillis) ?: deadlineMillis
 
@@ -94,7 +98,7 @@ class SessionService : Service() {
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle(getString(R.string.session_notification_title))
         .setContentText(remainingText())
-        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setSmallIcon(R.drawable.ic_stat_cue)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setContentIntent(openAppIntent())
@@ -139,6 +143,7 @@ class SessionService : Service() {
     companion object {
         const val EXTRA_SESSION_ID = "com.cues.android.EXTRA_SESSION_ID"
         const val EXTRA_DEADLINE_MILLIS = "com.cues.android.EXTRA_DEADLINE_MILLIS"
+        const val ACTION_STOP_SESSION = "com.cues.android.action.STOP_SESSION"
         private const val CHANNEL_ID = "cues_session"
         private const val NOTIFICATION_ID = 1
     }

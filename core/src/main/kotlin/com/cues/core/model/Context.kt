@@ -29,6 +29,8 @@ enum class ContextSource {
     BLUETOOTH_ADAPTER,
     BATTERY_MANAGER,
     WIFI_MANAGER,
+    AUDIO_MANAGER,
+    LOCATION_MANAGER,
     SYSTEM_CLOCK,
     USER,
     REHEARSAL,
@@ -68,6 +70,15 @@ data class ContextSnapshot(
         UnknownReason.NEVER_OBSERVED,
         ContextSource.WIFI_MANAGER,
     ),
+    val audioOutputs: ContextValue<Set<AudioKind>> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED, ContextSource.AUDIO_MANAGER,
+    ),
+    val batteryPercent: ContextValue<Int> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED, ContextSource.BATTERY_MANAGER,
+    ),
+    val insidePlaces: ContextValue<Set<String>> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED, ContextSource.LOCATION_MANAGER,
+    ),
 )
 
 /**
@@ -103,6 +114,10 @@ enum class EventKind {
     WIFI_CONNECTED,
     WIFI_DISCONNECTED,
     TIME_REACHED,
+    AUDIO_OUTPUT_ADDED,
+    AUDIO_OUTPUT_REMOVED,
+    PLACE_ENTERED,
+    PLACE_EXITED,
 }
 
 /** Kept distinct so a receipt can never present a rehearsal as something that happened. */

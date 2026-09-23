@@ -9,6 +9,7 @@
 #
 #   ./dev t              core tests            (no Android SDK needed)
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
+#   ./dev today          print the deterministic fixture forecast
 #   ./dev sim            full lifecycle through CueService: draft to timeout
 #   ./dev bo             score the checked-in corpus (not a device measurement)
 #   ./dev b              assemble debug APK
@@ -80,6 +81,8 @@ case "$cmd" in
     # -q keeps Gradle's own chatter out of the review table.
     $GW -q :core:demo -Pq="$1"
     ;;
+
+  today) $GW -q :core:demo -Pq="--today" ;;
 
   sim)
     $GW -q :core:sim

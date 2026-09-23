@@ -25,6 +25,8 @@ object SignalRegistry {
         ManualKit,
         WifiConnectionKit,
         AtTimeKit,
+        AudioOutputKit,
+        PlaceTransitionKit,
     )
 
     val conditionKits: List<ConditionKit<out Condition>> = listOf(
@@ -33,6 +35,11 @@ object SignalRegistry {
         ChargingStateKit,
         DeviceConnectedKit,
         WifiConnectedKit,
+        InContextKit,
+        AudioOutputActiveKit,
+        BatteryBelowKit,
+        BatteryAtLeastKit,
+        AtPlaceKit,
     )
 
     val endKits: List<EndKit<out EndCondition>> = listOf(
@@ -53,6 +60,8 @@ object SignalRegistry {
             Trigger.Manual::class,
             Trigger.WifiConnection::class,
             Trigger.AtTime::class,
+            Trigger.AudioOutput::class,
+            Trigger.PlaceTransition::class,
         )) { "Every sealed Trigger subtype must have exactly one signal kit." }
         check(conditionByType.keys == setOf(
             Condition.DaysOfWeek::class,
@@ -60,6 +69,11 @@ object SignalRegistry {
             Condition.ChargingState::class,
             Condition.DeviceConnected::class,
             Condition.WifiConnected::class,
+            Condition.InContext::class,
+            Condition.AudioOutputActive::class,
+            Condition.BatteryBelow::class,
+            Condition.BatteryAtLeast::class,
+            Condition.AtPlace::class,
         )) { "Every sealed Condition subtype must have exactly one signal kit." }
         check(endByType.keys == setOf(
             EndCondition.TriggerReversed::class,
@@ -133,15 +147,8 @@ object SignalRegistry {
         (kit as ConditionKit<Condition>).validateSet(conditions)
 
     fun capabilitiesFor(routine: Routine): Set<com.cues.core.model.Capability> {
-        // Keep the pre-Sprint-4 digest stable for the original vocabulary. New
-        // signal types declare their own access here; existing approved cues do
-        // not acquire a new capability merely because this registry exists.
-        val triggerCapabilities = when (routine.trigger) {
-            is Trigger.WifiConnection, is Trigger.AtTime -> triggerKit(routine.trigger).capabilities(routine.trigger)
-            else -> emptySet()
-        }
         return ActionRegistry.capabilitiesFor(routine.actions) +
-            triggerCapabilities +
+            triggerKit(routine.trigger).capabilities(routine.trigger) +
             routine.conditions.flatMap { conditionKit(it).capabilities(it) } +
             routine.endConditions.flatMap { endKit(it).capabilities(it) }
     }
