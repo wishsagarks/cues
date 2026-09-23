@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.cues.app.MainActivity
 import com.cues.app.R
+import com.cues.app.widget.NowNextWidget
 import java.util.concurrent.TimeUnit
 
 /**
@@ -76,6 +77,7 @@ class SessionService : Service() {
 
         handler.removeCallbacks(tick)
         handler.postDelayed(tick, TimeUnit.SECONDS.toMillis(30))
+        NowNextWidget.refresh(this)
 
         // Not START_STICKY: if this process dies, the exact alarm still fires
         // (AlarmManager survives independently of the service), and the
@@ -87,6 +89,7 @@ class SessionService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        NowNextWidget.refresh(this)
         super.onDestroy()
     }
 

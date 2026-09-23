@@ -83,6 +83,22 @@
                 android:value="Running a user-approved focus session with a visible countdown." />
         </service>
 
+        <service
+            android:name=".runtime.CueTileService"
+            android:exported="true"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:label="Cues">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
+        </service>
+
+        <receiver android:name=".widget.NowNextWidget" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/now_next_widget_info" />
+        </receiver>
+
         <!--
           Registered in the manifest so a connection can start the app.
           exported="true" is required, not optional: these broadcasts
