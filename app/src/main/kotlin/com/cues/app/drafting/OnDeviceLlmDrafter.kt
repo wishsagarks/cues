@@ -1,8 +1,8 @@
 package com.cues.app.drafting
 
 import com.cues.core.drafting.DraftResult
-import com.cues.core.drafting.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
+import com.cues.core.model.DraftSourceId
 
 /**
  * The on-device model path.
