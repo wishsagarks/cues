@@ -1,4 +1,5 @@
 Deep work on earbuds|When my earbuds connect after 6 PM on weekdays, start a 45-minute focus timer and quiet notifications. End it if I disconnect.
-Bedtime charge check|When the charger connects after 10 PM, start a 30-minute focus timer. End it after 30 minutes.
+Bedtime charge check|When the phone is charging after 10 PM, start a 30-minute focus timer.
 Commute focus|When my earbuds connect, start a 30-minute focus timer. End it if I disconnect.
 Weekday focus|When my earbuds connect on weekdays, start a 45-minute focus timer. End it if I disconnect.
+Gym session|When my earbuds connect on weekends, start a 60-minute focus timer and quiet notifications. End it if I disconnect.
