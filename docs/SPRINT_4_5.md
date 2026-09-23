@@ -39,6 +39,18 @@ Every open question here has a method, a pass condition, and a fallback that the
 | **R7** | Does OriginOS expose a usable Wi-Fi name with and without location access? | Compare any-network and named-network callbacks with location granted and revoked. (30 min) | Named matching is stable without an unjustified permission claim | Keep any-Wi-Fi only; named Wi-Fi remains a readable needs-location answer. |
 | **R8** | Does an at-time callback arrive with the screen off? | Schedule three bounded sessions, screen off, and compare delivery with the persisted zone/deadline. (20 min) | All three callbacks arrive within the measured tolerance | Keep at-time semantics in core, report delivery as unverified and cut the Android adapter. |
 
+**R4 — closed, 23 Sep 2026.** Manifest-permission merging is a build-time
+fact, not a device fact, so this ran for real: `./dev perms` (now added)
+built the debug APK and dumped the merged manifest with `aapt dump
+permissions`. First run showed `android.permission.INTERNET`, sourced (per
+`app/build/outputs/logs/manifest-merger-debug-report.txt`) from
+`com.google.android.datatransport:transport-backend-cct`, a telemetry
+dependency pulled in transitively through MediaPipe's GenAI library — not
+anything Cues calls. Removed with `tools:node="remove"` in
+`AndroidManifest.xml`; `./dev perms` now reports no `INTERNET` permission
+and `./dev b` still succeeds. **R1, R2, R3, R6 and R8 remain open** — each
+needs the physical loaner and is not run from this environment.
+
 Candidate runtimes for R5, in the order to try them:
 1. MediaPipe LLM Inference, already in the catalogue but unverified.
 2. Its successor, LiteRT-LM, if MediaPipe's pin does not resolve.

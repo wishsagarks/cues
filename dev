@@ -11,6 +11,7 @@
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
 #   ./dev sim            full lifecycle through CueService: draft to timeout
 #   ./dev b              assemble debug APK
+#   ./dev perms          dump merged-manifest permissions (R4)
 #   ./dev i              install on the connected device
 #   ./dev r              install and launch
 #   ./dev w [host:port]  wireless adb: pair / connect
@@ -45,6 +46,18 @@ need_sdk() {
   exit 1
 }
 
+# Resolves to the actual SDK path, in the same order need_sdk checks it.
+# Needed by `perms` to find aapt without guessing at a build-tools version.
+sdk_dir() {
+  if [ -n "${ANDROID_HOME:-}" ] && [ -d "${ANDROID_HOME}" ]; then echo "$ANDROID_HOME"; return 0; fi
+  if [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "${ANDROID_SDK_ROOT}" ]; then echo "$ANDROID_SDK_ROOT"; return 0; fi
+  if [ -f local.properties ]; then
+    dir="$(sed -n 's/^sdk\.dir=//p' local.properties | tail -1)"
+    if [ -n "$dir" ] && [ -d "$dir" ]; then echo "$dir"; return 0; fi
+  fi
+  return 1
+}
+
 need_adb() {
   command -v adb >/dev/null 2>&1 || { red "adb not on PATH."; exit 1; }
   if [ -z "$(adb devices | sed -n '2p')" ]; then
@@ -72,6 +85,26 @@ case "$cmd" in
     ;;
 
   b) need_sdk; $GW :app:assembleDebug "$@"; ok "APK built" ;;
+
+  perms)
+    need_sdk
+    $GW :app:assembleDebug
+    apk="app/build/outputs/apk/debug/app-debug.apk"
+    [ -f "$apk" ] || { red "APK not found at $apk"; exit 1; }
+    sdk="$(sdk_dir)" || { red "Could not resolve the SDK path for aapt."; exit 1; }
+    aapt="$(find "$sdk/build-tools" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -1)/aapt"
+    [ -x "$aapt" ] || { red "aapt not found under $sdk/build-tools."; exit 1; }
+    out="$(mktemp)"
+    "$aapt" dump permissions "$apk" | tee "$out"
+    if grep -q 'android.permission.INTERNET' "$out"; then
+      red "INTERNET is present in the merged manifest — R4 fails. See CLEANUP.md."
+      rm -f "$out"
+      exit 1
+    else
+      ok "No INTERNET permission in the merged manifest — R4 passes."
+      rm -f "$out"
+    fi
+    ;;
 
   i) need_sdk; need_adb; $GW :app:installDebug "$@"; ok "installed" ;;
 

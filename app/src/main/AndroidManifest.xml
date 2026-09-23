@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       Every permission here is required by a specific entry in the action
@@ -34,6 +35,15 @@
 
     <!-- Reconciling sessions that were running when the phone restarted. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      R4 (CLEANUP.md CL-06): com.google.android.datatransport:transport-backend-cct,
+      a telemetry dependency pulled in transitively through MediaPipe's GenAI
+      library, merges this in. Cues has no network path — see CLAUDE.md and
+      "Not in these sprints" in docs/SPRINT_4_5.md — so it is removed rather
+      than carried as an unused, unexplainable permission on the review screen.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
