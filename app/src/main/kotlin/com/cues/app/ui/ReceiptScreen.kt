@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.cues.core.store.ReceiptEntry
 import java.text.SimpleDateFormat
@@ -44,6 +46,7 @@ import kotlinx.coroutines.isActive
 @Composable
 fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
     var receipts by remember { mutableStateOf(loadReceipts()) }
+    val haptics = LocalHapticFeedback.current
     LaunchedEffect(Unit) {
         while (isActive) {
             delay(RECEIPTS_POLL_MILLIS)
@@ -74,7 +77,10 @@ fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
             }
         }
 
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        OutlinedButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onBack()
+        }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             Text("Back")
         }
     }

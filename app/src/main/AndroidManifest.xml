@@ -62,7 +62,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Cues">
+            android:theme="@style/Theme.Cues.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -84,13 +84,22 @@
         </service>
 
         <!--
-          Registered in the manifest so a connection can start the app. Whether
-          this actually delivers in the background on the target phone is a
-          device question, not a manifest one, and is on the event spike list.
+          Registered in the manifest so a connection can start the app.
+          exported="true" is required, not optional: these broadcasts
+          (Bluetooth ACL, power, boot) are sent by the system, a different
+          UID from Cues, and an unexported receiver only accepts intents
+          from within the app's own UID — it would never fire at all,
+          on any phone, regardless of Doze or background-execution
+          limits. Confirmed on an emulator: exported="false" here meant
+          zero charging/Bluetooth events ever reached the app. All three
+          actions are protected system broadcasts, so exported="true"
+          does not let another app spoof them. Whether delivery survives
+          Doze and OEM battery policy on the target phone remains a real
+          device question — that part is still on the event spike list.
         -->
         <receiver
             android:name=".runtime.BluetoothReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
@@ -99,7 +108,7 @@
 
         <receiver
             android:name=".runtime.PowerReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
@@ -108,7 +117,7 @@
 
         <receiver
             android:name=".runtime.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

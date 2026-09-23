@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
@@ -37,6 +39,7 @@ fun RoutineDetailScreen(
     onDryRun: () -> com.cues.core.rehearsal.RehearsalRow,
     deleteBlockedReason: String?,
 ) {
+    val haptics = LocalHapticFeedback.current
     val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -61,7 +64,10 @@ fun RoutineDetailScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        OutlinedButton(onClick = { dryRun.value = onDryRun() }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            dryRun.value = onDryRun()
+        }, modifier = Modifier.fillMaxWidth()) {
             Text("What would happen right now?")
         }
         dryRun.value?.let { row ->
@@ -72,7 +78,10 @@ fun RoutineDetailScreen(
 
         if (onManualStop != null) {
             Button(
-                onClick = onManualStop,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onManualStop()
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = cuesColors.stop),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Stop this session") }
@@ -80,14 +89,20 @@ fun RoutineDetailScreen(
         }
 
         if (routine.status == RoutineStatus.ARMED || routine.status == RoutineStatus.PAUSED) {
-            OutlinedButton(onClick = onPauseResume, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onPauseResume()
+            }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (routine.status == RoutineStatus.PAUSED) "Resume" else "Pause")
             }
             Spacer(Modifier.height(10.dp))
         }
 
         OutlinedButton(
-            onClick = onDelete,
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onDelete()
+            },
             enabled = deleteBlockedReason == null,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = cuesColors.stop),
             modifier = Modifier.fillMaxWidth(),
@@ -103,7 +118,10 @@ fun RoutineDetailScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+        OutlinedButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onBack()
+        }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }
 

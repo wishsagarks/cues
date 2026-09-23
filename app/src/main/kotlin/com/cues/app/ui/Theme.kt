@@ -2,10 +2,17 @@ package com.cues.app.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Compose tokens for the iQOO-inspired design system published alongside
@@ -20,32 +27,32 @@ import androidx.compose.ui.graphics.Color
  */
 object CuesColors {
     // Dark theme (the resting state — see the design system README).
-    val bg100Dark = Color(0xFF0A0A0F)
-    val bg200Dark = Color(0xFF15151C)
-    val bg300Dark = Color(0xFF1D1D26)
-    val borderDark = Color(0x17FFFFFF)
-    val ink100Dark = Color(0xFFF5F5F7)
-    val ink200Dark = Color(0xFF93939F)
+    val bg100Dark = Color(0xFF0E1118)
+    val bg200Dark = Color(0xFF161B25)
+    val bg300Dark = Color(0xFF202735)
+    val borderDark = Color(0x1FFFFFFF)
+    val ink100Dark = Color(0xFFF5F7FF)
+    val ink200Dark = Color(0xFFB7C0D3)
 
     // Light theme.
-    val bg100Light = Color(0xFFF5F5F7)
+    val bg100Light = Color(0xFFF5F7FB)
     val bg200Light = Color(0xFFFFFFFF)
-    val bg300Light = Color(0xFFEEEEF2)
-    val borderLight = Color(0x1A0A0A0F)
-    val ink100Light = Color(0xFF0A0A0F)
-    val ink200Light = Color(0xFF63636E)
+    val bg300Light = Color(0xFFEAF0FA)
+    val borderLight = Color(0x1A172033)
+    val ink100Light = Color(0xFF172033)
+    val ink200Light = Color(0xFF5E6B80)
 
     // The signature electric-blue accent — spent once per screen.
-    val accentDark = Color(0xFF5B6BFF)
-    val accentLight = Color(0xFF4353FF)
+    val accentDark = Color(0xFF8DACFF)
+    val accentLight = Color(0xFF2864FF)
 
     // Semantic state — never the accent.
-    val goDark = Color(0xFF00E5C7)
-    val goLight = Color(0xFF00A99D)
-    val stopDark = Color(0xFFFF5B4D)
-    val stopLight = Color(0xFFD1372A)
-    val amberDark = Color(0xFFFFC233)
-    val amberLight = Color(0xFFB8860B)
+    val goDark = Color(0xFF50D8B0)
+    val goLight = Color(0xFF008D6A)
+    val stopDark = Color(0xFFFF8E85)
+    val stopLight = Color(0xFFC43E36)
+    val amberDark = Color(0xFFFFCE6A)
+    val amberLight = Color(0xFF9A6500)
 }
 
 data class CuesSemanticColors(
@@ -78,6 +85,60 @@ private val LightSemantic = CuesSemanticColors(
 
 val LocalCuesColors = androidx.compose.runtime.staticCompositionLocalOf { DarkSemantic }
 
+private val CuesShapes = Shapes(
+    small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(26.dp),
+)
+
+/** A compact hierarchy with the crisp, calm cadence of a system interface. */
+private val CuesTypography = Typography(
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 36.sp,
+        lineHeight = 42.sp,
+        letterSpacing = (-1.1).sp,
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        letterSpacing = (-0.6).sp,
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.4).sp,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 17.sp,
+        lineHeight = 23.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        letterSpacing = 0.7.sp,
+    ),
+)
+
 @Composable
 fun CuesTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val semantic = if (darkTheme) DarkSemantic else LightSemantic
@@ -86,6 +147,8 @@ fun CuesTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable (
         darkColorScheme(
             primary = CuesColors.accentDark,
             onPrimary = Color.White,
+            secondary = semantic.go,
+            onSecondary = semantic.bg100,
             background = semantic.bg100,
             surface = semantic.bg200,
             surfaceVariant = semantic.bg300,
@@ -97,6 +160,8 @@ fun CuesTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable (
         lightColorScheme(
             primary = CuesColors.accentLight,
             onPrimary = Color.White,
+            secondary = semantic.go,
+            onSecondary = Color.White,
             background = semantic.bg100,
             surface = semantic.bg200,
             surfaceVariant = semantic.bg300,
@@ -107,7 +172,7 @@ fun CuesTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable (
     }
 
     androidx.compose.runtime.CompositionLocalProvider(LocalCuesColors provides semantic) {
-        MaterialTheme(colorScheme = colorScheme, content = content)
+        MaterialTheme(colorScheme = colorScheme, typography = CuesTypography, shapes = CuesShapes, content = content)
     }
 }
 

@@ -19,6 +19,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cues.core.approval.Approvals
@@ -43,6 +45,7 @@ fun ReviewScreen(
     onApprove: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(16.dp),
@@ -109,9 +112,15 @@ fun ReviewScreen(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Back") }
+                    Button(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onBack()
+                    }, modifier = Modifier.weight(1f)) { Text("Back") }
                     Button(
-                        onClick = onApprove,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onApprove()
+                        },
                         enabled = review.validation.isValid,
                         modifier = Modifier.weight(2f),
                     ) { Text("Approve & arm") }

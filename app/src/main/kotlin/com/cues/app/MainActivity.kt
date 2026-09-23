@@ -21,11 +21,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.GraceScheduler
 import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.runtime.LiveSnapshot
 import com.cues.app.ui.CuesTheme
+import com.cues.app.ui.cuesColors
 import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.HomeScreen
 import com.cues.app.ui.ReceiptScreen
@@ -58,6 +60,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var localSpeechInput: LocalSpeechInput
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // One system-owned splash handoff on every supported Android version.
+        // This must happen before Activity setup so Android 12+ does not show a
+        // second, default splash between launch and Compose.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         val app = application as CuesApplication
         localSpeechInput = LocalSpeechInput(this)
@@ -179,7 +185,11 @@ private fun CuesApp(
         }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHost) }) { padding ->
+    Scaffold(
+        containerColor = cuesColors.bg100,
+        contentColor = cuesColors.ink100,
+        snackbarHost = { SnackbarHost(snackbarHost) },
+    ) { padding ->
         Box(Modifier.padding(padding)) {
             when (val current = screen) {
                 Screen.Home -> HomeScreen(

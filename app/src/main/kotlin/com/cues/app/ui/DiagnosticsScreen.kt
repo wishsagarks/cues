@@ -15,6 +15,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.DeviceDiagnostics
@@ -35,10 +37,14 @@ fun DiagnosticsScreen(
     bakeOffReport: String? = null,
     onRunBakeOff: (() -> Unit)? = null,
 ) {
+    val haptics = LocalHapticFeedback.current
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Device checks", style = MaterialTheme.typography.headlineSmall)
-            OutlinedButton(onClick = onBack) { Text("Back") }
+            OutlinedButton(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onBack()
+            }) { Text("Back") }
         }
         Text(
             "Run these checks on the event phone. Automatic checks use Android APIs; OriginOS observations stay manual.",
@@ -53,7 +59,10 @@ fun DiagnosticsScreen(
         DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
 
         Button(
-            onClick = onRefresh,
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onRefresh()
+            },
             enabled = !isRefreshing,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (isRefreshing) "Checking…" else "Check this phone") }
@@ -71,14 +80,20 @@ fun DiagnosticsScreen(
             title = "Jovi mic or assist gesture",
             instruction = "Try the phone's microphone and assist gesture. Record whether Jovi prevented Cues from receiving the intended user gesture.",
             observation = diagnostics.joviMicOrAssist,
-            onRecord = onRecordJoviMicOrAssist,
+            onRecord = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onRecordJoviMicOrAssist(it)
+            },
         )
         Spacer(Modifier.height(12.dp))
         ManualCheck(
             title = "OriginOS permission monitor",
             instruction = "After arming a Bluetooth or charging cue, inspect OriginOS's permission activity. Record whether it flags Cues' listeners; Android does not expose this suggestion to apps.",
             observation = diagnostics.permissionMonitor,
-            onRecord = onRecordPermissionMonitor,
+            onRecord = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onRecordPermissionMonitor(it)
+            },
         )
 
         if (onRunBakeOff != null) {
@@ -96,7 +111,10 @@ fun DiagnosticsScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
             Button(
-                onClick = onRunBakeOff,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onRunBakeOff()
+                },
                 enabled = !isBakingOff,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (isBakingOff) "Running…" else "Run bake-off") }

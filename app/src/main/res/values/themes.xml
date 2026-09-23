@@ -1,4 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Cues" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Kept intentionally quiet: Compose owns the screen design after launch. -->
+    <style name="Theme.Cues" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F5F7FB</item>
+        <item name="android:navigationBarColor">#F5F7FB</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <!-- A proper system splash, not a branding Activity. The compat library
+         makes this same intentional handoff available below Android 12. -->
+    <style name="Theme.Cues.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#F5F7FB</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_cues_splash</item>
+        <item name="windowSplashScreenAnimationDuration">250</item>
+        <item name="postSplashScreenTheme">@style/Theme.Cues</item>
+    </style>
 </resources>
