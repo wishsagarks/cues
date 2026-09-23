@@ -1,6 +1,7 @@
 package com.cues.app
 
 import android.app.Application
+import android.util.Log
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
@@ -27,6 +28,20 @@ import java.time.ZoneId
  * session service — is meant to call.
  */
 class CuesApplication : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        // 4.5: rebuild the zen-rule map from live system state before
+        // anything might need to release one, then reconcile sessions —
+        // expired ones are cleaned up, never restarted. Runs on every
+        // process start, not only after BootReceiver's ACTION_BOOT_COMPLETED,
+        // because an OEM-killed-and-relaunched process needs the same
+        // reconciliation a device reboot does; BootReceiver's own call is
+        // then a harmless, idempotent repeat in the same process.
+        executor.reconcileZenRules()
+        val reconciled = cueService.onBoot()
+        Log.i(TAG, "reconciled ${reconciled.size} session(s) at process start")
+    }
 
     val clock: Clock = Clock { System.currentTimeMillis() }
 
@@ -111,5 +126,9 @@ class CuesApplication : Application() {
         } catch (e: SecurityException) {
             emptyList()
         }
+    }
+
+    private companion object {
+        const val TAG = "CuesSession"
     }
 }

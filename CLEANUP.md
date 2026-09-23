@@ -69,14 +69,22 @@ before returning `SUCCEEDED` — task 4.3's read-back requirement and this bug
 turned out to be the same fix. Unverified on the loaner; the alarm read-back
 in particular depends on `PendingIntent` matching behaving as documented.
 
-Two things flagged for the first Saturday pass, not yet true bugs:
+**Resolved in Sprint 4 task 4.5 (23 Sep 2026).** `AndroidActionExecutor` now
+has `reconcileZenRules()`, which rebuilds `zenRuleIds` from
+`NotificationManager.getAutomaticZenRules()` — filtered to rules this app
+owns, then matched to a session id decoded from the rule's own `conditionId`
+URI (`zenRuleConditionUri` already encoded it: `condition://com.cues.android/session/<id>`),
+not guessed from "the most recently orphaned rule". `CuesApplication.onCreate()`
+calls it, then `CueService.onBoot()`, before anything else can touch the
+executor — on every process start, not only `BootReceiver`'s
+`ACTION_BOOT_COMPLETED`, since an OEM-killed-and-relaunched process needs the
+same reconciliation a device reboot does. `zenRuleIds` moved from a
+companion-object (process-wide static) map to an instance property, since the
+static map was itself part of what made this bug easy to miss. Unverified on
+the loaner.
 
-- `AndroidActionExecutor.zenRuleIds` is an in-memory map from session id to
-  the platform's zen-rule id. It does not survive process death, so a
-  `DND_CONTRIBUTION` obligation left over from a killed process falls back to
-  "no rule was held" on release rather than actually finding and removing it.
-  A real fix reconciles against `NotificationManager.automaticZenRules`,
-  matched by owner and name, on boot.
+One thing still flagged for the first Saturday pass, not yet a true bug:
+
 - The Review screen's rehearsal and required-access rows never account for a
   capability that becomes available only after the user leaves the app to
   grant a permission and comes back — there is no re-check on resume.

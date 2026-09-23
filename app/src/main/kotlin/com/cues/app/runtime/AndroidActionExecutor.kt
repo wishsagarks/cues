@@ -52,6 +52,13 @@ class AndroidActionExecutor(
     private val alarms: AlarmManager
         get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
+    // Zen rule ids returned by the platform aren't derivable from the session
+    // id, so they're cached here for release — an instance property, not a
+    // companion object, because a process-wide static map was exactly the
+    // kind of hidden shared state 4.5 replaces. It still does not survive
+    // process death on its own; [reconcileZenRules] is what makes that safe.
+    private val zenRuleIds = mutableMapOf<String, String>()
+
     /**
      * Dispatches to the per-action handler, then stamps a successful outcome
      * with what it made this session responsible for releasing — derived from
@@ -242,6 +249,35 @@ class AndroidActionExecutor(
     private fun zenRuleConditionUri(sessionId: String): Uri =
         Uri.parse("condition://com.cues.android/session/$sessionId")
 
+    /**
+     * Rebuilds [zenRuleIds] from live system state (4.5).
+     *
+     * [zenRuleIds] does not survive process death — a plain in-memory map
+     * never could — so on every process start this reads
+     * [NotificationManager.getAutomaticZenRules] instead of trusting it. A
+     * rule id alone carries no session identity, but this class's own
+     * [zenRuleConditionUri] already encodes the session id into the
+     * condition URI handed to the platform when the rule was created, so
+     * reconciling means reading that back — matched by owner, the way 4.5
+     * calls for, then by the session id in the URI, never by guessing which
+     * orphaned rule is "probably" the right one.
+     */
+    fun reconcileZenRules() {
+        val rules = notifications.automaticZenRules ?: return
+        val owner = ComponentName(context, AndroidActionExecutor::class.java)
+        rules.forEach { (ruleId, rule) ->
+            if (rule.owner != owner) return@forEach
+            val sessionId = rule.conditionId?.let(::sessionIdFromConditionUri) ?: return@forEach
+            zenRuleIds[sessionId] = ruleId
+        }
+    }
+
+    private fun sessionIdFromConditionUri(uri: Uri): String? {
+        val segments = uri.pathSegments
+        val index = segments.indexOf("session")
+        return if (index in segments.indices && index + 1 < segments.size) segments[index + 1] else null
+    }
+
     // --------------------------------------------------------------- notify
 
     private fun pinnedNote(args: ActionArgs, sessionId: String): ActionOutcome {
@@ -302,15 +338,7 @@ class AndroidActionExecutor(
         return ActionOutcome(ActionState.BLOCKED, "Result notifications are not wired up yet.")
     }
 
-    companion object {
-        private const val TAG = "CuesSession"
-
-        // Zen rule ids returned by the platform aren't derivable from the
-        // session id, so they're tracked here for release. Lost on process
-        // death: a restart's onBoot() reconciliation is expected to fall back
-        // to notifications.automaticZenRules and match by owner+name, which
-        // is real device work tracked in CLEANUP.md CL-06, not implemented
-        // here.
-        private val zenRuleIds = mutableMapOf<String, String>()
+    private companion object {
+        const val TAG = "CuesSession"
     }
 }
