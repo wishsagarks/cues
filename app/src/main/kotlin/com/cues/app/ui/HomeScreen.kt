@@ -232,7 +232,7 @@ private fun MonitoringCard(statuses: List<AdapterStatus>) {
             Text("MONITORING", style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
             statuses.forEach { status ->
                 Text(
-                    "${status.label}: " + (
+                    "${status.label}: " + (status.running?.let { if (it) "listening; " else "not listening; " }.orEmpty()) + (
                         status.lastEventAtMillis?.let { MONITORING_TIME_FORMAT.format(Date(it)) }
                             ?: "no event received yet"
                         ),
@@ -241,7 +241,7 @@ private fun MonitoringCard(statuses: List<AdapterStatus>) {
                 )
             }
             Text(
-                "Registered in the manifest. Delivery while backgrounded is unverified on this phone (R1).",
+                "Background delivery remains unverified on this phone; listener registration is not delivery proof (R1/R7/R8).",
                 style = MaterialTheme.typography.labelSmall,
                 color = cuesColors.ink200,
                 modifier = Modifier.padding(top = 6.dp),

@@ -75,7 +75,14 @@ object Receipts {
             Truth.UNKNOWN -> "Skipped, because something could not be read"
             else -> "Skipped"
         }
-        return Receipt(headline, reasons.filter { it.truth != Truth.MATCH }.map { it.detail })
+        if (deciding == null) return Receipt(headline, emptyList())
+        val otherFailures = reasons.filter { it.truth != Truth.MATCH && it !== deciding }
+        val disclosure = if (otherFailures.isEmpty()) {
+            "Everything else matched."
+        } else {
+            "${otherFailures.size} other condition${if (otherFailures.size == 1) "" else "s"} also did not match."
+        }
+        return Receipt(headline, listOf(deciding.detail, disclosure))
     }
 
     private fun exitScheduled(routine: Routine, session: Session): Receipt = Receipt(

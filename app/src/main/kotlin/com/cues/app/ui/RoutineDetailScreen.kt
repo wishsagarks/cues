@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cues.core.model.Routine
@@ -32,8 +34,10 @@ fun RoutineDetailScreen(
     onPauseResume: () -> Unit,
     onDelete: () -> Unit,
     onManualStop: (() -> Unit)?,
+    onDryRun: () -> com.cues.core.rehearsal.RehearsalRow,
     deleteBlockedReason: String?,
 ) {
+    val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column {
@@ -56,6 +60,15 @@ fun RoutineDetailScreen(
         DetailRow("Repeat", ReviewCopy.repeatText(routine))
 
         Spacer(Modifier.height(24.dp))
+
+        OutlinedButton(onClick = { dryRun.value = onDryRun() }, modifier = Modifier.fillMaxWidth()) {
+            Text("What would happen right now?")
+        }
+        dryRun.value?.let { row ->
+            Text("${row.label}: ${row.outcome}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+            row.explanation.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cuesColors.ink200) }
+        }
+        Spacer(Modifier.height(10.dp))
 
         if (onManualStop != null) {
             Button(

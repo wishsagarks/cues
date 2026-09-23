@@ -1,6 +1,7 @@
 package com.cues.app.runtime
 
 import android.content.Context
+import com.cues.core.ports.ListenerHealth
 
 /**
  * What Home's monitoring section shows (4.6 / MH-01): when each adapter last
@@ -17,6 +18,8 @@ data class AdapterStatus(
     val key: String,
     val label: String,
     val lastEventAtMillis: Long?,
+    val running: Boolean? = null,
+    val detail: String? = null,
 )
 
 /** Persists the last-event timestamp per adapter so it survives leaving the screen. */
@@ -28,10 +31,10 @@ class MonitoringRepository(context: Context) {
         preferences.edit().putLong(keyFor(adapterKey), atMillis).apply()
     }
 
-    fun statuses(): List<AdapterStatus> = listOf(
+    fun statuses(health: List<ListenerHealth> = emptyList()): List<AdapterStatus> = listOf(
         AdapterStatus("bluetooth", "Bluetooth", lastEventAtMillis(BLUETOOTH)),
         AdapterStatus("power", "Charging", lastEventAtMillis(POWER)),
-    )
+    ) + health.map { AdapterStatus(it.key, it.key.replaceFirstChar { c -> c.uppercase() }, lastEventAtMillis(it.key), it.running, it.detail) }
 
     private fun lastEventAtMillis(adapterKey: String): Long? =
         preferences.getLong(keyFor(adapterKey), 0).takeIf { it > 0 }

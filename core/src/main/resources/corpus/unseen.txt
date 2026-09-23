@@ -1,0 +1,4 @@
+# Intentionally empty. Add 15 paraphrases written by a teammate who has not
+# read GrammarParser, then pass this optional corpus to the bake-off. Keeping
+# the file empty prevents this session from pretending grammar-informed cases
+# are unseen evaluation data.

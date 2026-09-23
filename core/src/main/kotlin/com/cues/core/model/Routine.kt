@@ -46,6 +46,8 @@ data class Routine(
      * never be able to invalidate an existing approval.
      */
     val draftedBy: DraftSourceId? = null,
+    /** Text the drafter could not map to the closed vocabulary. Approval blocks until it is resolved. */
+    val unaccountedClauses: List<String> = emptyList(),
 )
 
 /**

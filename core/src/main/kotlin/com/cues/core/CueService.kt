@@ -5,6 +5,8 @@ import com.cues.core.approval.Approvals
 import com.cues.core.approval.DeleteResult
 import com.cues.core.context.SnapshotBuilder
 import com.cues.core.drafting.CompositeDrafter
+import com.cues.core.drafting.ClauseAccounting
+import com.cues.core.drafting.ClauseKind
 import com.cues.core.drafting.DraftResult
 import com.cues.core.model.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
@@ -63,7 +65,18 @@ class CueService(
      * not armed until [approveAndArm].
      */
     suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text)) {
-        is DraftResult.Drafted -> result.copy(routine = result.routine.copy(draftedBy = result.source))
+        is DraftResult.Drafted -> {
+            // Accounting is always derived locally from the submitted request;
+            // a model never gets to assert that it understood a clause.
+            val clauses = if (result.clauses.isEmpty()) ClauseAccounting.classify(text, emptyList()) else result.clauses
+            result.copy(
+                clauses = clauses,
+                routine = result.routine.copy(
+                    draftedBy = result.source,
+                    unaccountedClauses = clauses.filter { it.kind == ClauseKind.UNACCOUNTED }.map { it.text },
+                ),
+            )
+        }
         is DraftResult.NeedsClarification, is DraftResult.Failed -> result
     }
 

@@ -24,6 +24,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.GraceScheduler
 import com.cues.app.runtime.MonitoringRepository
+import com.cues.app.runtime.LiveSnapshot
 import com.cues.app.ui.CuesTheme
 import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.HomeScreen
@@ -68,6 +69,8 @@ class MainActivity : ComponentActivity() {
                     store = app.store,
                     deviceDiagnostics = app.deviceDiagnostics,
                     monitoring = app.monitoring,
+                    adapterHealth = { app.adapterSupervisor.health() },
+                    syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
                     localSpeechInput = localSpeechInput,
                 )
             }
@@ -94,6 +97,8 @@ private fun CuesApp(
     store: JsonFileStore,
     deviceDiagnostics: DeviceDiagnosticsRepository,
     monitoring: MonitoringRepository,
+    adapterHealth: () -> List<com.cues.core.ports.ListenerHealth>,
+    syncAdapters: () -> Unit,
     localSpeechInput: LocalSpeechInput,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
@@ -104,7 +109,7 @@ private fun CuesApp(
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
-    var adapterStatuses by remember { mutableStateOf(monitoring.statuses()) }
+    var adapterStatuses by remember { mutableStateOf(monitoring.statuses(adapterHealth())) }
 
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
@@ -119,7 +124,8 @@ private fun CuesApp(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(context))
-                adapterStatuses = monitoring.statuses()
+                syncAdapters()
+                adapterStatuses = monitoring.statuses(adapterHealth())
                 routines = cueService.list()
             }
         }
@@ -129,6 +135,8 @@ private fun CuesApp(
 
     fun refresh() {
         routines = cueService.list()
+        syncAdapters()
+        adapterStatuses = monitoring.statuses(adapterHealth())
     }
 
     fun notify(message: String) {
@@ -245,6 +253,10 @@ private fun CuesApp(
                                     GraceScheduler.cancel(context, sessionId)
                                     refresh()
                                 }
+                            },
+                            onDryRun = {
+                                val now = System.currentTimeMillis()
+                                Rehearsal.dryRun(routine, LiveSnapshot.current(context, now), now)
                             },
                             deleteBlockedReason = null,
                         )

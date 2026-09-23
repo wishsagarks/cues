@@ -63,3 +63,10 @@ tasks.register<JavaExec>("demo") {
     // Gradle's --args is awkward to type on a phone keyboard; -Pq="..." is not.
     if (project.hasProperty("q")) args(project.property("q").toString())
 }
+
+tasks.register<JavaExec>("bakeoff") {
+    group = "cues"
+    description = "Scores the local parser against the checked-in corpus; not a device measurement."
+    mainClass.set("com.cues.core.cli.BakeOffMainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}

@@ -10,6 +10,10 @@ data class Unsupported(
     val explanation: String,
 )
 
+enum class ClauseKind { MAPPED, FILLER, UNACCOUNTED }
+
+data class ClauseSpan(val text: String, val range: IntRange, val kind: ClauseKind)
+
 sealed interface DraftResult {
 
     /** The drafter that produced this result, whatever the outcome. */
@@ -32,6 +36,8 @@ sealed interface DraftResult {
          */
         val unsupported: List<Unsupported> = emptyList(),
         val findings: List<Finding> = emptyList(),
+        val consumed: List<IntRange> = emptyList(),
+        val clauses: List<ClauseSpan> = emptyList(),
         val elapsedMillis: Long = 0,
     ) : DraftResult
 
@@ -50,6 +56,8 @@ sealed interface DraftResult {
          * matching prose.
          */
         val unsupported: List<Unsupported> = emptyList(),
+        val consumed: List<IntRange> = emptyList(),
+        val clauses: List<ClauseSpan> = emptyList(),
         val elapsedMillis: Long = 0,
     ) : DraftResult
 

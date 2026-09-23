@@ -119,4 +119,11 @@ class RehearsalTest {
 
         assertEquals("Started", report.rows.first { it.label.contains("matching") }.outcome)
     }
+
+    @Test
+    fun `dry run is one labelled non executing row`() {
+        val row = Rehearsal.dryRun(Fixtures.heroRoutine(), Fixtures.snapshot(), Fixtures.NOW)
+        assertEquals("Dry run: nothing was changed", row.label)
+        assertEquals("Started", row.outcome)
+    }
 }

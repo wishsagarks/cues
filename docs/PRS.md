@@ -65,6 +65,10 @@ Work completed before the event covers the offline decision core — the routine
 | AC-01 | Start an app-owned focus timer with a visible deadline and cancellation state. | Core |
 | AC-02 | Apply and release only a supported app-owned DND contribution after required access. | Core |
 | AC-03 | Show local outcomes in-app and through notifications when permitted. Notification denial is itself a visible condition. | Core |
+| AC-04 | Mark an action `SUCCEEDED` only after reading back the resulting platform state, where the platform exposes it. | Core |
+| CP-04 | Account for every word of the request as mapped, filler or unaccounted, and block approval while anything is unaccounted. | Core |
+| DD-01 | When two drafters disagree on normalized semantics, ask about the differing field rather than choosing. | Core |
+| RH-03 | Offer a labeled, non-executing evaluation against the live context of an armed cue. | Core |
 | LC-01 | End the session on the approved disconnect, duration limit or manual stop. Make cleanup idempotent. | Core |
 | LC-02 | Prevent duplicate starts within one connection session. Reconnect debounce must not restart the same timer during a short signal flap. | Core |
 | LC-03 | Persist active sessions and cleanup obligations. Reconcile after process restart without replaying completed side effects. | Core |

@@ -10,6 +10,7 @@
 #   ./dev t              core tests            (no Android SDK needed)
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
 #   ./dev sim            full lifecycle through CueService: draft to timeout
+#   ./dev bo             score the checked-in corpus (not a device measurement)
 #   ./dev b              assemble debug APK
 #   ./dev perms          dump merged-manifest permissions (R4)
 #   ./dev i              install on the connected device
@@ -83,6 +84,8 @@ case "$cmd" in
   sim)
     $GW -q :core:sim
     ;;
+
+  bo) $GW -q :core:bakeoff ;;
 
   b) need_sdk; $GW :app:assembleDebug "$@"; ok "APK built" ;;
 

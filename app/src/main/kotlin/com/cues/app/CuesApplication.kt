@@ -8,11 +8,14 @@ import com.cues.app.runtime.AndroidCapabilityProvider
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import com.cues.app.runtime.MonitoringRepository
+import com.cues.app.runtime.TimeAdapter
+import com.cues.app.runtime.WifiAdapter
 import com.cues.core.CueService
 import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.ports.Clock
+import com.cues.core.signals.AdapterSupervisor
 import com.cues.core.store.JsonFileStore
 import java.io.File
 import java.time.ZoneId
@@ -50,6 +53,7 @@ class CuesApplication : Application() {
         // never had the chance to observe at all.
         val gaps = cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(this))
         if (gaps.isNotEmpty()) Log.i(TAG, "found ${gaps.size} coverage gap(s) at process start")
+        adapterSupervisor.sync(cueService.list().filter { it.status == com.cues.core.model.RoutineStatus.ARMED })
     }
 
     /** Sprint 4's monitoring-health record: last event per adapter, for Home. */
@@ -99,6 +103,10 @@ class CuesApplication : Application() {
             drafter = drafter,
             zoneId = { ZoneId.systemDefault() },
         )
+    }
+
+    val adapterSupervisor by lazy {
+        AdapterSupervisor(mapOf("wifi" to WifiAdapter(this), "time" to TimeAdapter(this)))
     }
 
     /**

@@ -30,6 +30,7 @@ class AndroidCapabilityProvider(private val context: Context) : CapabilityProvid
         if (notificationPolicyAccessGranted()) add(Capability.NOTIFICATION_POLICY_ACCESS)
         if (postNotificationsGranted()) add(Capability.POST_NOTIFICATIONS)
         if (exactAlarmGranted()) add(Capability.EXACT_ALARM)
+        // ACCESS_NETWORK_STATE is a normal install-time permission; the Wi-Fi adapter reads only transport state.
         add(Capability.NETWORK_STATE)
         // Reading current charging state needs no special permission on
         // modern Android; granted whenever the BatteryManager service exists.

@@ -54,6 +54,14 @@ object Validator {
             addAll(validateRearm(routine.rearmPolicy))
             addAll(validateCleanup(routine.cleanupPolicy))
 
+            if (routine.unaccountedClauses.isNotEmpty()) {
+                add(Finding(
+                    Severity.ERROR,
+                    "sourceText",
+                    "Cues could not account for: ${routine.unaccountedClauses.joinToString(", ")}. Remove or reword it before approval.",
+                ))
+            }
+
             if (routine.schemaVersion != SCHEMA_VERSION) {
                 add(
                     Finding(

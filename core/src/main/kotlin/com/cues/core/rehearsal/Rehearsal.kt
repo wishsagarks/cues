@@ -70,6 +70,14 @@ private class ScratchStore : SessionStore {
  */
 object Rehearsal {
 
+    /** Evaluates exactly one live snapshot with the same mock-only engine as rehearsal. */
+    fun dryRun(routine: Routine, liveContext: ContextSnapshot, atMillis: Long = liveContext.nowMillis): RehearsalRow {
+        val armed = routine.copy(status = RoutineStatus.ARMED)
+        val (engine, _) = rig(atMillis)
+        val result = engine.onTriggerEvent(armed, connect(armed, atMillis), liveContext)
+        return row("Dry run: nothing was changed", armed, result)
+    }
+
     fun run(routine: Routine, atMillis: Long = System.currentTimeMillis()): RehearsalReport {
         val armed = routine.copy(status = RoutineStatus.ARMED)
 

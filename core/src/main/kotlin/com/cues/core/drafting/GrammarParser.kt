@@ -50,6 +50,8 @@ class GrammarParser(
                 "Which device did you mean: ${trigger.candidates.joinToString(", ") { it.label }}?",
                 about = "trigger.device",
                 deviceCandidates = trigger.candidates,
+                consumed = consumed,
+                clauses = ClauseAccounting.classify(text, consumed),
             )
         }
 
@@ -62,6 +64,8 @@ class GrammarParser(
                 id,
                 "What should happen? Cues can start a focus timer and quiet notifications.",
                 about = "actions",
+                consumed = consumed,
+                clauses = ClauseAccounting.classify(text, consumed),
             )
         }
 
@@ -74,6 +78,8 @@ class GrammarParser(
                 question = "Named Wi-Fi needs location access on this build; use any Wi-Fi until the device spike is decided.",
                 about = "trigger.network",
                 unsupported = unsupported,
+                consumed = consumed,
+                clauses = ClauseAccounting.classify(text, consumed),
             )
         }
 
@@ -94,7 +100,11 @@ class GrammarParser(
             ),
         )
 
-        return DraftResult.Drafted(id, routine, unsupported)
+        return DraftResult.Drafted(
+            id, routine, unsupported,
+            consumed = consumed,
+            clauses = ClauseAccounting.classify(text, consumed),
+        )
     }
 
     // ------------------------------------------------------------ triggers
@@ -114,6 +124,7 @@ class GrammarParser(
                 ?: "What should start this cue? Try naming a device connecting, or the charger.",
             about = "trigger",
             unsupported = unsupported,
+            clauses = ClauseAccounting.classify(text, emptyList()),
         )
     }
 

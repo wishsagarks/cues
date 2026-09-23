@@ -2,6 +2,7 @@ package com.cues.app.drafting
 
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.RoutineDrafter
+import com.cues.core.drafting.GrammarParser
 import com.cues.core.model.DraftSourceId
 
 /**
@@ -30,10 +31,41 @@ import com.cues.core.model.DraftSourceId
  * stub that returned a plausible routine would be the one outcome worth
  * avoiding: it would make the model look like it was working.
  */
-class OnDeviceLlmDrafter : RoutineDrafter {
+fun interface LlmSession { fun generate(prompt: String): String }
+
+/**
+ * Integration seam for the MediaPipe runtime. Asset provisioning is deliberately
+ * explicit: no model is downloaded by the app and an absent asset is a failure,
+ * not a fallback disguised as inference.
+ */
+class MediaPipeLlmSession(private val modelPath: String? = null) : LlmSession {
+    override fun generate(prompt: String): String =
+        throw IllegalStateException("No side-loaded MediaPipe model is configured.")
+}
+
+class FakeLlmSession(private val answer: String) : LlmSession {
+    override fun generate(prompt: String): String = answer
+}
+
+class OnDeviceLlmDrafter(
+    private val session: LlmSession = MediaPipeLlmSession(),
+    private val parser: GrammarParser = GrammarParser(),
+) : RoutineDrafter {
 
     override val id: DraftSourceId = DraftSourceId.ON_DEVICE_LLM
 
-    override suspend fun draft(text: String): DraftResult =
-        DraftResult.Failed(id, "The on-device model is not wired up yet.")
+    override suspend fun draft(text: String): DraftResult = try {
+        // The model proposes a sentence in the same closed grammar; parsing it
+        // keeps capabilities and validation independent of model prose.
+        when (val parsed = parser.parse(session.generate(prompt(text)))) {
+            is DraftResult.Drafted -> parsed.copy(source = id, consumed = emptyList(), clauses = emptyList())
+            is DraftResult.NeedsClarification -> parsed.copy(source = id, consumed = emptyList(), clauses = emptyList())
+            is DraftResult.Failed -> parsed.copy(source = id)
+        }
+    } catch (e: Exception) {
+        DraftResult.Failed(id, e.message ?: "The on-device model could not produce a draft.")
+    }
+
+    private fun prompt(text: String): String =
+        "Return one Cues request using only supported trigger, condition, action and ending vocabulary. Request: $text"
 }
