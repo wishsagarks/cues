@@ -22,7 +22,7 @@ object ClauseAccounting {
     private val filler = setOf(
         "a", "an", "and", "at", "after", "before", "by", "do", "end", "for", "from",
         "i", "if", "in", "is", "it", "me", "my", "of", "on", "out", "please", "run", "start", "take", "the",
-        "then", "to", "until", "when", "whenever", "with", "about", "plug",
+        "then", "to", "until", "when", "whenever", "while", "with", "about", "plug",
         // Decorative time-of-day flavor, never the sole time specifier — the
         // grammar only ever derives an actual time from a clock value
         // ("after 7 pm", "before 9am"), never from these words alone.

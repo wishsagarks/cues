@@ -30,6 +30,7 @@ earbuds connect between 9am and 5pm, focus for an hour | trigger=bluetooth-conne
 # --- charging trigger ---
 when I plug in the charger quiet notifications for 20 minutes | trigger=charging-on, timer=20, dnd=true
 when the phone is charging after 11pm start a 15 minute timer | trigger=charging-on, from=23:00, timer=15
+while charging at night, silence notifications until 7am | trigger=charging-on, until=07:00, dnd=true
 
 # --- weekend, for the live demo (the event falls on a weekend) ---
 when my earbuds connect on the weekend start a 10 minute focus timer and quiet notifications | trigger=bluetooth-connect, device=earbuds, days=weekend, timer=10, dnd=true

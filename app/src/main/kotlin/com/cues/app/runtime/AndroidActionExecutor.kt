@@ -263,6 +263,13 @@ class AndroidActionExecutor(
      * orphaned rule is "probably" the right one.
      */
     fun reconcileZenRules() {
+        // Without Notification Policy Access, Cues could not have created a
+        // zen rule in the first place, so there is nothing to reconcile —
+        // and NotificationManager.getAutomaticZenRules() throws
+        // SecurityException rather than returning empty when access is
+        // missing, which would otherwise crash every cold start before the
+        // user has had a chance to grant it.
+        if (!notifications.isNotificationPolicyAccessGranted) return
         val rules = notifications.automaticZenRules ?: return
         val owner = ComponentName(context, AndroidActionExecutor::class.java)
         rules.forEach { (ruleId, rule) ->
