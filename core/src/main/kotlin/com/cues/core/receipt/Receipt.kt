@@ -96,6 +96,9 @@ object Receipts {
                     EndReason.ROUTINE_PAUSED -> "The cue was paused."
                     EndReason.RECONCILED_EXPIRED -> "It had already finished while the app was not running."
                     EndReason.START_FAILED -> "It could not start."
+                    EndReason.COVERAGE_GAP ->
+                        "A coverage gap: the device was no longer connected when Cues checked, " +
+                            "but no disconnect was ever observed — most likely while the app was not running."
                     null -> "It ended."
                 },
             )

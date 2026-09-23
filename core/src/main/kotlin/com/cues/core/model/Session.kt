@@ -56,6 +56,8 @@ enum class EndReason {
     ROUTINE_PAUSED,
     RECONCILED_EXPIRED,
     START_FAILED,
+    /** The device was no longer connected on resume, but no disconnect was ever observed (R6). */
+    COVERAGE_GAP,
 }
 
 /** The outcome of one action, recorded individually. A blocked action is not a success. */

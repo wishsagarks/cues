@@ -386,6 +386,48 @@ class SessionEngineTest {
         assertTrue(reconciled.isEmpty())
     }
 
+    // -------------------------------------------------------- coverage gaps
+
+    @Test
+    fun `a live session whose device is no longer connected is closed as a coverage gap`() {
+        val routine = Fixtures.heroRoutine()
+        val engine = engine()
+        engine.onTriggerEvent(routine, Fixtures.connect(), Fixtures.snapshot())
+
+        val gaps = engine.checkBluetoothCoverage(routines(routine), currentlyConnectedDeviceIds = emptySet())
+
+        assertEquals(1, gaps.size)
+        assertEquals(EndReason.COVERAGE_GAP, gaps.single().endReason)
+        assertEquals(SessionState.COMPLETED, gaps.single().state)
+    }
+
+    @Test
+    fun `a session whose device is still reported connected is left alone`() {
+        val routine = Fixtures.heroRoutine()
+        val engine = engine()
+        engine.onTriggerEvent(routine, Fixtures.connect(), Fixtures.snapshot())
+
+        val gaps = engine.checkBluetoothCoverage(routines(routine), currentlyConnectedDeviceIds = setOf(Fixtures.EARBUDS_ID))
+
+        assertTrue(gaps.isEmpty())
+        assertEquals(SessionState.ACTIVE, store.all.single().state)
+    }
+
+    @Test
+    fun `coverage checking releases what the session owned`() {
+        val executor = RecordingExecutor()
+        val routine = Fixtures.heroRoutine()
+        val engine = engine(executor)
+        engine.onTriggerEvent(routine, Fixtures.connect(), Fixtures.snapshot())
+
+        engine.checkBluetoothCoverage(routines(routine), currentlyConnectedDeviceIds = emptySet())
+
+        assertEquals(
+            setOf(OwnedResource.FOCUS_TIMER, OwnedResource.DND_CONTRIBUTION),
+            executor.released.toSet(),
+        )
+    }
+
     // ---------------------------------------------------------- rearming
 
     @Test

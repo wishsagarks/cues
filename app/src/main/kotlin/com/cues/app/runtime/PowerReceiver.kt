@@ -31,7 +31,11 @@ class PowerReceiver : BroadcastReceiver() {
         val charging = Readings.charging(context, atMillis)
 
         val app = context.applicationContext as CuesApplication
+        app.monitoring.recordEvent(MonitoringRepository.POWER, atMillis)
         val results = app.cueService.onDeviceEvent(event, charging = charging)
         GraceScheduler.apply(context, results)
+        // R6: an unrelated event is a free opportunity to notice a Bluetooth
+        // disconnect that was missed while nothing else happened to check.
+        app.cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(context))
     }
 }

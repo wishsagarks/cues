@@ -234,3 +234,36 @@ succeed on Temurin 21.
 can still often run `./dev t` — this one specifically had no JDK at all, which
 is a different and rarer failure than CL-04's network block. Don't conflate the
 two; check for a working `java`/`javac` before assuming `./dev t` is available.
+
+**Addendum, 23 Sep 2026 (relates to CL-04):** this Claude Code session installed
+a JDK 17/21 and the Android SDK locally (`brew install openjdk@17 openjdk@21
+android-commandlinetools`, `sdkmanager` for `platform-tools`,
+`platforms;android-35`, `build-tools;35.0.0`) and ran `./dev b` successfully for
+the first time — this is a different machine from the event laptop, so it does
+not retire CL-04 (whose condition is specifically the laptop, via Office Kit),
+but it is the first real evidence the pinned dependency versions in
+`gradle/libs.versions.toml` actually resolve and compile together.
+
+---
+
+## CL-10 — Bluetooth coverage-gap detection only sees GATT-connected devices
+
+**Status:** open · **Raised:** 23 Sep 2026
+
+Task 4.6's `BluetoothCoverage.currentlyConnectedDeviceIds` (R6) reads
+`BluetoothManager.getConnectedDevices(BluetoothProfile.GATT)`, the one profile
+constant that call is documented to accept. Classic-audio-only earbuds that
+never expose a GATT service (no battery or ANC characteristic over BLE) would
+not appear in that list even while genuinely connected, which would make
+`CueService.checkBluetoothCoverage` end a session that is actually still
+running and file it as `EndReason.COVERAGE_GAP` — a false gap, not a missed
+one. `BluetoothAdapter.getProfileConnectionState(BluetoothProfile.A2DP)` was
+considered instead, but it reports the adapter's connection state for *any*
+device on that profile, not the specific bound device, which is worse for a
+check whose whole point is per-device confidence.
+
+**Remove when:** R6 is run on the loaner with the actual paired earbuds —
+confirm whether they expose a GATT service while connected (most modern TWS
+earbuds do, for battery reporting) and record a false-positive rate, or
+switch to a `BluetoothA2dp`/`BluetoothHeadset` profile-proxy read if GATT
+alone proves insufficient.

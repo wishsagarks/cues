@@ -5,7 +5,9 @@ import android.util.Log
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
+import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
+import com.cues.app.runtime.MonitoringRepository
 import com.cues.core.CueService
 import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.GrammarParser
@@ -41,7 +43,17 @@ class CuesApplication : Application() {
         executor.reconcileZenRules()
         val reconciled = cueService.onBoot()
         Log.i(TAG, "reconciled ${reconciled.size} session(s) at process start")
+
+        // R6 (4.6): the other half of "a disconnect made while the process
+        // was dead appears as a coverage gap" — reconcile() above only
+        // catches an expired deadline/grace, not a disconnect the process
+        // never had the chance to observe at all.
+        val gaps = cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(this))
+        if (gaps.isNotEmpty()) Log.i(TAG, "found ${gaps.size} coverage gap(s) at process start")
     }
+
+    /** Sprint 4's monitoring-health record: last event per adapter, for Home. */
+    val monitoring: MonitoringRepository by lazy { MonitoringRepository(this) }
 
     val clock: Clock = Clock { System.currentTimeMillis() }
 

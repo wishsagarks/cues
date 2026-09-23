@@ -321,6 +321,29 @@ class SessionEngine(
         }
     }
 
+    /**
+     * Detects and closes Bluetooth coverage gaps (R6, task 4.6).
+     *
+     * A live session admitted by a [Trigger.BluetoothConnection] whose device
+     * is not in [currentlyConnectedDeviceIds] means the device disconnected
+     * without Cues ever observing the event — most plausibly while the
+     * process was dead, since a live process would have seen the
+     * `ACL_DISCONNECTED` broadcast and ended the session the ordinary way.
+     * Ends it, distinctly from [EndReason.TRIGGER_REVERSED], so the receipt
+     * says a gap was detected rather than claiming a clean, observed exit.
+     * Never restarts anything — the same rule [reconcile] follows for an
+     * expired session.
+     */
+    fun checkBluetoothCoverage(routines: Map<String, Routine>, currentlyConnectedDeviceIds: Set<String>): List<Session> =
+        store.allUnfinished().mapNotNull { session ->
+            if (!session.state.isLive()) return@mapNotNull null
+            val routine = routines[session.routineId] ?: return@mapNotNull null
+            val trigger = routine.trigger as? Trigger.BluetoothConnection ?: return@mapNotNull null
+            if (trigger.transition != DeviceTransition.CONNECTED) return@mapNotNull null
+            if (trigger.deviceId in currentlyConnectedDeviceIds) return@mapNotNull null
+            end(routine, session, EndReason.COVERAGE_GAP)
+        }
+
     /** Retries releases for sessions that ended owing something. */
     fun retryPendingCleanup(routines: Map<String, Routine>): List<Session> =
         store.allUnfinished()

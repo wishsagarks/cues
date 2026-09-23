@@ -10,6 +10,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,7 +18,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.GraceScheduler
+import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.ui.CuesTheme
 import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.HomeScreen
@@ -61,6 +67,7 @@ class MainActivity : ComponentActivity() {
                     cueService = app.cueService,
                     store = app.store,
                     deviceDiagnostics = app.deviceDiagnostics,
+                    monitoring = app.monitoring,
                     localSpeechInput = localSpeechInput,
                 )
             }
@@ -86,6 +93,7 @@ private fun CuesApp(
     cueService: CueService,
     store: JsonFileStore,
     deviceDiagnostics: DeviceDiagnosticsRepository,
+    monitoring: MonitoringRepository,
     localSpeechInput: LocalSpeechInput,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
@@ -96,10 +104,28 @@ private fun CuesApp(
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
+    var adapterStatuses by remember { mutableStateOf(monitoring.statuses()) }
 
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 4.6/4.7: re-checks coverage and refreshes what Home shows every time
+    // the app comes back to the foreground, not only at process start — the
+    // moment a user actually looks at the screen is the moment "was anything
+    // missed while I was away" matters.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(context))
+                adapterStatuses = monitoring.statuses()
+                routines = cueService.list()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     fun refresh() {
         routines = cueService.list()
@@ -138,6 +164,7 @@ private fun CuesApp(
             when (val current = screen) {
                 Screen.Home -> HomeScreen(
                     routines = routines,
+                    adapterStatuses = adapterStatuses,
                     isDrafting = isDrafting,
                     onDraft = ::draft,
                     onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },

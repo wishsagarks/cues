@@ -241,6 +241,21 @@ class CueService(
         return reconciled + retried
     }
 
+    /**
+     * Checks for Bluetooth coverage gaps (R6, task 4.6): a live session whose
+     * device Android now reports as not connected, with no disconnect ever
+     * observed for it. [currentlyConnectedDeviceIds] is a live platform
+     * reading the caller supplies — same discipline as [onDeviceEvent]'s
+     * readings — never assumed here. Called on resume and after every
+     * device event, per R6's method.
+     */
+    fun checkBluetoothCoverage(currentlyConnectedDeviceIds: Set<String>): List<Session> {
+        val byId = routines.all().associateBy { it.id }
+        val gaps = engine.checkBluetoothCoverage(byId, currentlyConnectedDeviceIds)
+        gaps.forEach { session -> byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session)) } }
+        return gaps
+    }
+
     // ---------------------------------------------------------- diagnostics
 
     data class Diagnostics(

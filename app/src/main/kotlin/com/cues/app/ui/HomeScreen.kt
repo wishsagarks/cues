@@ -38,9 +38,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.cues.app.runtime.AdapterStatus
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.Routine
 import com.cues.core.review.ReviewCopy
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Home: gesture-started local speech, editable typed input, and the list of
@@ -50,6 +54,7 @@ import com.cues.core.review.ReviewCopy
 @Composable
 fun HomeScreen(
     routines: List<Routine>,
+    adapterStatuses: List<AdapterStatus>,
     isDrafting: Boolean,
     onDraft: (String) -> Unit,
     onOpenRoutine: (Routine) -> Unit,
@@ -172,6 +177,9 @@ fun HomeScreen(
             }
         }
 
+        Spacer(Modifier.height(20.dp))
+        MonitoringCard(adapterStatuses)
+
         Spacer(Modifier.height(24.dp))
         Text(
             "YOUR CUES",
@@ -203,6 +211,46 @@ fun HomeScreen(
         )
     }
 }
+
+/**
+ * Monitoring health (4.6 / MH-01): when each adapter last saw an event.
+ *
+ * Deliberately does not claim a listener is "live" — a manifest receiver has
+ * no such signal to report, and claiming one would be exactly the
+ * overclaiming the FDD's "a receiver declaration is not proof of delivery"
+ * line rules out. Coverage gaps this session finds show up as ordinary
+ * receipts (EndReason.COVERAGE_GAP), not a separate banner here.
+ */
+@Composable
+private fun MonitoringCard(statuses: List<AdapterStatus>) {
+    Surface(
+        color = cuesColors.bg300,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("MONITORING", style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+            statuses.forEach { status ->
+                Text(
+                    "${status.label}: " + (
+                        status.lastEventAtMillis?.let { MONITORING_TIME_FORMAT.format(Date(it)) }
+                            ?: "no event received yet"
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Text(
+                "Registered in the manifest. Delivery while backgrounded is unverified on this phone (R1).",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+private val MONITORING_TIME_FORMAT = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
 
 @Composable
 private fun DevicePickerDialog(

@@ -56,8 +56,16 @@ class BluetoothReceiver : BroadcastReceiver() {
         val charging = Readings.charging(context, atMillis)
 
         val app = context.applicationContext as CuesApplication
+        app.monitoring.recordEvent(MonitoringRepository.BLUETOOTH, atMillis)
         val results = app.cueService.onDeviceEvent(event, charging = charging)
         GraceScheduler.apply(context, results)
+        // Not a coverage check here: this event *is* the freshest possible
+        // transition for this exact device, and GATT's connected-devices
+        // list can race a just-arrived ACL_CONNECTED by a beat — checking
+        // immediately risks reading stale state and closing the session we
+        // just opened. The Power receiver and app resume are what call
+        // checkBluetoothCoverage; this receiver's own events are already the
+        // ground truth for its own device.
     }
 
     private fun hasBluetoothConnect(context: Context): Boolean =
