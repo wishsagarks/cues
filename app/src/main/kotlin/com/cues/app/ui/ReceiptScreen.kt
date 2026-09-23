@@ -12,21 +12,45 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cues.core.store.ReceiptEntry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 /**
  * Receipt history: what actually happened, most recent first, built straight
  * from what [com.cues.core.CueService] already wrote through [com.cues.core.ports.ReceiptSink] —
  * no separate explanation layer, because a receipt that isn't the actual
  * record of what ran is the one thing this product is built not to do.
+ *
+ * [loadReceipts] is polled rather than read once (4.7): the store this reads
+ * from is a plain directory of files with no change notification of its own,
+ * so "observes the store" means asking it again while this screen is open,
+ * not `remember { store.receipts() }` on entry. A live session ending while
+ * this screen is on-screen now shows up without leaving and reopening it —
+ * the second CL-02 gap. Polling starts when this composable enters
+ * composition and stops the moment it leaves (`onBack` or navigating away),
+ * since [LaunchedEffect] is cancelled with its call site.
  */
 @Composable
-fun ReceiptScreen(receipts: List<ReceiptEntry>, onBack: () -> Unit) {
+fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
+    var receipts by remember { mutableStateOf(loadReceipts()) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(RECEIPTS_POLL_MILLIS)
+            receipts = loadReceipts()
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Receipts", style = MaterialTheme.typography.headlineSmall)
         Text(
@@ -83,3 +107,4 @@ private fun ReceiptCard(entry: ReceiptEntry) {
 }
 
 private val TIME_FORMAT = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
+private const val RECEIPTS_POLL_MILLIS = 1_500L

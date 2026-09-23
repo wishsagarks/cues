@@ -8,6 +8,7 @@ import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.DraftResult
 import com.cues.core.model.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
+import com.cues.core.model.Capability
 import com.cues.core.model.ContextValue
 import com.cues.core.model.EventKind
 import com.cues.core.model.Routine
@@ -68,6 +69,18 @@ class CueService(
 
     /** Normalizes and validates without changing status. Safe to call repeatedly while editing. */
     fun review(routine: Routine): Approvals.ReviewResult = Approvals.review(routine)
+
+    /**
+     * A live read of which required capabilities are still missing, without
+     * attempting to approve or arm anything (4.7 / AC-03).
+     *
+     * [Approvals.arm] already re-reads capabilities at the moment of arming
+     * rather than trusting the review; this is the same read, exposed so the
+     * Review screen can repeat it in `onResume` — the case that actually
+     * matters is a user who leaves the app to grant a permission and comes
+     * back, which nothing before 4.7 ever re-checked.
+     */
+    fun missingCapabilities(routine: Routine): Set<Capability> = routine.requiredCapabilities - capabilities.granted()
 
     /**
      * Approves the routine's current form, then attempts to arm it.

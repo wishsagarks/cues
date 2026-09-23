@@ -252,7 +252,7 @@ private fun CuesApp(
                 }
 
                 Screen.Receipts -> ReceiptScreen(
-                    receipts = remember { store.receipts() },
+                    loadReceipts = { store.receipts() },
                     onBack = { screen = Screen.Home },
                 )
 
@@ -296,6 +296,24 @@ private fun ReviewFlow(
 ) {
     val review = remember(routine) { cueService.review(routine) }
     val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
+
+    // 4.7 / AC-03: the case CL-02 flagged — a user leaves the app to grant a
+    // permission (say, notification-policy access) and comes back — was
+    // never re-checked before. approveAndArm already re-reads capabilities
+    // at arm time, so this can't approve on stale consent, but the review
+    // screen itself sat there showing the permission as still missing until
+    // the user tried anyway. Re-reading on every resume fixes that without
+    // touching arming's own gate.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, review) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                onMissingCapabilities(cueService.missingCapabilities(review.normalized))
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     ReviewScreen(
         routine = review.normalized,

@@ -83,18 +83,25 @@ companion-object (process-wide static) map to an instance property, since the
 static map was itself part of what made this bug easy to miss. Unverified on
 the loaner.
 
-One thing still flagged for the first Saturday pass, not yet a true bug:
+**Resolved in Sprint 4 task 4.7 (23 Sep 2026).** Both remaining bullets are
+fixed:
 
-- The Review screen's rehearsal and required-access rows never account for a
-  capability that becomes available only after the user leaves the app to
-  grant a permission and comes back — there is no re-check on resume.
-- The Receipts screen loads once via `remember { store.receipts() }` and does
-  not refresh while open. Fine for a demo; a live session ending while the
-  screen is on-screen won't show up without leaving and reopening it.
+- `CueService.missingCapabilities(routine)` exposes the same live
+  `requiredCapabilities - capabilities.granted()` read `Approvals.arm` already
+  does at arm time. `ReviewFlow` now calls it from a `LifecycleEventObserver`
+  on `ON_RESUME`, so leaving the app to grant a permission and coming back
+  updates the Review screen's rows without needing to re-approve.
+- `ReceiptScreen` takes `loadReceipts: () -> List<ReceiptEntry>` instead of a
+  `List<ReceiptEntry>`, and polls it every 1.5s via `LaunchedEffect` while the
+  screen is in composition — the store is a plain directory of files with no
+  change notification of its own, so "observing" it means asking again, not
+  computing it once with `remember`. Polling stops the moment the screen
+  leaves composition, since `LaunchedEffect` is cancelled with its call site.
 
-**Remove when:** each path is exercised on the loaner and the result recorded
-— a working implementation, or a documented limitation with its own entry
-here.
+Unverified on the loaner: the resume re-check depends on `ON_RESUME` actually
+firing when the user returns from the system permission settings, which is
+ordinary Android lifecycle behaviour but has not been observed on this
+hardware.
 
 ---
 
