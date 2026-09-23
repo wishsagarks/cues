@@ -274,3 +274,96 @@ confirm whether they expose a GATT service while connected (most modern TWS
 earbuds do, for battery reporting) and record a false-positive rate, or
 switch to a `BluetoothA2dp`/`BluetoothHeadset` profile-proxy read if GATT
 alone proves insufficient.
+
+---
+
+## CL-11 — Audio-output signal is only observed while the process is alive
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`AudioOutputAdapter` registers `AudioManager.registerAudioDeviceCallback`,
+which — like the Wi-Fi callback it mirrors — has no delivery guarantee once
+the process is killed. `docs/SPRINT_6.md`'s R9 tracks this; monitoring health
+reports it as live only while the process is alive rather than claiming
+background delivery that has not been observed.
+
+**Remove when:** R9 is run on the loaner (connect/disconnect wired and
+Bluetooth audio 5× each, app backgrounded and swiped from recents) and the
+result is recorded here and in Diagnostics.
+
+---
+
+## CL-12 — Battery-threshold conditions have no matching trigger
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`Condition.BatteryBelow`/`BatteryAtLeast` are snapshot-time gates only. R10
+(does `ACTION_BATTERY_LOW`/`BATTERY_OKAY` reach a manifest receiver on this
+OEM) was never run, so no `Trigger` crosses that threshold — a routine can
+require "battery below 20%" but nothing starts a session the moment it drops
+below 20%. This is a deliberate scope cut (`docs/SPRINT_6.md`'s cut order),
+not an oversight, and the vocabulary stays smaller than the corpus this
+implies until R10 says otherwise.
+
+**Remove when:** R10 is run on the loaner and either a `Trigger.BatteryLevel`
+kit is added, or the limitation is confirmed permanent and this entry is
+replaced with that finding.
+
+---
+
+## CL-13 — Declared places have no delivery adapter
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`Place` and `Condition.AtPlace`/`Trigger.PlaceTransition` are typed and
+validated in `:core`, and the app lets a user save a place by typing its
+coordinates (no location permission requested, matching the manifest's own
+"no location" line). There is no `PlaceAdapter`, no `GeofencingClient` and no
+location permission in `:app` — a place can be referenced by a cue's
+condition, evaluated against `ContextSnapshot.insidePlaces` if that field is
+ever populated, but nothing populates it today, and no cue can currently be
+*triggered* by entering or leaving a place. This is the first item in
+`docs/SPRINT_6.md`'s cut order, cut deliberately rather than shipped
+unverified: `docs/FDD.md` still lists geofencing as needing its own
+permission and reliability design, and R13 (delivery under the OEM battery
+policy with the screen off) has not been run.
+
+**Remove when:** a `PlaceAdapter` is built behind `ports/Ports.kt`, R13 is run
+on the loaner, and the result — working, or a documented delivery limitation
+— is recorded here.
+
+---
+
+## CL-14 — targetSdk 36 is unverified on the loaner
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`app/build.gradle.kts` targets and compiles against API 36 (raised from 35 in
+this sprint, ahead of AGP 8.7.3's tested range — the build prints a warning
+about this on every run). The FDD's other targetSdk-sensitive claims —
+exact-alarm scheduling, the app-owned zen rule, foreground-service behavior —
+were written and reasoned about against 35's rules; 36 may enforce
+edge-to-edge display or other behavior changes that have not been checked
+against `Theme.Cues` or `MainActivity`.
+
+**Remove when:** `./dev b` and a cold launch are confirmed on the loaner
+running OriginOS 7, with any edge-to-edge or notification-behavior changes
+recorded here.
+
+---
+
+## CL-15 — No promoted Live Update; the session notification is the old style
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+The original Sprint 6 plan called for a promoted `ProgressStyle` Live Update
+for the running session, matching iOS Live Activities' visibility. That was
+not built — `SessionService`'s notification is unchanged from Sprint 4/5.
+`docs/SPRINT_6.md`'s R11 (would a promoted session even be shown on the
+OriginOS 7 lock screen or Origin Island) was never run, and building the
+richer notification before knowing the answer risked shipping a claim this
+repo could not measure.
+
+**Remove when:** either R11 is answered and a `ProgressStyle` notification is
+built and confirmed on the loaner, or this entry is replaced with a recorded
+decision to keep the current notification and why.

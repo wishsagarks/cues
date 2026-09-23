@@ -15,9 +15,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Compose tokens for the Cues design system published alongside
- * this app (see the "iQOO Design System" artifact: color, type, spacing,
- * radius, shadow — this file carries the same values into Kotlin).
+ * Compose tokens for Cues' own design system: color, type, spacing, radius,
+ * shadow. Cues is its own product — see docs/ORIGINOS7_EXPERIENCE_PLAN.md's
+ * design contract — so these values are never sourced from, or presented
+ * as, OriginOS or iQOO branding.
  *
  * Semantic state colors (go/stop/amber) are kept separate from Material's
  * primary/secondary slots on purpose, matching the system's own rule: state
