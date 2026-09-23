@@ -181,15 +181,32 @@ submission copy, and the device adapter results are recorded.
 
 ## CL-09 — Signal-framework merge went to `main` without a local build or test run
 
-**Status:** open · **Raised:** 22 Sep 2026
+**Status:** struck out · **Raised:** 22 Sep 2026 · **Closed:** 23 Sep 2026
 
-The commit that merged the `SignalRegistry` refactor (`CueService`, `SessionEngine`,
-`Evaluator`, `Normalizer`, `Validator`, `GrammarParser`, the new `signals/` package,
-and their tests) was pushed to `main` from an environment with no working JDK, so
-`./dev t` could not be run and none of it has compiled anywhere. This is a stronger
-claim gap than CL-04: that entry is about unverified *version pins*, this one is
-about unverified *compilation*. Treat everything under `core/.../signals/` and every
-file this merge touched as unverified until the first real build.
+The commit that merged the `SignalRegistry` refactor was pushed to `main` from an
+environment with no working JDK, so `./dev t` could not be run locally. CI
+(`.github/workflows/core.yml`, which does have a real JDK) caught two real bugs
+that a local run would also have caught:
 
-**Remove when:** `./dev t` is run on a machine with a JDK (or on the loaner) and its
-result — pass or the specific failure — is recorded here.
+- `GrammarParser.kt`: `trim('"', '\\'')` was a malformed character literal
+  (`'\''` was intended) — a compile error.
+- `Evaluator.kt`: lost its wildcard model import when the trigger/condition
+  `when`-switches moved to `SignalRegistry`, leaving `ContextValue`, `Condition`,
+  `LocalTimeOfDay` and `Day` unresolved for the helper extensions it still
+  defines — also a compile error, and its cascade produced misleading
+  "ambiguous overload" errors in the new `signals/` files that were not
+  actually at fault.
+- One corpus assertion (`dnd=false` on the CT-01 composition line) exercised a
+  case `Corpus.kt`'s `"dnd"` check has never supported — it only ever checks
+  presence of `REQUEST_DND`, never absence. Not a signal-framework bug; the
+  assertion itself was wrong and was removed.
+
+Fixed in `a5f8f08` and `b393282`. CI run
+[35814893487](https://github.com/wishsagarks/Origin-Flow/actions/runs/35814893487)
+is green: 156/156 core tests pass, `:core:compileKotlin` and `:core:test` both
+succeed on Temurin 21.
+
+**Lesson kept for CL-04 and future merges:** a container without Google's Maven
+can still often run `./dev t` — this one specifically had no JDK at all, which
+is a different and rarer failure than CL-04's network block. Don't conflate the
+two; check for a working `java`/`javac` before assuming `./dev t` is available.
