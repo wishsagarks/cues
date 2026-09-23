@@ -68,6 +68,9 @@ retire them.
 
 ## Commands
 
+For Android, Compose, widget, notification or adapter changes, follow the
+versioned [Cues Android skill](.agents/skills/cues-android/SKILL.md).
+
 `./dev` is the task runner; verbs are short because much of the event is spent
 typing on a phone. `./dev h` lists them. `./dev t` runs the core suite and
 `./dev d "<sentence>"` compiles a cue and prints its review and rehearsal

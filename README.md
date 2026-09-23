@@ -52,6 +52,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
 | [RED_LIGHT.md](RED_LIGHT.md) | Building when the laptop is only reachable through Office Kit |
 | [CLEANUP.md](CLEANUP.md) | Provisional choices, each with the condition that retires it |
+| [DEVELOPER_SETUP.md](docs/DEVELOPER_SETUP.md) | Kotlin, Android SDK and shared Claude/Codex skill setup |
 
 Earlier versions are in the git history.
 
