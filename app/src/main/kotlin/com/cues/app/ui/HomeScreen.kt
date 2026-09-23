@@ -8,6 +8,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,9 +47,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.cues.app.runtime.AdapterStatus
+import com.cues.app.R
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.Routine
 import com.cues.core.review.ReviewCopy
@@ -75,6 +85,8 @@ fun HomeScreen(
     var speechMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
+    val logoScale by animateFloatAsState(if (isListening) 1.08f else 1f, spring(stiffness = 420f), label = "logo listening")
+    val logoLift by animateFloatAsState(if (isListening) -4f else 0f, spring(stiffness = 420f), label = "logo lift")
     val startVoice = {
         speechMessage = null
         isListening = true
@@ -139,26 +151,32 @@ fun HomeScreen(
                     .padding(16.dp),
             ) {
                 Row(
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column {
-                        Text("CUES", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Text("Make context\ncount.", style = MaterialTheme.typography.headlineMedium)
+                        Text("Cues", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("Context you\ndeclare.", style = MaterialTheme.typography.headlineMedium)
                     }
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.cues_logo),
+                        contentDescription = "Cues logo",
+                        modifier = Modifier.size(64.dp).offset(y = logoLift.dp).graphicsLayer(scaleX = logoScale, scaleY = logoScale),
+                    )
                     Row {
                         TextButton(onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onOpenDiagnostics()
                         }) { Text("Checks") }
                         TextButton(onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onOpenReceipts()
                         }) { Text("History") }
                     }
                 }
                 Text(
-                    "Create a precise cue, review its boundary, then let it run quietly.",
+                    "Name the context. Review the boundary. Let the phone do only what you approved.",
                     style = MaterialTheme.typography.bodySmall,
                     color = cuesColors.ink200,
                     modifier = Modifier.padding(top = 12.dp),
@@ -178,7 +196,7 @@ fun HomeScreen(
         Spacer(Modifier.height(12.dp))
         androidx.compose.material3.OutlinedButton(
             onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     startVoice()
                 } else {
@@ -205,7 +223,7 @@ fun HomeScreen(
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 submitDraft()
             },
             enabled = !isDrafting && text.isNotBlank(),
@@ -215,6 +233,18 @@ fun HomeScreen(
                 CircularProgressIndicator(modifier = Modifier.height(18.dp))
             } else {
                 Text("Draft")
+            }
+        }
+
+        AnimatedVisibility(visible = isListening || isDrafting) {
+            Column(Modifier.padding(top = 10.dp)) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    if (isListening) "Listening on this phone…" else "Turning your words into a reviewable cue…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
 
@@ -313,7 +343,7 @@ private fun DevicePickerDialog(
                 candidates.forEach { device ->
                     androidx.compose.material3.TextButton(
                         onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSelectDevice(device)
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -341,7 +371,7 @@ private fun CueCard(routine: Routine, onClick: () -> Unit) {
             .fillMaxWidth()
             .animateContentSize()
             .clickable {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             },
     ) {

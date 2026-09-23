@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,7 +43,7 @@ fun DiagnosticsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Device checks", style = MaterialTheme.typography.headlineSmall)
             OutlinedButton(onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onBack()
             }) { Text("Back") }
         }
@@ -60,7 +61,7 @@ fun DiagnosticsScreen(
 
         Button(
             onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onRefresh()
             },
             enabled = !isRefreshing,
@@ -81,7 +82,7 @@ fun DiagnosticsScreen(
             instruction = "Try the phone's microphone and assist gesture. Record whether Jovi prevented Cues from receiving the intended user gesture.",
             observation = diagnostics.joviMicOrAssist,
             onRecord = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onRecordJoviMicOrAssist(it)
             },
         )
@@ -91,7 +92,7 @@ fun DiagnosticsScreen(
             instruction = "After arming a Bluetooth or charging cue, inspect OriginOS's permission activity. Record whether it flags Cues' listeners; Android does not expose this suggestion to apps.",
             observation = diagnostics.permissionMonitor,
             onRecord = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onRecordPermissionMonitor(it)
             },
         )
@@ -112,7 +113,7 @@ fun DiagnosticsScreen(
             )
             Button(
                 onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onRunBakeOff()
                 },
                 enabled = !isBakingOff,
@@ -134,7 +135,7 @@ private fun DiagnosticCard(label: String, value: String) {
     Surface(
         color = cuesColors.bg300,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).animateContentSize(),
     ) {
         Column(Modifier.padding(14.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = cuesColors.ink200)

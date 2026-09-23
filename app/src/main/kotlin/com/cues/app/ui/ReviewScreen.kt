@@ -113,12 +113,12 @@ fun ReviewScreen(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onBack()
                     }, modifier = Modifier.weight(1f)) { Text("Back") }
                     Button(
                         onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onApprove()
                         },
                         enabled = review.validation.isValid,

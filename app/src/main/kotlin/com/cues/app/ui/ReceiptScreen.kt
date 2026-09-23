@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,7 +79,7 @@ fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
         }
 
         OutlinedButton(onClick = {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onBack()
         }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             Text("Back")
@@ -95,7 +96,7 @@ private fun ReceiptCard(entry: ReceiptEntry) {
     Surface(
         color = cuesColors.bg300,
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).animateContentSize(),
     ) {
         Column(Modifier.padding(13.dp)) {
             Text(TIME_FORMAT.format(Date(entry.atMillis)), style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)

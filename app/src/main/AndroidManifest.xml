@@ -53,6 +53,7 @@
     <application
         android:name=".CuesApplication"
         android:allowBackup="false"
+        android:icon="@drawable/cues_logo"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cues">

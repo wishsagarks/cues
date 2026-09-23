@@ -6,6 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -191,7 +197,14 @@ private fun CuesApp(
         snackbarHost = { SnackbarHost(snackbarHost) },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            when (val current = screen) {
+            AnimatedContent(
+                targetState = screen,
+                transitionSpec = {
+                    (slideInHorizontally { it / 8 } + fadeIn()) togetherWith
+                        (slideOutHorizontally { -it / 10 } + fadeOut())
+                },
+                label = "screen transition",
+            ) { current -> when (current) {
                 Screen.Home -> HomeScreen(
                     routines = routines,
                     adapterStatuses = adapterStatuses,
@@ -311,7 +324,7 @@ private fun CuesApp(
                     bakeOffReport = bakeOffReport,
                     onRunBakeOff = ::runBakeOffNow,
                 )
-            }
+            } }
         }
     }
 }
