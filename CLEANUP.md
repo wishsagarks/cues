@@ -53,6 +53,22 @@ docs, not a tested result. What's left honestly `BLOCKED` is now specific
 refusals — policy access not granted, exact-alarm not granted, result
 notifications not wired up — not a blanket "not implemented".
 
+**Found and fixed in Sprint 4 task 4.3 (23 Sep 2026):** none of
+`AndroidActionExecutor`'s three owning handlers (`startFocusTimer`,
+`requestDnd`, `pinnedNote`) ever set `ActionOutcome.acquired`. Every fake,
+rehearsal and sim `ActionExecutor` set it correctly; the one real
+implementation did not. `SessionEngine.start()` only records a
+`CleanupObligation` when `acquired` is non-null, so on a real device this
+silently meant no session ever owed a release — the timer, the zen rule and
+the pinned note would all have been left running forever, which is exactly
+the failure "cleanup releases only what Cues owns" exists to rule out. Fixed
+by deriving `acquired` from `ActionRegistry.definition(actionId)?.owns` in
+`execute()` rather than re-typing it per handler, and by having each handler
+read its effect back (scheduled alarm, enabled zen rule, active notification)
+before returning `SUCCEEDED` — task 4.3's read-back requirement and this bug
+turned out to be the same fix. Unverified on the loaner; the alarm read-back
+in particular depends on `PendingIntent` matching behaving as documented.
+
 Two things flagged for the first Saturday pass, not yet true bugs:
 
 - `AndroidActionExecutor.zenRuleIds` is an in-memory map from session id to

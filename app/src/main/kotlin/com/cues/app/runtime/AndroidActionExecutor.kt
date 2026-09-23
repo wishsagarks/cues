@@ -18,6 +18,7 @@ import com.cues.core.model.ActionState
 import com.cues.core.model.OwnedResource
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.ActionOutcome
+import com.cues.core.registry.ActionRegistry
 
 /**
  * The only path from an approved cue to the device.
@@ -51,11 +52,30 @@ class AndroidActionExecutor(
     private val alarms: AlarmManager
         get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    override fun execute(actionId: ActionId, args: ActionArgs, sessionId: String): ActionOutcome = when (actionId) {
-        ActionId.START_FOCUS_TIMER -> startFocusTimer(args, sessionId)
-        ActionId.REQUEST_DND -> requestDnd(args, sessionId)
-        ActionId.NOTIFY_RESULT -> notifyResult(args)
-        ActionId.PINNED_NOTE -> pinnedNote(args, sessionId)
+    /**
+     * Dispatches to the per-action handler, then stamps a successful outcome
+     * with what it made this session responsible for releasing — derived from
+     * [ActionRegistry], never re-typed here. A handler that returns SUCCEEDED
+     * without this stamp would leave [com.cues.core.session.SessionEngine]
+     * with no [com.cues.core.model.CleanupObligation] to release on exit,
+     * which is the one failure mode "cleanup releases only what Cues owns"
+     * cannot tolerate — every handler below has already read its effect back
+     * before returning SUCCEEDED, so this is a true record of what exists,
+     * not a hopeful one.
+     */
+    override fun execute(actionId: ActionId, args: ActionArgs, sessionId: String): ActionOutcome {
+        val outcome = when (actionId) {
+            ActionId.START_FOCUS_TIMER -> startFocusTimer(args, sessionId)
+            ActionId.REQUEST_DND -> requestDnd(args, sessionId)
+            ActionId.NOTIFY_RESULT -> notifyResult(args)
+            ActionId.PINNED_NOTE -> pinnedNote(args, sessionId)
+        }
+        val owns = ActionRegistry.definition(actionId)?.owns
+        return if (outcome.state == ActionState.SUCCEEDED && owns != null) {
+            outcome.copy(acquired = owns)
+        } else {
+            outcome
+        }
     }
 
     override fun release(resource: OwnedResource, sessionId: String): ActionOutcome = when (resource) {
@@ -92,6 +112,19 @@ class AndroidActionExecutor(
 
         return try {
             alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, deadlineMillis, pendingIntent)
+
+            // Acquire, then verify (4.3 / AC-04): AlarmManager has no direct
+            // "is this scheduled" query, so the read-back is asking the system
+            // for the same PendingIntent with FLAG_NO_CREATE — if it comes back
+            // null, nothing was actually registered against it, whatever the
+            // call above appeared to do.
+            if (!alarmIsScheduled(sessionId)) {
+                return ActionOutcome(
+                    ActionState.BLOCKED,
+                    "The timer could not be confirmed as scheduled after asking the system to set it.",
+                )
+            }
+
             context.startForegroundService(
                 Intent(context, SessionService::class.java)
                     .putExtra(SessionService.EXTRA_SESSION_ID, sessionId)
@@ -103,6 +136,20 @@ class AndroidActionExecutor(
             // the call; treat that race as the same honest BLOCKED outcome.
             ActionOutcome(ActionState.BLOCKED, "Exact-alarm scheduling was refused: ${e.message}.")
         }
+    }
+
+    /**
+     * Reads back whether [sessionId]'s deadline alarm is actually registered.
+     *
+     * PendingIntent matching ignores extras, so this looks up the exact same
+     * (requestCode, component) pair [deadlinePendingIntent] creates — with
+     * FLAG_NO_CREATE, which returns null rather than fabricating a new one.
+     */
+    private fun alarmIsScheduled(sessionId: String): Boolean {
+        val intent = Intent(context, DeadlineReceiver::class.java)
+            .putExtra(DeadlineReceiver.EXTRA_SESSION_ID, sessionId)
+        val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, sessionId.hashCode(), intent, flags) != null
     }
 
     private fun releaseFocusTimer(sessionId: String): ActionOutcome {
@@ -160,6 +207,20 @@ class AndroidActionExecutor(
         return try {
             val ruleId = notifications.addAutomaticZenRule(rule)
             zenRuleIds[sessionId] = ruleId
+
+            // Acquire, then verify (4.3 / AC-04): addAutomaticZenRule can
+            // return an id for a rule the system silently declined to enable
+            // (an OEM zen-mode conflict, for one) — read it back rather than
+            // trusting the id alone.
+            val confirmed = notifications.automaticZenRules?.get(ruleId)
+            if (confirmed == null || !confirmed.isEnabled) {
+                zenRuleIds.remove(sessionId)
+                runCatching { notifications.removeAutomaticZenRule(ruleId) }
+                return ActionOutcome(
+                    ActionState.BLOCKED,
+                    "The quiet rule could not be confirmed as enabled after being applied.",
+                )
+            }
             ActionOutcome(ActionState.SUCCEEDED, "Quiet rule applied.")
         } catch (e: SecurityException) {
             ActionOutcome(ActionState.BLOCKED, "The system refused the quiet rule: ${e.message}.")
@@ -191,17 +252,26 @@ class AndroidActionExecutor(
                 android.app.NotificationChannel("cues_pinned", "Cues pinned notes", NotificationManager.IMPORTANCE_LOW),
             )
         }
+        @Suppress("DEPRECATION")
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, "cues_pinned")
         } else Notification.Builder(context)
+        val id = pinnedNotificationId(sessionId)
         notifications.notify(
-            pinnedNotificationId(sessionId),
+            id,
             builder.setContentTitle("Cues")
                 .setContentText(message)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setOngoing(true)
                 .build(),
         )
+
+        // Acquire, then verify (4.3 / AC-04): active notifications are readable
+        // since API 23, well under minSdk 29, so this checks the platform
+        // actually posted it rather than trusting notify()'s void return.
+        if (notifications.activeNotifications.none { it.id == id }) {
+            return ActionOutcome(ActionState.BLOCKED, "The pinned note could not be confirmed as posted.")
+        }
         return ActionOutcome(ActionState.SUCCEEDED, "Pinned note is visible.")
     }
 
