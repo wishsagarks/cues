@@ -50,6 +50,6 @@ every morning at 7 start a 45 minute focus timer | unsupported=true
 when I connect to wifi after 9pm quiet notifications for an hour | trigger=wifi-connect, from=21:00, dnd=true, unsupported=false
 when I join home wifi start a timer | trigger=wifi-connect, timer=25, unsupported=true
 at 10 pm quiet notifications until 7 am | trigger=at-time, until=07:00, dnd=true
-if the phone isn't charging at 11 pm remind me to charge it | trigger=at-time, dnd=false
+if the phone isn't charging at 11 pm remind me to charge it | trigger=at-time
 when my earbuds connect if my watch is connected start a 25 minute timer | trigger=bluetooth-connect, device=earbuds, timer=25
 at 8 pm pin a note "focus mode" until 9 pm | trigger=at-time, pinned=true, until=21:00
