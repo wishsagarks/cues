@@ -1087,3 +1087,50 @@ environment (no Android SDK — see CLAUDE.md):**
 denied in-app, a real calendar event drives `Condition.CalendarBusy` through
 an actual armed cue, and the all-day/free-marked-event question above is
 either answered or explicitly deferred with a tracking entry of its own.
+
+---
+
+## CL-31 — App shortcuts: written, unverified on a device, no new permission
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 9 listed app shortcuts among the not-done items. Added
+`app/.../runtime/AppShortcuts.kt` (`ShortcutManagerCompat.setDynamicShortcuts`)
+with a "New cue" entry plus one "Start ‹cue›" entry per armed
+`Trigger.Manual` cue, refreshed on process start (`CuesApplication.onCreate`)
+and on every `ON_RESUME` (`MainActivity`'s existing coverage-check
+observer). Tapping "Start ‹cue›" fires the exact same event
+`CuesAppFunctionService.startCue` already does — `EventKind.MANUAL_RUN`
+scoped to that one routine id (CL-28), never an unscoped run.
+
+**A real, disclosed decision, not an oversight:** every shortcut is
+*dynamic*, none are static (`res/xml`). A static shortcut's `<intent>` needs
+a hardcoded target package, and this app's debug build changes its package
+id (`applicationIdSuffix = ".debug"` in `app/build.gradle.kts`) — a static
+XML resource has no way to reference `${applicationId}` the way
+`AndroidManifest.xml` can, so a hardcoded `com.cues.android` would silently
+point a debug build's shortcut at the wrong package. Building every intent
+as `Intent(context, MainActivity::class.java)` in Kotlin is always correct
+for whichever build is actually installed; the cost is that shortcuts only
+exist after the app has run at least once, not immediately after install.
+
+**What is not verified, because `:app` cannot be exercised in this
+environment (no Android SDK — see CLAUDE.md):**
+1. None of `ShortcutManagerCompat`'s calls have run on a device — whether
+   the shortcuts actually appear on a long-press of the launcher icon, and
+   whether OriginOS 7's launcher honors dynamic shortcuts the way stock
+   Android does, are both unconfirmed.
+2. `ShortcutManagerCompat.getMaxShortcutCountPerActivity` is trusted as
+   returning a sane positive number; the `?: 4` fallback for a non-positive
+   result has never been exercised.
+3. No test proves a "Start ‹cue›" tap can't reach a paused, disabled or
+   non-manual routine — the guard clauses in the `MainActivity` handler
+   mirror `CuesAppFunctionService.startCue`'s checks, but unlike that
+   class's own logic (which lives partly in tested `:core` code via
+   `onDeviceEvent`/`couldStart`), the shortcut-specific routing itself has
+   no test.
+
+**Remove when:** the shortcut set has actually appeared on the loaner's
+launcher, "Start ‹cue›" has started a real manual cue from a long-press
+menu, and item 3's routing has either a test or is judged thin enough to
+skip one.

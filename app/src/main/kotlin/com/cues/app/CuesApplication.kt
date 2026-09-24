@@ -62,6 +62,10 @@ class CuesApplication : Application() {
         val gaps = cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(this))
         if (gaps.isNotEmpty()) Log.i(TAG, "found ${gaps.size} coverage gap(s) at process start")
         adapterSupervisor.sync(cueService.list().filter { it.status == com.cues.core.model.RoutineStatus.ARMED })
+        // Task 9: app shortcuts ("New cue", "Start ‹cue›") reflect what's
+        // armed right now, refreshed on every process start the same way
+        // adapterSupervisor.sync above already is.
+        com.cues.app.runtime.AppShortcuts.refresh(this, cueService.list())
 
         // CL-25: ACTION_USER_PRESENT is one of the implicit broadcasts a
         // manifest <receiver> can no longer catch (API 26+); it has to be

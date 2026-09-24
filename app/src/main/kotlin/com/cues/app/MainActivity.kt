@@ -97,6 +97,14 @@ class MainActivity : ComponentActivity() {
     // can arrive through onNewIntent, well after setContent already ran.
     private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
 
+    // App shortcuts (Task 9): "New cue" and a per-cue "Start ‹cue›" both
+    // launch MainActivity with one of these extras. A counter, not a raw
+    // Boolean/String, is what actually reaches CuesApp for "New cue" —
+    // tapping the shortcut twice in a row must re-trigger navigating Home
+    // even though the value "true" never itself changes.
+    private var newCueShortcutTick by androidx.compose.runtime.mutableStateOf(0)
+    private var startRoutineShortcutId by androidx.compose.runtime.mutableStateOf<String?>(null)
+
     /** Untrusted text from outside Cues — a share sheet or a screen read. Never executed, only ever shown as an editable draft. */
     private fun sharedOrCapturedText(intent: android.content.Intent?): String? {
         intent ?: return null
@@ -105,6 +113,16 @@ class MainActivity : ComponentActivity() {
             return intent.getStringExtra(android.content.Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
         }
         return null
+    }
+
+    private fun applyShortcutIntent(intent: android.content.Intent?) {
+        intent ?: return
+        if (intent.getBooleanExtra(com.cues.app.runtime.AppShortcuts.EXTRA_NEW_CUE, false)) {
+            newCueShortcutTick++
+        }
+        intent.getStringExtra(com.cues.app.runtime.AppShortcuts.EXTRA_START_ROUTINE_ID)?.let {
+            startRoutineShortcutId = it
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +135,7 @@ class MainActivity : ComponentActivity() {
         localSpeechInput = LocalSpeechInput(this)
         replySpeaker = com.cues.app.voice.ReplySpeaker(this)
         incomingScreenText = sharedOrCapturedText(intent)
+        applyShortcutIntent(intent)
 
         setContent {
             CuesTheme {
@@ -133,6 +152,9 @@ class MainActivity : ComponentActivity() {
                     replySpeaker = replySpeaker,
                     testUtilityAction = app::testUseUtility,
                     incomingScreenText = incomingScreenText,
+                    newCueShortcutTick = newCueShortcutTick,
+                    startRoutineShortcutId = startRoutineShortcutId,
+                    onStartRoutineShortcutConsumed = { startRoutineShortcutId = null },
                 )
             }
         }
@@ -142,6 +164,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         sharedOrCapturedText(intent)?.let { incomingScreenText = it }
+        applyShortcutIntent(intent)
     }
 
     override fun onDestroy() {
@@ -210,6 +233,9 @@ private fun CuesApp(
     replySpeaker: com.cues.app.voice.ReplySpeaker,
     testUtilityAction: (com.cues.core.model.UtilityId, com.cues.core.model.UtilityState) -> com.cues.core.ports.ActionOutcome,
     incomingScreenText: String? = null,
+    newCueShortcutTick: Int = 0,
+    startRoutineShortcutId: String? = null,
+    onStartRoutineShortcutConsumed: () -> Unit = {},
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     // "Cue this screen" (Task 16): a fresh capture always brings the user
@@ -217,6 +243,11 @@ private fun CuesApp(
     // anything by itself.
     androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
         if (incomingScreenText != null) screen = Screen.Home
+    }
+    // The "New cue" shortcut (Task 9): same navigation as a fresh capture,
+    // keyed on a counter so tapping it twice in a row still re-fires.
+    androidx.compose.runtime.LaunchedEffect(newCueShortcutTick) {
+        if (newCueShortcutTick > 0) screen = Screen.Home
     }
     var routines by remember { mutableStateOf(cueService.list()) }
     var isDrafting by remember { mutableStateOf(false) }
@@ -264,6 +295,10 @@ private fun CuesApp(
                 syncAdapters()
                 adapterStatuses = monitoring.statuses(adapterHealth())
                 routines = cueService.list()
+                // Task 9: keeps "Start ‹cue›" in step with which manual cues
+                // are actually armed right now, not whatever was true the
+                // last time the app happened to be foregrounded.
+                com.cues.app.runtime.AppShortcuts.refresh(context, routines)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -278,6 +313,35 @@ private fun CuesApp(
 
     fun notify(message: String) {
         scope.launch { snackbarHost.showSnackbar(message) }
+    }
+
+    // "Start ‹cue›" shortcut (Task 9): the exact same event
+    // CuesAppFunctionService.startCue already fires — EventKind.MANUAL_RUN
+    // scoped to this one routine id (CL-28), never an unscoped run that
+    // could start every armed manual cue at once.
+    androidx.compose.runtime.LaunchedEffect(startRoutineShortcutId) {
+        val routineId = startRoutineShortcutId ?: return@LaunchedEffect
+        onStartRoutineShortcutConsumed()
+        val routine = cueService.list().firstOrNull { it.id == routineId }
+        when {
+            routine == null -> notify("That cue no longer exists.")
+            routine.trigger !is com.cues.core.model.Trigger.Manual ->
+                notify("\"${routine.title}\" doesn't run by hand.")
+            routine.status != com.cues.core.model.RoutineStatus.ARMED ->
+                notify("\"${routine.title}\" is ${routine.status.name.lowercase()}, not armed.")
+            else -> {
+                val results = cueService.onDeviceEvent(
+                    com.cues.core.model.TriggerEvent(
+                        com.cues.core.model.EventKind.MANUAL_RUN,
+                        System.currentTimeMillis(),
+                        routineId = routine.id,
+                    ),
+                )
+                val started = results.filterIsInstance<com.cues.core.session.EngineResult.Started>().any()
+                notify(if (started) "Started \"${routine.title}\"." else "\"${routine.title}\" did not start — its conditions weren't met.")
+                refresh()
+            }
+        }
     }
 
     fun runBakeOffNow() {

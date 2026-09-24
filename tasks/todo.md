@@ -27,7 +27,14 @@
     (`CalendarKitTest`, a `GrammarParserTest` case; 281 core tests) and
     verified with `./dev d` end to end. The new `READ_CALENDAR` permission
     and the live provider query are unverified on a device — see CL-30.
-  - **Not done:** shortcuts; Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
+  - **Closed 24 Sep 2026:** app shortcuts. `app/.../runtime/AppShortcuts.kt`
+    (`ShortcutManagerCompat`) publishes "New cue" plus a "Start ‹cue›" entry
+    per armed manual cue, refreshed on process start and `ON_RESUME`; a tap
+    fires the same `EventKind.MANUAL_RUN` path `CuesAppFunctionService.startCue`
+    uses. Deliberately all-dynamic, not static, to dodge the debug
+    `applicationIdSuffix` package mismatch a static `res/xml` shortcut would
+    hit — see CL-31. Unverified on a device.
+  - **Not done:** Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
 - [ ] Checkpoint — Typed actions green (core-side criteria met — see below; Android-side device criteria still open)
 - [x] Task 10 — LiteRT-LM inference reports and embeddings.
   - `core/.../inference/Inference.kt` (`InferenceBackend`, `InferenceReport`), `DraftResult.inferenceReport` on all 3 variants, `CueService.diagnostics().lastInferenceReport` and each turn's `args["backend"]`.
