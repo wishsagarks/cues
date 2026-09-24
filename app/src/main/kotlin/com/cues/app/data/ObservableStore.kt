@@ -18,6 +18,7 @@ import com.cues.core.ports.MacroStore
 import com.cues.core.ports.NamedContextStore
 import com.cues.core.ports.PatchStore
 import com.cues.core.ports.PlaceStore
+import com.cues.core.ports.ReceiptLog
 import com.cues.core.ports.ReceiptSink
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
@@ -69,6 +70,7 @@ class ObservableStore(
 ) : RoutineStore by delegate,
     SessionStore by delegate,
     ReceiptSink by delegate,
+    ReceiptLog by delegate,
     NamedContextStore by delegate,
     PatchStore by delegate,
     PlaceStore by delegate,
@@ -100,6 +102,12 @@ class ObservableStore(
     // ---- ReceiptSink --------------------------------------------------------
     override fun record(sessionId: String, lines: List<String>) {
         delegate.record(sessionId, lines)
+        generation.bump()
+    }
+
+    // ---- ReceiptLog -----------------------------------------------------------
+    override fun append(record: com.cues.core.receipt.ReceiptRecord) {
+        delegate.append(record)
         generation.bump()
     }
 

@@ -183,6 +183,11 @@ class CuesApplication : Application() {
             facts = store,
             usageLedger = store,
             attention = AndroidDeviceAttention(this),
+            // Redesign: structured receipts alongside the text ones, so
+            // Insights and the Receipts tab can filter/count by reason code
+            // instead of parsing prose. Optional, like usageLedger — nothing
+            // that decides behaviour reads from it.
+            receiptLog = store,
         )
     }
 
