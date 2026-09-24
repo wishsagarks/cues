@@ -58,8 +58,8 @@ screen implies. Each has a CLEANUP entry with its retirement condition.
 
 | Gap | Effect | Entry |
 |---|---|---|
-| The attention port is never wired | Actions that need the user run immediately, even with the screen off. `PENDING` never happens on a phone | CL-25 |
-| No in-app grant for notifications, DND access or exact alarms | Review says "Missing: …" with no way forward. The demo grants them with adb during setup | CL-26 |
+| The attention port was never wired | Fixed in `:core` and tested (268 tests); `:app` wiring written, uncompiled | CL-25 |
+| No in-app grant for notifications, DND access or exact alarms | Fixed in `:app`, uncompiled — Review's rows now have grant buttons. The demo keeps the adb fallback until this runs on the loaner | CL-26 |
 | Coach Accept seeds text the parser cannot draft | Accept always yields "What should start this cue?" | CL-27 |
 | "Hand off to Jovi" fires the generic `ACTION_ASSIST`. AppFunctions (Task 17) not built | The label promises Jovi, and no system agent can call Cues | CL-24 |
 | A screen capture reaches `CuesApp` and is ignored | "Cue this screen" does nothing visible yet | CL-23 item 2 |

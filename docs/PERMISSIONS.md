@@ -18,10 +18,10 @@ when the app resumes, and arming re-checks them live.
 |---|---|---|---|
 | `BLUETOOTH_CONNECT` | Runtime | Bluetooth trigger/condition: resolving the bound device and reading its connection | Prompted from Home before the paired-device picker |
 | `RECORD_AUDIO` | Runtime | Speech input, only after a mic tap | Prompted on the first mic tap (Home) |
-| `POST_NOTIFICATIONS` | Runtime (API 33+) | Session notification, `NOTIFY_RESULT`, pinned notes | **Never prompted in-app (CL-26).** Review lists it as missing and blocks arming until it is granted in system settings |
+| `POST_NOTIFICATIONS` | Runtime (API 33+) | Session notification, `NOTIFY_RESULT`, pinned notes | Review's "Required access" row has an "Allow" button when missing (CL-26, uncompiled) |
 | `ACCESS_NETWORK_STATE` | Normal | Any-Wi-Fi signal. No SSID, so no location | Install time |
-| `ACCESS_NOTIFICATION_POLICY` | Special access | The app-owned `AutomaticZenRule` (`REQUEST_DND`) and ringer mode (`RINGER_MODE`) | **No in-app deep link (CL-26).** Review lists it as missing, and the user grants it in system settings |
-| `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM` | Special / normal | Timer deadline, reconnect grace, at-time trigger | **No in-app deep link (CL-26).** Review lists it as missing where the OS has not granted it |
+| `ACCESS_NOTIFICATION_POLICY` | Special access | The app-owned `AutomaticZenRule` (`REQUEST_DND`) and ringer mode (`RINGER_MODE`) | Review's "Required access" row has an "Open settings" button (`ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS`) when missing (CL-26, uncompiled) |
+| `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM` | Special / normal | Timer deadline, reconnect grace, at-time trigger | Review's "Required access" row has an "Open settings" button (`ACTION_REQUEST_SCHEDULE_EXACT_ALARM`) where the OS hasn't granted it (CL-26, uncompiled) |
 | `RECEIVE_BOOT_COMPLETED` | Normal | Reconciling sessions after a restart | Install time |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` | Normal | `SessionService`, the visible running session | Install time |
 | `CAMERA` | Runtime | Timetable capture and Cue Card QR scan only, released when the screen closes | On opening either capture screen. The Photo Picker route needs no permission |

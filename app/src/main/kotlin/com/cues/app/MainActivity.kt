@@ -740,5 +740,6 @@ private fun ReviewFlow(
             }
         },
         onBack = onBack,
+        onCapabilitiesChanged = { onMissingCapabilities(cueService.missingCapabilities(review.normalized)) },
     )
 }

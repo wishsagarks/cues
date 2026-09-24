@@ -826,33 +826,54 @@ with the result recorded here and in `docs/DEVICE_MATRIX.md`.
 
 ## CL-26 — Three capabilities Review asks for have no way to grant them in-app
 
-**Status:** open · **Raised:** 24 Sep 2026
+**Status:** open (fixed in `:app`, uncompiled) · **Raised:** 24 Sep 2026 · **Updated:** 24 Sep 2026
 
 Review lists every derived capability, marks the missing ones ("Missing:
 Do Not Disturb access, notifications, exact alarms") and re-reads them on
-resume (CL-02, task 4.7). Only Bluetooth and the microphone (Home), the
-camera (both capture screens) and Accessibility (Utility Bindings) have a
-button that leads to the grant. `POST_NOTIFICATIONS` is never requested at
-runtime. Notification-policy access and exact alarms have no deep link to
-their settings pages. A first-time user sees "Missing: …" under an Approve
-button that stays disabled, with no way forward from inside the app. The
-hero cue hits this for DND access and notifications. Exact alarms are
-probably covered on API 33+, where the declared `USE_EXACT_ALARM` is
-granted at install, but that is unverified on the loaner.
+resume (CL-02, task 4.7). Before this update, only Bluetooth and the
+microphone (Home), the camera (both capture screens) and Accessibility
+(Utility Bindings) had a button that led to the grant — `POST_NOTIFICATIONS`
+was never requested at runtime, and notification-policy access and exact
+alarms had no deep link to their settings pages. A first-time user saw
+"Missing: …" under an Approve button that stayed disabled, with no way
+forward from inside the app.
 
-Nothing is claimed as granted when it isn't, and arming correctly refuses.
-The gap is that the refusal has no way out.
+**Fixed, this update (`app/.../ui/ReviewScreen.kt`), not compiled here (no
+Android SDK in this environment):**
 
-For the event, grant these before the demo with adb (docs/DEMO.md, "Before
-the demo"). That is a setup step, not a user path, and the demo must not
-present it as one.
+Each missing capability's row in "Required access" now shows a button where
+one applies:
 
-**Remove when:** Review's "Missing" line gets a per-capability action.
-Use a `RequestPermission` launcher for `POST_NOTIFICATIONS` (API 33+),
-`Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS` for DND access, and
-`Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM` for exact alarms (API 31+,
-where not already granted). Confirm on the loaner that the flow out and back
-re-enables Approve through the existing resume re-check.
+- `POST_NOTIFICATIONS` and `BLUETOOTH_CONNECT` — "Allow", an
+  `ActivityResultContracts.RequestPermission()` launcher, the same pattern
+  Home already uses for the mic and Bluetooth prompts. Its callback calls a
+  new `onCapabilitiesChanged` (wired from `ReviewFlow` to the same
+  `cueService.missingCapabilities(...)` read the `ON_RESUME` observer
+  already used), so the row updates immediately rather than waiting for the
+  user to background and foreground the app.
+- `NOTIFICATION_POLICY_ACCESS` — "Open settings",
+  `Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS`.
+- `EXACT_ALARM` — "Open settings", `Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM`.
+  Only ever missing on API 31+, since `AndroidCapabilityProvider` reports it
+  granted unconditionally below that, so there is no older-API branch.
+
+These two leave the app, so they rely on the existing `ON_RESUME` re-check
+(CL-02) to update the row on return, not on `onCapabilitiesChanged`.
+
+Left as `null` (no button, same as before): `LOCATION_*`, `BATTERY_STATE`,
+`NETWORK_STATE` (none is ever actually missing — see
+`AndroidCapabilityProvider`), and `ACCESSIBILITY_SERVICE` (its own consent
+flow already exists on the Utility Bindings screen; a second deep link here
+would just be a second path to the same toggle).
+
+For the event, until this is confirmed on the loaner, still grant these
+before the demo with adb (docs/DEMO.md, "Before the demo") as a fallback.
+
+**Remove when:** `./dev b` compiles this, and a run on the loaner confirms
+each button's flow — including that the `POST_NOTIFICATIONS` and
+`BLUETOOTH_CONNECT` rows update without needing to leave the app, and that
+returning from each settings screen re-enables Approve through the existing
+resume re-check.
 
 ---
 

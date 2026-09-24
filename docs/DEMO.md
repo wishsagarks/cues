@@ -23,8 +23,10 @@ out loud rather than smoothed over.
 ## Before the demo (setup, not part of the story)
 
 1. Install the build under test with `./dev r`, and pair the demo earbuds.
-2. Grant what the app cannot yet ask for in-app (CL-26). Because this is setup,
-   it is not shown:
+2. Review's "Required access" rows now have grant buttons for these (CL-26,
+   written but not compiled in the environment that wrote it — confirm on the
+   loaner before relying on this step). If a button is missing or doesn't
+   work, fall back to adb as setup, not shown on stage:
 
    ```sh
    adb shell pm grant com.cues.android.debug android.permission.POST_NOTIFICATIONS

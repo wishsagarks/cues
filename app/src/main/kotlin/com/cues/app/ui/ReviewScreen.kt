@@ -1,5 +1,11 @@
 package com.cues.app.ui
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,9 +23,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +52,14 @@ fun ReviewScreen(
     missingCapabilities: Set<Capability>,
     onApprove: () -> Unit,
     onBack: () -> Unit,
+    /**
+     * Called right after a grant action that resolves synchronously (a
+     * runtime permission dialog), so the missing-capability list updates
+     * immediately rather than waiting for the next `ON_RESUME` — which
+     * still fires, and still matters, for the settings-screen grants below
+     * that actually leave the app (CL-26).
+     */
+    onCapabilitiesChanged: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -81,7 +97,7 @@ fun ReviewScreen(
 
             item { SectionLabel("Required access") }
             items(routine.requiredCapabilities.sortedBy { it.name }) { capability ->
-                PermissionCheckRow(capability, capability in missingCapabilities)
+                PermissionCheckRow(capability, capability in missingCapabilities, onCapabilitiesChanged)
             }
 
             if (!review.validation.isValid || review.validation.warnings.isNotEmpty()) {
@@ -204,20 +220,49 @@ private fun ActionRiskRow(actionId: com.cues.core.model.ActionId) {
 }
 
 @Composable
-private fun PermissionCheckRow(capability: Capability, isMissing: Boolean) {
+private fun PermissionCheckRow(capability: Capability, isMissing: Boolean, onCapabilitiesChanged: () -> Unit) {
     val copy = with(ReviewCopy) { capability.permissionCheckCopy() }
+    val context = LocalContext.current
+
+    // POST_NOTIFICATIONS and BLUETOOTH_CONNECT are the two capabilities here
+    // with a synchronous runtime-permission dialog rather than a settings
+    // screen; the launcher has to exist unconditionally so Compose keeps its
+    // slot stable across recompositions, even on rows that never launch it.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { onCapabilitiesChanged() }
+
     Surface(
         color = if (isMissing) cuesColors.stopBg else cuesColors.bg300,
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text(
-                with(ReviewCopy) { capability.friendlyName() },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (isMissing) cuesColors.stop else cuesColors.ink100,
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    with(ReviewCopy) { capability.friendlyName() },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isMissing) cuesColors.stop else cuesColors.ink100,
+                )
+                if (isMissing) {
+                    val grantLabel = capability.grantLabel()
+                    if (grantLabel != null) {
+                        TextButton(onClick = {
+                            when (capability) {
+                                Capability.POST_NOTIFICATIONS ->
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                Capability.BLUETOOTH_CONNECT ->
+                                    permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                                else -> context.startActivity(
+                                    capability.settingsIntent(context.packageName)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        }) { Text(grantLabel) }
+                    }
+                }
+            }
             Text(
                 copy.purpose,
                 style = MaterialTheme.typography.bodySmall,
@@ -233,6 +278,38 @@ private fun PermissionCheckRow(capability: Capability, isMissing: Boolean) {
         }
     }
     Spacer(Modifier.height(8.dp))
+}
+
+/**
+ * `null` for a capability with no direct grant surface from here (location,
+ * battery/network reads that need no permission, or the accessibility
+ * service, which is its own consent flow on the Utility Bindings screen —
+ * duplicating a settings deep link here would just be a second, easily
+ * inconsistent path to the same toggle).
+ */
+private fun Capability.grantLabel(): String? = when (this) {
+    Capability.POST_NOTIFICATIONS -> "Allow"
+    Capability.BLUETOOTH_CONNECT -> "Allow"
+    Capability.NOTIFICATION_POLICY_ACCESS -> "Open settings"
+    Capability.EXACT_ALARM -> "Open settings"
+    else -> null
+}
+
+/**
+ * Only called for a capability [grantLabel] names as a settings screen, i.e.
+ * never [Capability.POST_NOTIFICATIONS] or [Capability.BLUETOOTH_CONNECT],
+ * which the caller launches as a runtime-permission request instead.
+ *
+ * `ACTION_REQUEST_SCHEDULE_EXACT_ALARM` is API 31+ only, but so is ever
+ * seeing [Capability.EXACT_ALARM] as missing —
+ * [com.cues.app.runtime.AndroidCapabilityProvider] reports it granted
+ * unconditionally below API 31 — so there is no older-API branch to write
+ * here.
+ */
+private fun Capability.settingsIntent(packageName: String): Intent = when (this) {
+    Capability.NOTIFICATION_POLICY_ACCESS -> Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+    Capability.EXACT_ALARM -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
+    else -> error("$this has no settings screen; grantLabel() should have returned null")
 }
 
 @Composable
