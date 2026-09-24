@@ -155,7 +155,8 @@ class AndroidActionExecutor(
             )
         }
 
-        val deadlineMillis = System.currentTimeMillis() + minutes * 60_000L
+        val startedAtMillis = System.currentTimeMillis()
+        val deadlineMillis = startedAtMillis + minutes * 60_000L
         val pendingIntent = deadlinePendingIntent(sessionId)
 
         return try {
@@ -176,7 +177,8 @@ class AndroidActionExecutor(
             context.startForegroundService(
                 Intent(context, SessionService::class.java)
                     .putExtra(SessionService.EXTRA_SESSION_ID, sessionId)
-                    .putExtra(SessionService.EXTRA_DEADLINE_MILLIS, deadlineMillis),
+                    .putExtra(SessionService.EXTRA_DEADLINE_MILLIS, deadlineMillis)
+                    .putExtra(SessionService.EXTRA_STARTED_AT_MILLIS, startedAtMillis),
             )
             ActionOutcome(ActionState.SUCCEEDED, "Timer set for $minutes minutes.")
         } catch (e: SecurityException) {

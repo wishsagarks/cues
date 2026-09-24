@@ -30,11 +30,14 @@ class NowNextWidget : AppWidgetProvider() {
 
         private fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val app = context.applicationContext as CuesApplication
+            val routines = app.store.all()
             val active = app.store.allUnfinished().firstOrNull { it.state.isLive() }
-            val next = forecastToday(app.store.all(), app.store.allPatches(), LiveSnapshot.current(context), ZoneId.systemDefault()).firstOrNull()
+            val activeTitle = active?.let { session -> routines.firstOrNull { it.id == session.routineId }?.title }
+            val next = forecastToday(routines, app.store.allPatches(), LiveSnapshot.current(context), ZoneId.systemDefault()).firstOrNull()
             val views = RemoteViews(context.packageName, R.layout.now_next_widget).apply {
-                setTextViewText(R.id.now_text, active?.let { "Now: cue running" } ?: "Now: no cue running")
-                setTextViewText(R.id.next_text, next?.let { "Next: ${it.window}" } ?: "Next: no eligible cue today")
+                setTextViewText(R.id.now_text, activeTitle ?: "No cue running")
+                setTextViewText(R.id.next_text, next?.let { "Next: ${it.window}" } ?: "Nothing eligible today")
+                setViewVisibility(R.id.live_dot, if (active != null) android.view.View.VISIBLE else android.view.View.GONE)
                 setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(context, id, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             }
             manager.updateAppWidget(id, views)

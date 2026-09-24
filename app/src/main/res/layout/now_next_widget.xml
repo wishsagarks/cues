@@ -3,9 +3,46 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
-    android:background="#FF161B25">
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Cues" android:textColor="#FF8DACFF" android:textStyle="bold" />
-    <TextView android:id="@+id/now_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF5F7FF" android:layout_marginTop="4dp" />
-    <TextView android:id="@+id/next_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFB7C0D3" android:layout_marginTop="4dp" />
+    android:padding="14dp"
+    android:background="#FF12141C">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <View
+            android:id="@+id/live_dot"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_live_dot"
+            android:visibility="gone" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CUES"
+            android:textColor="#FFFFE600"
+            android:textSize="12sp"
+            android:letterSpacing="0.08"
+            android:textStyle="bold" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/now_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FFE1E1ED"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:layout_marginTop="6dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+    <TextView
+        android:id="@+id/next_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FFA9B1C3"
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
 </LinearLayout>

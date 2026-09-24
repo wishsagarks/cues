@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -39,6 +40,7 @@ class SessionService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var deadlineMillis: Long = 0
+    private var startedAtMillis: Long = 0
     private var sessionId: String = ""
 
     private val tick = object : Runnable {
@@ -62,6 +64,8 @@ class SessionService : Service() {
         }
         sessionId = intent?.getStringExtra(EXTRA_SESSION_ID) ?: sessionId
         deadlineMillis = intent?.getLongExtra(EXTRA_DEADLINE_MILLIS, deadlineMillis) ?: deadlineMillis
+        startedAtMillis = intent?.getLongExtra(EXTRA_STARTED_AT_MILLIS, startedAtMillis)
+            ?.takeIf { it > 0 } ?: startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -98,15 +102,40 @@ class SessionService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification())
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle(getString(R.string.session_notification_title))
-        .setContentText(remainingText())
-        .setSmallIcon(R.drawable.ic_stat_cue)
-        .setOngoing(true)
-        .setOnlyAlertOnce(true)
-        .setContentIntent(openAppIntent())
-        .addAction(0, getString(R.string.session_notification_stop), stopIntent())
-        .build()
+    /**
+     * Redesign plan §5.3: a determinate progress bar plus a real
+     * countdown chronometer, colorized in the brand yellow, rather than a
+     * plain two-line notification re-typed every 30s. Still no
+     * ProgressStyle/Live-Update promotion — that stays out per CL-15's
+     * recorded decision; this only restyles the standard notification that
+     * already existed.
+     */
+    private fun buildNotification(): android.app.Notification {
+        val now = System.currentTimeMillis()
+        val totalMillis = (deadlineMillis - startedAtMillis).coerceAtLeast(1L)
+        val elapsedMillis = (now - startedAtMillis).coerceIn(0L, totalMillis)
+        val progressPercent = ((elapsedMillis * 100) / totalMillis).toInt().coerceIn(0, 100)
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.session_notification_title))
+            .setContentText(remainingText())
+            .setSmallIcon(R.drawable.ic_stat_cue)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setColor(Color.parseColor("#FFE600"))
+            .setColorized(true)
+            .setProgress(100, progressPercent, false)
+            .apply {
+                if (deadlineMillis > 0) {
+                    setUsesChronometer(true)
+                    setChronometerCountDown(true)
+                    setWhen(deadlineMillis)
+                }
+            }
+            .setContentIntent(openAppIntent())
+            .addAction(0, getString(R.string.session_notification_stop), stopIntent())
+            .build()
+    }
 
     /**
      * The notification's own stop action (4.4). Broadcasts to
@@ -146,6 +175,7 @@ class SessionService : Service() {
     companion object {
         const val EXTRA_SESSION_ID = "com.cues.android.EXTRA_SESSION_ID"
         const val EXTRA_DEADLINE_MILLIS = "com.cues.android.EXTRA_DEADLINE_MILLIS"
+        const val EXTRA_STARTED_AT_MILLIS = "com.cues.android.EXTRA_STARTED_AT_MILLIS"
         const val ACTION_STOP_SESSION = "com.cues.android.action.STOP_SESSION"
         private const val CHANNEL_ID = "cues_session"
         private const val NOTIFICATION_ID = 1
