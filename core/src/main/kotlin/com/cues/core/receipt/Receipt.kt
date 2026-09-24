@@ -42,21 +42,7 @@ object Receipts {
     private fun started(routine: Routine, session: Session, decision: Decision): Receipt {
         val lines = buildList {
             decision.reasons.filter { it.truth == Truth.MATCH }.forEach { add(it.detail) }
-
-            session.actions.forEach { record ->
-                add(
-                    when (record.state) {
-                        ActionState.SUCCEEDED -> "${record.actionId.friendly()}: done.${record.actionId.unownedCaveat()}"
-                        // Named as refused, not folded into a general success.
-                        ActionState.BLOCKED -> "${record.actionId.friendly()}: blocked. ${record.detail.orEmpty()}".trim()
-                        ActionState.FAILED -> "${record.actionId.friendly()}: failed. ${record.detail.orEmpty()}".trim()
-                        ActionState.PENDING ->
-                            "${record.actionId.friendly()}: waiting for you. ${record.detail.orEmpty()}".trim()
-                        else -> "${record.actionId.friendly()}: ${record.state.name.lowercase()}."
-                    },
-                )
-            }
-
+            addAll(actionLines(session))
             session.deadlineMillis?.let { add("Ends at the ${routine.timerMinutes()}-minute mark unless stopped sooner.") }
             if (EndCondition.TriggerReversed in routine.endConditions) {
                 add("Also ends if ${routine.triggerNoun()} goes away for more than ${routine.rearmPolicy.reconnectGraceSeconds} seconds.")
@@ -71,6 +57,35 @@ object Receipts {
             else -> "Started, with something blocked"
         }
         return Receipt(headline, lines)
+    }
+
+    /**
+     * A step that was [ActionState.PENDING] because [Presence.NEEDS_USER]
+     * found nobody at the phone, now attempted because someone is. Not part
+     * of [EngineResult] — nothing decided whether to admit a session here,
+     * only whether to retry what was already waiting — so this is called
+     * straight from [com.cues.core.CueService.retryPendingActions], not
+     * through [forResult].
+     */
+    fun resumed(session: Session): Receipt {
+        val headline = when {
+            session.actions.any { it.state == ActionState.BLOCKED || it.state == ActionState.FAILED } ->
+                "Resumed, with something blocked"
+            else -> "Resumed"
+        }
+        return Receipt(headline, actionLines(session))
+    }
+
+    private fun actionLines(session: Session): List<String> = session.actions.map { record ->
+        when (record.state) {
+            ActionState.SUCCEEDED -> "${record.actionId.friendly()}: done.${record.actionId.unownedCaveat()}"
+            // Named as refused, not folded into a general success.
+            ActionState.BLOCKED -> "${record.actionId.friendly()}: blocked. ${record.detail.orEmpty()}".trim()
+            ActionState.FAILED -> "${record.actionId.friendly()}: failed. ${record.detail.orEmpty()}".trim()
+            ActionState.PENDING ->
+                "${record.actionId.friendly()}: waiting for you. ${record.detail.orEmpty()}".trim()
+            else -> "${record.actionId.friendly()}: ${record.state.name.lowercase()}."
+        }
     }
 
     private fun skipped(reasons: List<Reason>): Receipt {

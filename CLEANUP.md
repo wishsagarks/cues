@@ -774,39 +774,53 @@ loaner, or Task 17 is cut and the plan says so.
 
 ## CL-25 — Actions that need the user never wait on a real phone
 
-**Status:** open · **Raised:** 24 Sep 2026
+**Status:** open (core fixed and tested; `:app` half written, uncompiled) · **Raised:** 24 Sep 2026 · **Updated:** 24 Sep 2026
 
 Task 8's `PENDING` semantics are built and tested in `:core`:
 `SessionEngine` holds a `Presence.NEEDS_USER` action while
 `DeviceAttention.isUserPresent()` is false, `retryPendingActions` runs it
-later, and expiry makes it `BLOCKED` and the session `PARTIAL`. The running
-app never uses any of it:
+later, and expiry makes it `BLOCKED` and the session `PARTIAL`. Found during
+the Task 19 matrix preparation (M8): the running app never used any of it.
 
-- `CueService` constructs `SessionEngine(sessions, executor, clock)` with no
-  attention argument, so the engine keeps its default
-  `DeviceAttention { true }`. Every session admitted on a phone treats the
-  user as present, including with the screen off.
-- Nothing outside the tests calls `retryPendingActions`, and `:app` has no
-  screen-on or unlock listener that could call it.
+**Fixed in `:core`, this update:**
 
-The six `NEEDS_USER` actions (`OPEN_APP`, `COMPOSE_MESSAGE`,
-`ADD_CALENDAR_EVENT`, `SET_ALARM`, `OPEN_LINK`, `USE_UTILITY`) therefore
-execute immediately when a session starts. From the background, Android's
-activity-launch limits may block or silently drop them. What reaches the
-receipt then depends on the executor's read-back, not on the presence rule the
-Review screen describes. Nothing is claimed as done that was not, but the
-"waits until you're at the phone" behaviour is not delivered.
+- `CueService` now takes an `attention: DeviceAttention` parameter (default
+  `DeviceAttention { true }`, so every existing caller — the CLI, every
+  test — is unaffected) and passes it to `SessionEngine`.
+- A new `CueService.retryPendingActions()` finds every unfinished session
+  with a `PENDING` action, checks `attention.isUserPresent()` itself (it does
+  not trust the caller to have already checked — `SessionEngine`'s own
+  method does trust its caller, by design, so the check has to live at this
+  layer), retries each one through the engine, and records a "Resumed"
+  receipt (`Receipts.resumed`, sharing its per-action line rendering with
+  `started` rather than duplicating it).
+- New test: `CueServiceTest` — a `NEEDS_USER` action stays `PENDING` and
+  unattempted while `attention` says nobody is present; calling
+  `retryPendingActions()` in that state is a no-op (catches the version of
+  this fix that forgot to gate on `attention` itself); flipping `attention`
+  to present and calling again executes it and returns the session; a
+  second call afterward is a no-op, not a re-execution. 268 core tests
+  green.
 
-Found during the Task 19 matrix preparation (M8). It is not fixed in that
-pass because the `:app` half cannot be compiled in the environment that
-found it.
+**Written but not compiled (`:app`, no Android SDK in the environment that
+wrote this):**
 
-**Remove when:** `CueService` accepts a `DeviceAttention` and passes it to
-`SessionEngine`, and exposes a retry for active sessions with pending actions
-(both testable in `:core`). `:app` also needs to supply an implementation
-(`PowerManager.isInteractive` and not `KeyguardManager.isKeyguardLocked`)
-and call that retry from a context-registered `ACTION_USER_PRESENT`
-receiver. Then run M8 on the loaner and record the result.
+- `AndroidDeviceAttention` (`app/.../runtime/`) reads `PowerManager.isInteractive()`,
+  not `KeyguardManager.isKeyguardLocked()` — see its own doc comment for why.
+- `CuesApplication` passes it to `CueService`'s new `attention` parameter, and
+  registers a context-registered `ACTION_USER_PRESENT` receiver in
+  `onCreate()` (`ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)`,
+  required at targetSdk 36) that calls `retryPendingActions()`.
+- `MainActivity`'s existing `ON_RESUME` observer (the same one that re-checks
+  Bluetooth coverage) also calls `retryPendingActions()`, since reopening the
+  app from recents on an already-unlocked phone never fires
+  `ACTION_USER_PRESENT`.
+
+**Remove when:** `./dev b` compiles this, and M8 is run on the loaner —
+does `isInteractive()` behave as expected, does the receiver actually fire,
+does a `NEEDS_USER` action that ran from the background get blocked by
+Android's activity-launch restrictions before the retry ever gets a chance —
+with the result recorded here and in `docs/DEVICE_MATRIX.md`.
 
 ---
 

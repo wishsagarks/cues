@@ -239,6 +239,11 @@ private fun CuesApp(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(context))
+                // CL-25: the app coming forward is also a presence signal,
+                // independent of the ACTION_USER_PRESENT receiver in
+                // CuesApplication — this covers reopening from recents on an
+                // already-unlocked phone, which never fires that broadcast.
+                cueService.retryPendingActions()
                 syncAdapters()
                 adapterStatuses = monitoring.statuses(adapterHealth())
                 routines = cueService.list()

@@ -91,9 +91,18 @@ class CueService(
      * existed.
      */
     private val embedder: Embedder? = null,
+    /**
+     * Whether someone is at the phone right now. Defaults to "always
+     * present" — today's behaviour for every action that predates this
+     * parameter — so every existing caller (the CLI, every test, and every
+     * `:app` construction site until it supplies a real reading) is
+     * unaffected. See [com.cues.core.ports.DeviceAttention] and CLEANUP.md
+     * CL-25 for why a real phone needs a real one wired in.
+     */
+    private val attention: com.cues.core.ports.DeviceAttention = com.cues.core.ports.DeviceAttention { true },
 ) {
 
-    private val engine = SessionEngine(sessions, executor, clock)
+    private val engine = SessionEngine(sessions, executor, clock, attention = attention)
     private var lastInferenceReport: InferenceReport? = null
 
     init {
@@ -612,6 +621,35 @@ class CueService(
             byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session)) }
         }
         return reconciled + retried
+    }
+
+    /**
+     * Attempts every [com.cues.core.model.ActionState.PENDING] action across
+     * every live session, if [attention] agrees someone is at the phone right
+     * now — checked here, not left to the caller, because
+     * [SessionEngine.retryPendingActions] itself trusts whoever calls it to
+     * have already confirmed that.
+     *
+     * Safe to call on every resume whether or not anything is pending: a
+     * session with nothing waiting is left alone, and `attention` is read
+     * only when there is a `PENDING` action to justify asking. On a phone,
+     * the moment the app comes back to the foreground is a reasonable proxy
+     * for presence, the same moment [checkBluetoothCoverage] already
+     * re-checks from `ON_RESUME` (CL-25).
+     */
+    fun retryPendingActions(): List<Session> {
+        val byId = routines.all().associateBy { it.id }
+        val pending = sessions.allUnfinished()
+            .filter { session -> session.actions.any { it.state == com.cues.core.model.ActionState.PENDING } }
+        if (pending.isEmpty() || !attention.isUserPresent()) return emptyList()
+
+        return pending.mapNotNull { session ->
+            val routine = byId[session.routineId] ?: return@mapNotNull null
+            engine.retryPendingActions(routine, session.id)?.also { updated ->
+                val receipt = com.cues.core.receipt.Receipts.resumed(updated)
+                receipts.record(updated.id, listOf(receipt.headline) + receipt.lines)
+            }
+        }
     }
 
     /**

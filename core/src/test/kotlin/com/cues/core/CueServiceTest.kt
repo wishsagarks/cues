@@ -11,6 +11,7 @@ import com.cues.core.ports.CapabilityProvider
 import com.cues.core.session.EngineResult
 import com.cues.core.session.FakeClock
 import com.cues.core.session.RecordingExecutor
+import com.cues.core.session.ToggleAttention
 import com.cues.core.store.JsonFileStore
 import java.io.File
 import java.time.ZoneId
@@ -128,6 +129,43 @@ class CueServiceTest {
         clock.advanceMinutes(45)
         val ended = service.onDeadline(started.session.id)
         assertEquals(SessionState.COMPLETED, assertIs<EngineResult.Ended>(ended).session.state)
+    }
+
+    @Test
+    fun `a NEEDS_USER action waits, and CueService retryPendingActions runs it once someone is present`() = runTest {
+        val attention = ToggleAttention(present = false)
+        val serviceWithAttention = CueService(
+            routines = store, sessions = store, receipts = store, executor = executor,
+            clock = clock, capabilities = ALL_GRANTED, drafter = GrammarParser(PAIRED),
+            zoneId = { ZoneId.of("Asia/Kolkata") }, attention = attention,
+        )
+        val routine = Fixtures.heroRoutine(conditions = emptyList()).copy(
+            actions = listOf(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp("com.example.app", "Example"))),
+            endConditions = listOf(EndCondition.ManualStop),
+        )
+        store.save(routine)
+
+        val started = assertIs<EngineResult.Started>(
+            serviceWithAttention.onDeviceEvent(Fixtures.connect()).single(),
+        ).session
+        assertEquals(SessionState.PARTIAL, started.state)
+        assertEquals(ActionState.PENDING, started.actions.single().state)
+        assertTrue(executor.executed.isEmpty(), "a PENDING action must never be attempted while nobody is present")
+
+        // Nothing pending yet to retry — must not falsely report progress.
+        assertTrue(serviceWithAttention.retryPendingActions().isEmpty())
+
+        attention.present = true
+        val retried = serviceWithAttention.retryPendingActions()
+
+        assertEquals(listOf(ActionId.OPEN_APP), executor.executed)
+        val resumedSession = retried.single()
+        assertEquals(ActionState.SUCCEEDED, resumedSession.actions.single().state)
+        assertEquals(SessionState.ACTIVE, resumedSession.state)
+
+        // A second call after everything already ran must be a no-op, not a re-execution.
+        assertTrue(serviceWithAttention.retryPendingActions().isEmpty())
+        assertEquals(1, executor.executed.size)
     }
 
     @Test

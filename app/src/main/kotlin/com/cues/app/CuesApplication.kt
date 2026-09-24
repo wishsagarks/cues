@@ -6,6 +6,7 @@ import com.cues.app.drafting.LiteRtLmSession
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
+import com.cues.app.runtime.AndroidDeviceAttention
 import com.cues.app.runtime.AudioOutputAdapter
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
@@ -61,6 +62,30 @@ class CuesApplication : Application() {
         val gaps = cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(this))
         if (gaps.isNotEmpty()) Log.i(TAG, "found ${gaps.size} coverage gap(s) at process start")
         adapterSupervisor.sync(cueService.list().filter { it.status == com.cues.core.model.RoutineStatus.ARMED })
+
+        // CL-25: ACTION_USER_PRESENT is one of the implicit broadcasts a
+        // manifest <receiver> can no longer catch (API 26+); it has to be
+        // context-registered, and the application's own lifetime is the
+        // natural scope for it — this is the one moment "someone is now at
+        // the phone" actually happens, as opposed to ON_RESUME's "the app
+        // itself came forward", which MainActivity already re-checks for
+        // coverage gaps. Unregistering is deliberately skipped: the process
+        // owns this receiver for as long as it's alive, the same way
+        // CuesAccessibilityService's lifetime already works.
+        // RECEIVER_NOT_EXPORTED: only the system can broadcast ACTION_USER_PRESENT
+        // anyway, but targetSdk 34+ requires every dynamically registered
+        // receiver to say so explicitly.
+        androidx.core.content.ContextCompat.registerReceiver(
+            this,
+            object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                    val resumed = cueService.retryPendingActions()
+                    if (resumed.isNotEmpty()) Log.i(TAG, "retried ${resumed.size} pending action(s) on user-present")
+                }
+            },
+            android.content.IntentFilter(android.content.Intent.ACTION_USER_PRESENT),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     /** Sprint 4's monitoring-health record: last event per adapter, for Home. */
@@ -141,6 +166,7 @@ class CuesApplication : Application() {
             places = store,
             facts = store,
             usageLedger = store,
+            attention = AndroidDeviceAttention(this),
         )
     }
 
