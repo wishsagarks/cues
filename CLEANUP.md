@@ -1222,3 +1222,35 @@ environment (no Android SDK — see CLAUDE.md):**
 Workbench pane) has been observed on the loaner, the button/long-press
 interaction in item 2 is confirmed not to break ordinary taps, and either
 item 3's shadow is fixed or judged acceptable to ship as-is.
+
+---
+
+## CL-33 — Insights: computed and benchmarked on the JVM, never measured on a phone
+
+**Status:** open · **Raised:** 25 Sep 2026
+
+`core/.../insights/Insights.kt` computes the Insights report from sessions,
+structured receipts (`receipts-v2/`) and the usage ledger.
+`InsightsBenchmarkTest` runs plan §10.2's synthetic worst case (1,200
+sessions, 200 receipts, 14,000 ledger events): a median of 2–3 ms against a
+150 ms budget. That figure is **the pure computation on an Apple M4 laptop
+JVM**, with every input already in memory.
+
+**What is not measured:**
+1. The device cost. The reads that gather the inputs are what §10.2 expects
+   to dominate: `SessionStore.recent` and `allUnfinished` decode one file per
+   session, and `ledgerEvents()` decodes one file per ledger event (up to
+   ~14,000). None of that has run on the loaner.
+2. Whether pruning (sessions ended over 30 days ago, owing nothing, deleted
+   on the next ended save) keeps `allUnfinished()`'s full scan cheap enough
+   in practice. It bounds the file count; the time per file is unknown.
+
+**Consequence worth knowing now:** pruning at 30 days means the 30-day
+window's *previous*-window delta (days 30–60) will almost always read "No
+earlier data". That is honest, not a bug, but the UI should expect it.
+
+**Remove when:** the debug "Insights computed in N ms (N events)" line in
+Checks has been read on the loaner with a realistic ledger, and the figure
+is recorded in `docs/MEASUREMENTS.md` with its source. If it exceeds 300 ms,
+or file reads dominate, first move the ledger to a single append-only file
+(plan §10.2) before considering SQLite/Room.
