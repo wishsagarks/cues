@@ -770,6 +770,21 @@ environment (no Android SDK here — see CLAUDE.md):**
    there is no dedicated intent for a bare utility toggle request. Teaching
    and testing a binding from the Utility Bindings screen was already
    end-to-end; now attaching one to a cue is too, in `:core`.
+8. **Restore intent survives process death — `:core` half done, `:app` half
+   open (25 Sep 2026, plan §10.4).** `releaseUtility` kept its restore target
+   only in memory, so after a process death it returned `SUCCEEDED "No prior
+   utility state was held."` while Game Mode stayed on. `:core` now persists
+   the approved `ActionArgs` on each `CleanupObligation` at acquisition,
+   hands release the whole obligation and session
+   (`ActionExecutor.release(obligation, session)`, defaulting to the old
+   overload), and carries `Verification` (`STEPS_CONFIRMED` renders as
+   "assumed" in receipts). `UtilityRestoreTest` proves the data is present
+   and sufficient after a simulated process death, a mid-session edit, and
+   two utilities in one cue. **Not done:** `AndroidActionExecutor` still
+   uses only the resource-only overload, so on a phone the bug is unchanged
+   until it overrides the new one (`TODO(app)` in `Ports.kt`). Same shape as
+   CL-17's ringer restore: a release must never report success for state it
+   cannot account for.
 
 **Remove when:** a taught Eye protection on/off pair has actually run on the
 loaner — teach, test on, test off, and a real cue session that arms, fires

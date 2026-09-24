@@ -66,7 +66,36 @@ data class ActionRecord(
     val actionId: ActionId,
     val state: ActionState,
     val detail: String? = null,
+    /**
+     * How [state] was confirmed. Defaults to [Verification.NONE], which is
+     * also what every record written before this field existed decodes as —
+     * the honest reading of a record that never said.
+     */
+    val verification: Verification = Verification.NONE,
 )
+
+/**
+ * How Cues knows an action (or a release) did what it reports.
+ *
+ * "Done" means different things for different mechanisms, and the UI has to
+ * be able to tell them apart: a ringer mode Cues read back is a fact, a macro
+ * whose on-screen steps all landed is an assumption about a setting Cues
+ * cannot read. The two must never look alike.
+ */
+@Serializable
+enum class Verification {
+    /** The platform state was re-read after the change — the ringer mode, the DND rule. */
+    READ_BACK,
+
+    /**
+     * Only the macro's own on-screen postconditions held. The setting itself
+     * was never read, so the result is shown as assumed, never as a plain ✓.
+     */
+    STEPS_CONFIRMED,
+
+    /** No check was possible, or none was recorded. */
+    NONE,
+}
 
 /**
  * The exact [ActionRecord.detail] a [ActionState.PENDING] action is stamped
@@ -112,6 +141,27 @@ data class CleanupObligation(
     val acquiredAtMillis: Long,
     val released: Boolean = false,
     val failureDetail: String? = null,
+    /**
+     * The approved arguments of the action that acquired this resource,
+     * persisted at acquisition so release can work out what to undo from the
+     * session record alone.
+     *
+     * Why the session's pinned `routineVersion` is not enough on its own:
+     * `RoutineStore` keeps only a routine's latest version, so an edit made
+     * while this session ran — which the FDD allows, and which never rewrites
+     * the running session — replaces the arguments it ran with. A deleted
+     * routine takes them with it. And two `USE_UTILITY` actions in one cue
+     * owe the same [OwnedResource], so the resource alone cannot say which
+     * utility a given obligation is for. Keeping the arguments here is the
+     * one field that closes all three.
+     *
+     * Null for an obligation written before this field existed. A release
+     * that needs the arguments and finds null must report that it cannot
+     * tell what to restore — never succeed by default.
+     */
+    val args: ActionArgs? = null,
+    /** How the release was confirmed, once it has happened. */
+    val releaseVerification: Verification = Verification.NONE,
 )
 
 /**
