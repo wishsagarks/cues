@@ -219,6 +219,19 @@ sealed interface Condition {
     @Serializable
     @SerialName("atPlace")
     data class AtPlace(val placeId: String, val placeVersion: Int, val label: String) : Condition
+
+    /**
+     * Whether the calendar shows a busy event right now. Missing
+     * `READ_CALENDAR` reads as [ContextValue.Unknown], never as "not busy" —
+     * see `signals/CalendarKit.kt`.
+     */
+    @Serializable
+    @SerialName("calendarBusy")
+    data object CalendarBusy : Condition
+
+    @Serializable
+    @SerialName("calendarNotBusy")
+    data object CalendarNotBusy : Condition
 }
 
 @Serializable
@@ -478,4 +491,7 @@ enum class Capability {
      * member of this enum already follows.
      */
     ACCESSIBILITY_SERVICE,
+
+    /** Reading whether the calendar shows a busy event right now — `Condition.CalendarBusy`/`CalendarNotBusy`. */
+    READ_CALENDAR,
 }

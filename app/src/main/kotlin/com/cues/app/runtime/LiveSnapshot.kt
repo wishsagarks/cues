@@ -18,5 +18,6 @@ object LiveSnapshot {
             atMillis,
         ),
         wifi = WifiReadings.current(context, atMillis),
+        calendarBusy = CalendarReadings.busy(context, atMillis),
     )
 }

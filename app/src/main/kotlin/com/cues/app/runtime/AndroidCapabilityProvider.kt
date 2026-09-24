@@ -38,7 +38,12 @@ class AndroidCapabilityProvider(private val context: Context) : CapabilityProvid
         // modern Android; granted whenever the BatteryManager service exists.
         add(Capability.BATTERY_STATE)
         if (accessibilityServiceEnabled()) add(Capability.ACCESSIBILITY_SERVICE)
+        if (readCalendarGranted()) add(Capability.READ_CALENDAR)
     }
+
+    private fun readCalendarGranted(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
+            PackageManager.PERMISSION_GRANTED
 
     /**
      * Whether "Cues: iQOO utility bindings" is enabled in system

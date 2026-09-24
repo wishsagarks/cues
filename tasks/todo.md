@@ -20,7 +20,14 @@
     `sharedOrCapturedText` (also used for the screen-capture path CL-23 item
     2 closed) feeds it into the same data-only draft box. Unverified on a
     device — see CL-29.
-  - **Not done:** shortcuts; calendar condition kit (`Condition.CalendarBusy`/`NotBusy`); Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
+  - **Closed 24 Sep 2026:** calendar condition kit. `Condition.CalendarBusy`/
+    `CalendarNotBusy`, `Capability.READ_CALENDAR`, `signals/CalendarKit.kt`,
+    a `GrammarParser` phrase, and `app/.../runtime/CalendarReadings.kt`
+    reading `CalendarContract.Instances`. Fully tested in `:core`
+    (`CalendarKitTest`, a `GrammarParserTest` case; 281 core tests) and
+    verified with `./dev d` end to end. The new `READ_CALENDAR` permission
+    and the live provider query are unverified on a device — see CL-30.
+  - **Not done:** shortcuts; Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
 - [ ] Checkpoint — Typed actions green (core-side criteria met — see below; Android-side device criteria still open)
 - [x] Task 10 — LiteRT-LM inference reports and embeddings.
   - `core/.../inference/Inference.kt` (`InferenceBackend`, `InferenceReport`), `DraftResult.inferenceReport` on all 3 variants, `CueService.diagnostics().lastInferenceReport` and each turn's `args["backend"]`.

@@ -40,6 +40,8 @@ object SignalRegistry {
         BatteryBelowKit,
         BatteryAtLeastKit,
         AtPlaceKit,
+        CalendarBusyKit,
+        CalendarNotBusyKit,
     )
 
     val endKits: List<EndKit<out EndCondition>> = listOf(
@@ -74,6 +76,8 @@ object SignalRegistry {
             Condition.BatteryBelow::class,
             Condition.BatteryAtLeast::class,
             Condition.AtPlace::class,
+            Condition.CalendarBusy::class,
+            Condition.CalendarNotBusy::class,
         )) { "Every sealed Condition subtype must have exactly one signal kit." }
         check(endByType.keys == setOf(
             EndCondition.TriggerReversed::class,

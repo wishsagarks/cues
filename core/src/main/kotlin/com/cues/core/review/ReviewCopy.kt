@@ -100,6 +100,7 @@ object ReviewCopy {
         Capability.LOCATION_FOREGROUND -> "foreground location"
         Capability.LOCATION_BACKGROUND -> "background location"
         Capability.ACCESSIBILITY_SERVICE -> "the Cues utility-bindings accessibility service"
+        Capability.READ_CALENDAR -> "calendar read access"
     }
 
     /** Explains the actual, bounded use of each requested capability before approval. */
@@ -152,6 +153,11 @@ object ReviewCopy {
         Capability.ACCESSIBILITY_SERVICE -> PermissionCheckCopy(
             purpose = "Replay a macro you taught, only against the exact toggle it was taught on.",
             frequency = "Used only when a USE_UTILITY action in this cue fires, and only while you are present.",
+        )
+
+        Capability.READ_CALENDAR -> PermissionCheckCopy(
+            purpose = "Read whether the calendar shows a busy event right now, for a calendar-busy or calendar-free condition.",
+            frequency = "Read only when this cue's trigger fires; Cues does not read event titles, attendees or any other detail.",
         )
     }
 

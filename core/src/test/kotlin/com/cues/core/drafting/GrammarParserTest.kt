@@ -327,6 +327,22 @@ class GrammarParserTest {
         assertEquals(LocalTimeOfDay(0, 0), windowFor(base + "after midnight")?.startInclusive)
         assertEquals(LocalTimeOfDay(9, 0), windowFor(base + "after 9am")?.startInclusive)
     }
+
+    @Test
+    fun `calendar phrasing drafts the matching condition, never both at once`() {
+        val busy = parser().parse("when my earbuds connect, start a 25 minute focus timer if my calendar is busy")
+        val routine = assertIs<DraftResult.Drafted>(busy).routine
+        assertTrue(Condition.CalendarBusy in routine.conditions)
+        assertTrue(Condition.CalendarNotBusy !in routine.conditions)
+
+        val free = parser().parse("when my earbuds connect, start a 25 minute focus timer if my calendar is free")
+        val freeRoutine = assertIs<DraftResult.Drafted>(free).routine
+        assertTrue(Condition.CalendarNotBusy in freeRoutine.conditions)
+        assertTrue(Condition.CalendarBusy !in freeRoutine.conditions)
+
+        assertTrue(Validator.validate(routine).errors.isEmpty())
+        assertTrue(Capability.READ_CALENDAR in routine.requiredCapabilities)
+    }
 }
 
 internal fun corpusText(): String =

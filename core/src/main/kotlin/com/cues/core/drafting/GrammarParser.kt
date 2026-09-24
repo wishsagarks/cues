@@ -299,6 +299,18 @@ class GrammarParser(
         Regex("\\bbattery (?:is )?(?:at least|above) (\\d{1,3})%?\\b").find(text)?.let { match ->
             consumed += match.range; add(Condition.BatteryAtLeast(match.groupValues[1].toInt()))
         }
+        // "calendar is free" must be checked before "calendar is busy" would
+        // otherwise be tempted to match on the shared "calendar" word; the
+        // free/not-busy phrasing is matched first and, on a hit, the busy
+        // pattern below simply finds nothing left to match against.
+        Regex("\\b(?:my )?calendar (?:is )?(?:free|clear|not busy)\\b").find(text)?.let { match ->
+            consumed += match.range; add(Condition.CalendarNotBusy)
+        }
+        if (Condition.CalendarNotBusy !in this) {
+            Regex("\\b(?:my )?calendar (?:is )?busy\\b").find(text)?.let { match ->
+                consumed += match.range; add(Condition.CalendarBusy)
+            }
+        }
         parseDays(text, consumed)?.let { add(it) }
         parseTimeWindow(text, consumed)?.let { add(it) }
         Regex("\\b(?:the )?phone (?:is )?(?:not |isn't |isnt )?charging\\b").find(text)?.let { match ->

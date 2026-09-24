@@ -1038,3 +1038,52 @@ app) has landed in Cues' draft box on the loaner, and either a test proves
 shared text cannot reach `onDraft`/arm anything without the user pressing
 submit and going through Review, or that guarantee is judged self-evident
 enough from `HomeScreen`'s existing `submitDraft` gate to skip.
+
+---
+
+## CL-30 — Calendar condition kit: fully tested in `:core`, a new permission unverified on a device
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 9 listed the calendar condition kit among the not-done items. Added:
+`Condition.CalendarBusy`/`CalendarNotBusy`, `Capability.READ_CALENDAR`,
+`signals/CalendarKit.kt` (mirrors `BatteryThresholdKit`'s shared-evaluation
+shape), and a `GrammarParser` phrase ("my calendar is busy"/"free"/"clear"/
+"not busy").
+
+**What is genuinely built and tested, entirely in `:core`:**
+- `CalendarKitTest.kt`: busy/free matching, the inverse relationship between
+  the two conditions, and — the one that matters — a denied `READ_CALENDAR`
+  reads as `Unknown`, never as "not busy". `SignalRegistry`'s own init-block
+  check enforces every `Condition` subtype has exactly one kit, so this
+  can't silently go unregistered.
+- `GrammarParserTest.kt`: the phrase drafts the matching condition and never
+  both at once, passes `Validator`, and derives `Capability.READ_CALENDAR`.
+- Verified with `./dev d "when my earbuds connect, start a 25 minute focus
+  timer if my calendar is busy"` (not assumed): drafts, reviews (`ACCESS`
+  row correctly lists "calendar read access"), and rehearses to a correctly
+  `Unknown`-because-never-observed skip — there is no CLI adapter feeding it
+  a value, which is the honest behaviour for an unwired signal.
+
+**What is not verified, because `:app` cannot be exercised in this
+environment (no Android SDK — see CLAUDE.md):**
+1. `app/.../runtime/CalendarReadings.kt`'s `CalendarContract.Instances`
+   query has never run against a real calendar provider — whether an
+   all-day or a `AVAILABILITY_FREE`-marked event should count as "busy" is
+   an open product question this pass answers with "any instance exists,
+   full stop," disclosed as a simplification in the code, not resolved.
+2. `android.permission.READ_CALENDAR` is a genuinely new, dangerous runtime
+   permission — added to the manifest, but there is no in-app grant button
+   for it yet the way CL-26 added for notifications/DND/exact-alarm. A cue
+   using either calendar condition will show `Unknown` → skipped until the
+   user is prompted through the OS's own permission dialog some other way
+   (today, that means the system permission screen directly, not a Cues
+   button).
+3. `./dev perms` has not been run against this revision (no Android SDK
+   here) to confirm `READ_CALENDAR` is the only new line and `INTERNET` is
+   still absent.
+
+**Remove when:** a real device confirms `READ_CALENDAR` can be granted and
+denied in-app, a real calendar event drives `Condition.CalendarBusy` through
+an actual armed cue, and the all-day/free-marked-event question above is
+either answered or explicitly deferred with a tracking entry of its own.

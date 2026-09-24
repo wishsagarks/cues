@@ -34,6 +34,7 @@ enum class ContextSource {
     SYSTEM_CLOCK,
     USER,
     REHEARSAL,
+    CALENDAR_PROVIDER,
 }
 
 @Serializable
@@ -78,6 +79,15 @@ data class ContextSnapshot(
     ),
     val insidePlaces: ContextValue<Set<String>> = ContextValue.Unknown(
         UnknownReason.NEVER_OBSERVED, ContextSource.LOCATION_MANAGER,
+    ),
+    /**
+     * Whether the calendar shows a busy event covering [nowMillis]. Missing
+     * `READ_CALENDAR` reads as [ContextValue.Unknown] with
+     * [UnknownReason.PERMISSION_DENIED] — never as "not busy". See
+     * `signals/CalendarKit.kt`.
+     */
+    val calendarBusy: ContextValue<Boolean> = ContextValue.Unknown(
+        UnknownReason.NEVER_OBSERVED, ContextSource.CALENDAR_PROVIDER,
     ),
 )
 

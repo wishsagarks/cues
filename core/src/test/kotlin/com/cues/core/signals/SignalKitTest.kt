@@ -19,7 +19,7 @@ class SignalKitTest {
     @Test
     fun `registry covers every closed signal subtype`() {
         assertEquals(7, SignalRegistry.triggerKits.size)
-        assertEquals(10, SignalRegistry.conditionKits.size)
+        assertEquals(12, SignalRegistry.conditionKits.size)
         assertEquals(4, SignalRegistry.endKits.size)
     }
 

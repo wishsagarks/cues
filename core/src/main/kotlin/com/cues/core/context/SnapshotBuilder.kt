@@ -35,6 +35,7 @@ object SnapshotBuilder {
         audioOutputs: ContextValue<Set<AudioKind>> = unreadAudio(),
         batteryPercent: ContextValue<Int> = unreadBatteryPercent(),
         insidePlaces: ContextValue<Set<String>> = unreadPlaces(),
+        calendarBusy: ContextValue<Boolean> = unreadCalendar(),
     ): ContextSnapshot {
         val local = ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), zoneId)
 
@@ -53,6 +54,7 @@ object SnapshotBuilder {
             audioOutputs = audioOutputs,
             batteryPercent = batteryPercent,
             insidePlaces = insidePlaces,
+            calendarBusy = calendarBusy,
         )
     }
 
@@ -63,6 +65,7 @@ object SnapshotBuilder {
     private fun unreadAudio() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.AUDIO_MANAGER)
     private fun unreadBatteryPercent() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.BATTERY_MANAGER)
     private fun unreadPlaces() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.LOCATION_MANAGER)
+    private fun unreadCalendar() = ContextValue.Unknown(UnknownReason.NEVER_OBSERVED, ContextSource.CALENDAR_PROVIDER)
 
     private fun java.time.DayOfWeek.toCuesDay(): Day = when (this) {
         java.time.DayOfWeek.MONDAY -> Day.MON

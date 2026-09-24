@@ -63,6 +63,15 @@
     -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!--
+      Condition.CalendarBusy/CalendarNotBusy only ever reads whether some
+      event covers a moment — see CalendarReadings.kt. Cues never reads an
+      event's title, attendees or any other detail, and a cue using neither
+      condition never requests this at all (see ActionRegistry-derived
+      requiredCapabilities).
+    -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
