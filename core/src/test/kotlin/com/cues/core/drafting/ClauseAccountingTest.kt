@@ -21,4 +21,15 @@ class ClauseAccountingTest {
         assertTrue(com.cues.core.compile.Validator.validate(clean).isValid)
         assertTrue(!com.cues.core.compile.Validator.validate(blocked).isValid)
     }
+
+    @Test fun `a parser draft that drops a clause cannot validate once stamped`() {
+        val sentence = "When my earbuds connect start a timer and text Mum"
+        val parser = GrammarParser(listOf(PairedDevice(Fixtures.EARBUDS_ID, Fixtures.EARBUDS_LABEL, setOf("earbuds"))))
+        val drafted = parser.parse(sentence) as DraftResult.Drafted
+
+        val stamped = ClauseAccounting.stamp(sentence, drafted)
+
+        assertEquals(listOf("text", "Mum"), stamped.routine.unaccountedClauses)
+        assertTrue(!com.cues.core.compile.Validator.validate(stamped.routine).isValid)
+    }
 }

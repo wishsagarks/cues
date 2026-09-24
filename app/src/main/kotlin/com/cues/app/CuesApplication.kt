@@ -109,8 +109,8 @@ class CuesApplication : Application() {
     /**
      * Where a side-loaded `.litertlm` model is expected, under private app
      * storage — never `getExternalFilesDir`, and never written by this app.
-     * A dev pushes it with `adb push model.litertlm <this path>`; nothing
-     * here downloads one. Its absence is the ordinary, honest case: every
+     * adb cannot write here directly: push to /data/local/tmp, then copy in
+     * with `run-as` (docs/DEVICE_MATRIX.md, M2). Nothing here downloads one. Its absence is the ordinary, honest case: every
      * build without one falls all the way back to the parser.
      */
     private val modelFile: File by lazy { File(filesDir, "models/model.litertlm") }

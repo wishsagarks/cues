@@ -33,6 +33,14 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+    <!--
+      SET_ALARM's handoff: the platform's common-intents guide requires the
+      caller to hold this to invoke AlarmClock.ACTION_SET_ALARM at all. A
+      normal, install-time permission; no prompt, and the clock app still
+      shows its own confirm screen because Cues never passes EXTRA_SKIP_UI.
+    -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
     <!-- Reconciling sessions that were running when the phone restarted. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

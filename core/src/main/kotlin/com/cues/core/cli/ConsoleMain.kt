@@ -26,6 +26,10 @@ import kotlinx.coroutines.runBlocking
  * `CuesExporter`.
  */
 object ConsoleMain {
+    private const val SAMPLE_BANNER =
+        "<div role=\"note\" style=\"background:#fde68a;color:#1f2937;padding:10px 16px;font:600 14px system-ui,sans-serif\">" +
+            "Sample data from ./dev console. Not a phone export: every cue, receipt and model figure below is a fixture.</div>"
+
     @JvmStatic
     fun main(args: Array<String>) {
         runBlocking {
@@ -46,7 +50,7 @@ object ConsoleMain {
             val now = System.currentTimeMillis()
             val day = 86_400_000L
 
-            val html = ConsoleHtml.render(
+            val rendered = ConsoleHtml.render(
                 CuesExporter.exportText(
                     routines = listOf(routine),
                     receipts = listOf(
@@ -76,6 +80,9 @@ object ConsoleMain {
                     generatedAtMillis = now,
                 ),
             )
+            // The fixture's inference figures would otherwise read as a phone measurement.
+            require("<body>" in rendered) { "Console template has no <body> to label." }
+            val html = rendered.replaceFirst("<body>", "<body>\n$SAMPLE_BANNER")
 
             val outPath = args.firstOrNull() ?: "build/console.html"
             val outFile = File(outPath)

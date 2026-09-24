@@ -5,6 +5,7 @@ import com.cues.core.compile.Severity
 import com.cues.core.compile.Validator
 import com.cues.core.corpus.Corpus
 import com.cues.core.corpus.CorpusReport
+import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.PairedDevice
@@ -83,8 +84,9 @@ fun main(args: Array<String>) {
         }
 
         is DraftResult.Drafted -> {
-            printReview(result)
-            printRehearsal(result.routine)
+            val stamped = ClauseAccounting.stamp(sentence, result)
+            printReview(stamped)
+            printRehearsal(stamped.routine)
         }
     }
 }

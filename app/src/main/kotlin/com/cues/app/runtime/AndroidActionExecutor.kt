@@ -481,10 +481,10 @@ class AndroidActionExecutor(
     /**
      * Asks the clock app to set an alarm, showing its own confirm screen.
      *
-     * No `EXTRA_SKIP_UI`: that flag only works for a caller holding the
-     * `SET_ALARM` permission, a special-purpose grant this app does not
-     * otherwise need. [ActionId.SET_ALARM] is [com.cues.core.registry.Presence.NEEDS_USER]
-     * for exactly this reason.
+     * The manifest holds `SET_ALARM` because invoking this intent requires
+     * it, but Cues never passes `EXTRA_SKIP_UI`: the user confirms in the
+     * clock app, which is why [ActionId.SET_ALARM] is
+     * [com.cues.core.registry.Presence.NEEDS_USER].
      */
     private fun setAlarm(args: ActionArgs): ActionOutcome {
         val alarm = (args as? ActionArgs.Alarm)
@@ -504,6 +504,8 @@ class AndroidActionExecutor(
             ActionOutcome(ActionState.SUCCEEDED, "Asked the clock app to set an alarm. Cues cannot undo this.")
         } catch (e: android.content.ActivityNotFoundException) {
             ActionOutcome(ActionState.BLOCKED, "Could not open the clock app: ${e.message}.")
+        } catch (e: SecurityException) {
+            ActionOutcome(ActionState.BLOCKED, "The clock app refused the request: ${e.message}.")
         }
     }
 

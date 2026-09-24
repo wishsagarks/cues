@@ -20,7 +20,6 @@ import com.cues.core.context.PersonalIndex
 import com.cues.core.context.ReferenceResolution
 import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.ClauseAccounting
-import com.cues.core.drafting.ClauseKind
 import com.cues.core.drafting.DraftResult
 import com.cues.core.model.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
@@ -114,26 +113,8 @@ class CueService(
      * not armed until [approveAndArm].
      */
     suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text).also(::recordInference)) {
-        is DraftResult.Drafted -> {
-            // Accounting is always derived locally from the submitted request;
-            // a model never gets to assert that it understood a clause. Only
-            // the deterministic parser's own span data is trustworthy — that
-            // check is on the source, never on whether the returned list
-            // happens to be empty, so a future drafter can't earn trust by
-            // accident just because it left `clauses` unset.
-            val clauses = if (result.source == DraftSourceId.GRAMMAR_PARSER) {
-                result.clauses
-            } else {
-                ClauseAccounting.classify(text, emptyList())
-            }
-            result.copy(
-                clauses = clauses,
-                routine = result.routine.copy(
-                    draftedBy = result.source,
-                    unaccountedClauses = clauses.filter { it.kind == ClauseKind.UNACCOUNTED }.map { it.text },
-                ),
-            )
-        }
+        // A model never gets to assert that it understood a clause.
+        is DraftResult.Drafted -> ClauseAccounting.stamp(text, result)
         is DraftResult.NeedsClarification, is DraftResult.Failed -> result
     }
 

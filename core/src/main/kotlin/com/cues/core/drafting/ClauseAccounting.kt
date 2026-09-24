@@ -1,5 +1,7 @@
 package com.cues.core.drafting
 
+import com.cues.core.model.DraftSourceId
+
 /**
  * Accounts for every token in the request. This deliberately answers a
  * stricter question than friendly unsupported-copy: text that is neither part
@@ -42,4 +44,20 @@ object ClauseAccounting {
 
     fun unaccounted(text: String, consumed: List<IntRange>): List<String> =
         classify(text, consumed).filter { it.kind == ClauseKind.UNACCOUNTED }.map { it.text }
+
+    /**
+     * Stamps a draft with its drafter and locally derived accounting. Only the
+     * parser's own spans are trusted, decided by source, never by whether a
+     * drafter happened to leave `clauses` empty.
+     */
+    fun stamp(text: String, result: DraftResult.Drafted): DraftResult.Drafted {
+        val clauses = if (result.source == DraftSourceId.GRAMMAR_PARSER) result.clauses else classify(text, emptyList())
+        return result.copy(
+            clauses = clauses,
+            routine = result.routine.copy(
+                draftedBy = result.source,
+                unaccountedClauses = clauses.filter { it.kind == ClauseKind.UNACCOUNTED }.map { it.text },
+            ),
+        )
+    }
 }

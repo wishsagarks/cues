@@ -248,10 +248,9 @@ object ActionRegistry {
             label = "Set an alarm",
             risk = ActionRisk.EXTERNAL_UNOWNED,
             // AlarmClock.ACTION_SET_ALARM shows the clock app's own confirm
-            // screen unless the caller both passes EXTRA_SKIP_UI and holds
-            // the SET_ALARM permission — a special-purpose grant this app
-            // does not otherwise need, so this stays NEEDS_USER rather than
-            // claiming an unattended path the manifest doesn't back up.
+            // screen unless the caller passes EXTRA_SKIP_UI. Cues never
+            // does, so this stays NEEDS_USER rather than claiming an
+            // unattended path.
             presence = Presence.NEEDS_USER,
             requiredCapabilities = emptySet(),
             // An alarm the clock app now owns. Cues did not have one before
