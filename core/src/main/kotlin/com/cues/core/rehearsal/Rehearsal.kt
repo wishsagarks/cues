@@ -35,12 +35,12 @@ data class RehearsalReport(val rows: List<RehearsalRow>)
  */
 private class MockExecutor : ActionExecutor {
     override fun execute(actionId: ActionId, args: ActionArgs, sessionId: String): ActionOutcome {
-        val owns = when (actionId) {
-            ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
-            ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
-            ActionId.NOTIFY_RESULT -> null
-            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
-        }
+        // Delegates to the registry rather than re-listing every action's
+        // ownership here — a second copy of that mapping is exactly the kind
+        // of thing that quietly falls out of date the next time an action is
+        // added, and a rehearsal that got ownership wrong would rehearse a
+        // cleanup promise the real run does not keep.
+        val owns = com.cues.core.registry.ActionRegistry.definition(actionId)?.owns
         return ActionOutcome(ActionState.SUCCEEDED, detail = "sample", acquired = owns)
     }
 

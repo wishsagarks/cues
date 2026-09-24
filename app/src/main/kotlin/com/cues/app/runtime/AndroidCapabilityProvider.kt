@@ -7,6 +7,8 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
+import android.text.TextUtils
 import androidx.core.content.ContextCompat
 import com.cues.core.model.Capability
 import com.cues.core.ports.CapabilityProvider
@@ -35,6 +37,29 @@ class AndroidCapabilityProvider(private val context: Context) : CapabilityProvid
         // Reading current charging state needs no special permission on
         // modern Android; granted whenever the BatteryManager service exists.
         add(Capability.BATTERY_STATE)
+        if (accessibilityServiceEnabled()) add(Capability.ACCESSIBILITY_SERVICE)
+    }
+
+    /**
+     * Whether "Cues: iQOO utility bindings" is enabled in system
+     * Accessibility settings — read live from [Settings.Secure], the same
+     * source the system Accessibility screen itself reads, rather than from
+     * [CuesAccessibilityService.isRunning] alone: the service can be bound
+     * and then killed by the OS well before the user disables it in
+     * Settings, and this is meant to answer "did the user grant this",
+     * not "is a process currently alive".
+     */
+    private fun accessibilityServiceEnabled(): Boolean {
+        val expected = "${context.packageName}/${CuesAccessibilityService::class.java.name}"
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: return false
+        // No .asSequence(): SimpleStringSplitter implements both Iterable<String>
+        // and Iterator<String>, which makes that call an ambiguous overload.
+        // Iterating it directly with .any() needs no such choice.
+        return TextUtils.SimpleStringSplitter(':').apply { setString(enabled) }
+            .any { it.equals(expected, ignoreCase = true) }
     }
 
     private fun hasBluetoothConnect(): Boolean {

@@ -9,18 +9,29 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.service.notification.ZenPolicy
 import android.util.Log
+import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import com.cues.core.model.ActionArgs
 import com.cues.core.model.ActionId
 import com.cues.core.model.ActionState
+import com.cues.core.model.MediaCommand
 import com.cues.core.model.OwnedResource
+import com.cues.core.model.RingerModeKind
+import com.cues.core.model.UtilityId
+import com.cues.core.model.UtilityState
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.ActionOutcome
 import com.cues.core.registry.ActionRegistry
+import com.cues.core.registry.UtilityCatalog
 
 /**
  * The only path from an approved cue to the device.
@@ -46,6 +57,9 @@ import com.cues.core.registry.ActionRegistry
  */
 class AndroidActionExecutor(
     private val context: Context,
+    /** Null in any caller that hasn't wired taught macros — USE_UTILITY then reports itself BLOCKED, honestly, rather than crashing. */
+    private val macros: com.cues.core.ports.MacroStore? = null,
+    private val utilityBindings: com.cues.core.ports.UtilityBindingStore? = null,
 ) : ActionExecutor {
 
     private val notifications: NotificationManager
@@ -53,6 +67,21 @@ class AndroidActionExecutor(
 
     private val alarms: AlarmManager
         get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    private val audio: AudioManager
+        get() = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    // The ringer mode Cues found before it changed it, keyed by session.
+    // Same shape and same caveat as zenRuleIds below: an in-memory map does
+    // not survive process death. Unlike a zen rule, a ringer mode carries no
+    // marker of who set it, so there is no live-state read this can
+    // reconcile from after a restart — see CLEANUP.md CL-17. A session that
+    // dies mid-run leaves the ringer as Cues set it rather than guessing.
+    private val ringerModeBefore = mutableMapOf<String, Int>()
+
+    // What state to put a utility back into on release, keyed by session.
+    // Same in-memory, non-survives-a-restart caveat as ringerModeBefore.
+    private val utilityRestoreState = mutableMapOf<String, Pair<UtilityId, UtilityState>>()
 
     // Zen rule ids returned by the platform aren't derivable from the session
     // id, so they're cached here for release — an instance property, not a
@@ -78,6 +107,14 @@ class AndroidActionExecutor(
             ActionId.REQUEST_DND -> requestDnd(args, sessionId)
             ActionId.NOTIFY_RESULT -> notifyResult(args)
             ActionId.PINNED_NOTE -> pinnedNote(args, sessionId)
+            ActionId.OPEN_APP -> openApp(args)
+            ActionId.COMPOSE_MESSAGE -> composeMessage(args)
+            ActionId.ADD_CALENDAR_EVENT -> addCalendarEvent(args)
+            ActionId.SET_ALARM -> setAlarm(args)
+            ActionId.MEDIA_CONTROL -> mediaControl(args)
+            ActionId.RINGER_MODE -> setRingerMode(args, sessionId)
+            ActionId.OPEN_LINK -> openLink(args)
+            ActionId.USE_UTILITY -> useUtility(args, sessionId)
         }
         val owns = ActionRegistry.definition(actionId)?.owns
         return if (outcome.state == ActionState.SUCCEEDED && owns != null) {
@@ -91,6 +128,8 @@ class AndroidActionExecutor(
         OwnedResource.FOCUS_TIMER -> releaseFocusTimer(sessionId)
         OwnedResource.DND_CONTRIBUTION -> releaseDnd(sessionId)
         OwnedResource.PINNED_NOTE -> releasePinnedNote(sessionId)
+        OwnedResource.RINGER_MODE -> releaseRingerMode(sessionId)
+        OwnedResource.UTILITY_CONTRIBUTION -> releaseUtility(sessionId)
     }
 
     // ------------------------------------------------------------- timer
@@ -360,6 +399,271 @@ class AndroidActionExecutor(
             ActionOutcome(ActionState.SUCCEEDED, "Result notification posted.")
         } else {
             ActionOutcome(ActionState.BLOCKED, "The result notification could not be confirmed as posted.")
+        }
+    }
+
+    // ---------------------------------------------------------- handoffs
+
+    /**
+     * Opens another app's own launcher activity.
+     *
+     * The package name reaches this call already chosen by the user from an
+     * installed-app picker at Review — [ActionArgs.OpenApp] is validated
+     * shape only, never trust that the app is still installed. Success here
+     * means "opened"; the user finishes whatever they meant to do there
+     * themselves, which is the entire point of [com.cues.core.registry.ActionRisk.HANDOFF].
+     */
+    private fun openApp(args: ActionArgs): ActionOutcome {
+        val target = (args as? ActionArgs.OpenApp)
+            ?: return ActionOutcome(ActionState.FAILED, "No app was supplied.")
+        val intent = context.packageManager.getLaunchIntentForPackage(target.packageName)
+            ?: return ActionOutcome(ActionState.BLOCKED, "${target.label} is no longer installed.")
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Opened ${target.label}.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "${target.label} could not be opened: ${e.message}.")
+        }
+    }
+
+    /**
+     * Pre-fills a new message and stops there.
+     *
+     * `ACTION_SENDTO` with an `smsto:` URI opens the user's default messaging
+     * app on a *draft*; nothing about this intent can send it, which is what
+     * makes [ActionArgs.ComposeMessage] a handoff rather than a message Cues
+     * sent on the user's behalf.
+     */
+    private fun composeMessage(args: ActionArgs): ActionOutcome {
+        val message = (args as? ActionArgs.ComposeMessage)
+            ?: return ActionOutcome(ActionState.FAILED, "No message text was supplied.")
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = "smsto:${message.contactHint.orEmpty()}".toUri()
+            putExtra("sms_body", message.text)
+        }
+        if (intent.resolveActivity(context.packageManager) == null) {
+            return ActionOutcome(ActionState.BLOCKED, "No messaging app is available to pre-fill this.")
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Pre-filled a message. You send it.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "Could not open a messaging app: ${e.message}.")
+        }
+    }
+
+    /**
+     * Opens the calendar app's own "add event" editor, pre-filled to start
+     * now — the same moment every other action here takes effect at, per
+     * [ActionArgs.CalendarEvent]'s doc comment. The user reviews and saves it.
+     */
+    private fun addCalendarEvent(args: ActionArgs): ActionOutcome {
+        val event = (args as? ActionArgs.CalendarEvent)
+            ?: return ActionOutcome(ActionState.FAILED, "No event details were supplied.")
+        val beginMillis = System.currentTimeMillis()
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            data = CalendarContract.Events.CONTENT_URI
+            putExtra(CalendarContract.Events.TITLE, event.title)
+            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, beginMillis)
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, beginMillis + event.durationMinutes * 60_000L)
+        }
+        if (intent.resolveActivity(context.packageManager) == null) {
+            return ActionOutcome(ActionState.BLOCKED, "No calendar app is available.")
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Opened the calendar editor. You save it.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "Could not open the calendar app: ${e.message}.")
+        }
+    }
+
+    /**
+     * Asks the clock app to set an alarm, showing its own confirm screen.
+     *
+     * No `EXTRA_SKIP_UI`: that flag only works for a caller holding the
+     * `SET_ALARM` permission, a special-purpose grant this app does not
+     * otherwise need. [ActionId.SET_ALARM] is [com.cues.core.registry.Presence.NEEDS_USER]
+     * for exactly this reason.
+     */
+    private fun setAlarm(args: ActionArgs): ActionOutcome {
+        val alarm = (args as? ActionArgs.Alarm)
+            ?: return ActionOutcome(ActionState.FAILED, "No alarm time was supplied.")
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            putExtra(AlarmClock.EXTRA_HOUR, alarm.hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, alarm.minute)
+            alarm.label?.let { putExtra(AlarmClock.EXTRA_MESSAGE, it) }
+        }
+        if (intent.resolveActivity(context.packageManager) == null) {
+            return ActionOutcome(ActionState.BLOCKED, "No clock app is available to set an alarm.")
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // A state Cues did not own before and cannot take back — see
+            // ActionRisk.EXTERNAL_UNOWNED. There is no obligation to record.
+            ActionOutcome(ActionState.SUCCEEDED, "Asked the clock app to set an alarm. Cues cannot undo this.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "Could not open the clock app: ${e.message}.")
+        }
+    }
+
+    /** A single media-key dispatch. No permission, no UI, and nothing Cues owns afterward. */
+    private fun mediaControl(args: ActionArgs): ActionOutcome {
+        val command = (args as? ActionArgs.MediaControl)?.command
+            ?: return ActionOutcome(ActionState.FAILED, "No media command was supplied.")
+        val keyCode = when (command) {
+            MediaCommand.PLAY, MediaCommand.PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            MediaCommand.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
+            MediaCommand.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        }
+        return try {
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+            ActionOutcome(ActionState.SUCCEEDED, "Sent ${command.name.lowercase()}. Cues cannot undo this.")
+        } catch (e: SecurityException) {
+            ActionOutcome(ActionState.BLOCKED, "The media command was refused: ${e.message}.")
+        }
+    }
+
+    /**
+     * Silences or vibrates the ringer, remembering what it replaced so
+     * [releaseRingerMode] can put it back — but only if nothing else has
+     * changed it since, the same rule [requestDnd]'s release follows.
+     */
+    private fun setRingerMode(args: ActionArgs, sessionId: String): ActionOutcome {
+        val mode = (args as? ActionArgs.RingerMode)?.mode
+            ?: return ActionOutcome(ActionState.FAILED, "No ringer mode was supplied.")
+        if (!notifications.isNotificationPolicyAccessGranted) {
+            return ActionOutcome(ActionState.BLOCKED, "Do Not Disturb access has not been granted.")
+        }
+        val target = when (mode) {
+            RingerModeKind.SILENT -> AudioManager.RINGER_MODE_SILENT
+            RingerModeKind.VIBRATE -> AudioManager.RINGER_MODE_VIBRATE
+        }
+        val previous = audio.ringerMode
+        return try {
+            audio.ringerMode = target
+            // Acquire, then verify (4.3 / AC-04): some OEMs silently refuse a
+            // ringer-mode change under specific zen states.
+            if (audio.ringerMode != target) {
+                return ActionOutcome(ActionState.BLOCKED, "The ringer mode could not be confirmed as changed.")
+            }
+            ringerModeBefore[sessionId] = previous
+            ActionOutcome(ActionState.SUCCEEDED, "Ringer set to ${mode.name.lowercase()}.")
+        } catch (e: SecurityException) {
+            ActionOutcome(ActionState.BLOCKED, "The system refused the ringer change: ${e.message}.")
+        }
+    }
+
+    private fun releaseRingerMode(sessionId: String): ActionOutcome {
+        val previous = ringerModeBefore.remove(sessionId)
+            ?: return ActionOutcome(ActionState.SUCCEEDED, "No prior ringer mode was held.")
+        // Respect a user's own later change, exactly as cleanupPolicy.respectUserOverride
+        // already means for DND: if the ringer isn't in a Cues-set mode any
+        // more, something else — the user — moved it, and that wins.
+        val current = audio.ringerMode
+        if (current != AudioManager.RINGER_MODE_SILENT && current != AudioManager.RINGER_MODE_VIBRATE) {
+            return ActionOutcome(ActionState.SUCCEEDED, "Left as you set it.")
+        }
+        return try {
+            audio.ringerMode = previous
+            ActionOutcome(ActionState.SUCCEEDED)
+        } catch (e: SecurityException) {
+            ActionOutcome(ActionState.COMPENSATION_FAILED, "Could not restore the ringer: ${e.message}.")
+        }
+    }
+
+    /** Opens a link whose scheme [ActionRegistry] has already checked against a closed allowlist. */
+    private fun openLink(args: ActionArgs): ActionOutcome {
+        val link = (args as? ActionArgs.OpenLink)
+            ?: return ActionOutcome(ActionState.FAILED, "No link was supplied.")
+        val uri = runCatching { link.url.toUri() }.getOrNull()
+            ?: return ActionOutcome(ActionState.FAILED, "The link could not be read.")
+        if (uri.scheme?.lowercase() !in ActionRegistry.ALLOWED_LINK_SCHEMES) {
+            // Belt and braces: Validator already refuses this at approval
+            // time, so reaching here would mean stored data changed after
+            // approval, not that this check is the primary defence.
+            return ActionOutcome(ActionState.BLOCKED, "This link's scheme is not allowed.")
+        }
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        if (intent.resolveActivity(context.packageManager) == null) {
+            return ActionOutcome(ActionState.BLOCKED, "No app is available to open this link.")
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Opened the link. You finish this.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "Could not open the link: ${e.message}.")
+        }
+    }
+
+    // ------------------------------------------------------------ utility
+
+    /**
+     * Turns one cataloged utility on or off by replaying the taught macro
+     * bound to it — see [com.cues.app.runtime.CuesAccessibilityService].
+     * `performPlayback` blocks its caller, so this deliberately never runs on
+     * the main thread; [com.cues.core.session.SessionEngine] already calls
+     * [ActionExecutor.execute] from a background context for every action.
+     */
+    private fun useUtility(args: ActionArgs, sessionId: String): ActionOutcome {
+        val request = (args as? ActionArgs.UseUtility)
+            ?: return ActionOutcome(ActionState.FAILED, "No utility was supplied.")
+        val bindingStore = utilityBindings
+            ?: return ActionOutcome(ActionState.BLOCKED, "Utility bindings are not configured on this build.")
+        val macroStore = macros
+            ?: return ActionOutcome(ActionState.BLOCKED, "Utility bindings are not configured on this build.")
+        if (!CuesAccessibilityService.isRunning()) {
+            return ActionOutcome(
+                ActionState.BLOCKED,
+                "Enable \"Cues: iQOO utility bindings\" in Accessibility settings first.",
+            )
+        }
+
+        val label = com.cues.core.registry.UtilityCatalog.definition(request.utilityId).label
+        val binding = bindingStore.findBinding(request.utilityId)
+            ?: return ActionOutcome(ActionState.BLOCKED, "No macro has been taught yet for $label.")
+        val macroId = if (request.state == UtilityState.ON) binding.onMacroId else binding.offMacroId
+        val macro = macroStore.findMacro(macroId)
+            ?: return ActionOutcome(ActionState.BLOCKED, "The taught macro for $label is missing.")
+
+        return when (val outcome = CuesAccessibilityService.playMacroNow(macro)) {
+            MacroRunOutcome.Succeeded -> {
+                val restoreTo = if (request.state == UtilityState.ON) UtilityState.OFF else UtilityState.ON
+                utilityRestoreState[sessionId] = request.utilityId to restoreTo
+                ActionOutcome(ActionState.SUCCEEDED, "$label turned ${request.state.name.lowercase()}.")
+            }
+            is MacroRunOutcome.Blocked -> ActionOutcome(ActionState.BLOCKED, outcome.detail)
+        }
+    }
+
+    /**
+     * Replays the opposite macro to put the utility back where Cues found
+     * it. Unlike [releaseRingerMode], this has no cheap live read of the
+     * toggle's current state to compare against first — that would need the
+     * target app's own screen in the foreground, which release does not
+     * force open just to check — see CLEANUP.md. It replays unconditionally.
+     */
+    private fun releaseUtility(sessionId: String): ActionOutcome {
+        val (utilityId, restoreTo) = utilityRestoreState.remove(sessionId)
+            ?: return ActionOutcome(ActionState.SUCCEEDED, "No prior utility state was held.")
+        val bindingStore = utilityBindings
+            ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "Utility bindings are not configured on this build.")
+        val macroStore = macros
+            ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "Utility bindings are not configured on this build.")
+        if (!CuesAccessibilityService.isRunning()) {
+            return ActionOutcome(ActionState.COMPENSATION_FAILED, "The utility-bindings accessibility service is not running.")
+        }
+
+        val binding = bindingStore.findBinding(utilityId)
+            ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "No macro is taught for this utility any more.")
+        val macroId = if (restoreTo == UtilityState.ON) binding.onMacroId else binding.offMacroId
+        val macro = macroStore.findMacro(macroId)
+            ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "The taught macro for this utility is missing.")
+
+        return when (val outcome = CuesAccessibilityService.playMacroNow(macro)) {
+            MacroRunOutcome.Succeeded -> ActionOutcome(ActionState.SUCCEEDED, "Restored.")
+            is MacroRunOutcome.Blocked -> ActionOutcome(ActionState.COMPENSATION_FAILED, outcome.detail)
         }
     }
 

@@ -75,6 +75,9 @@ object Normalizer {
             .append(",cooldown:").append(rearmPolicy.cooldownSeconds)
             .append(",max:").append(rearmPolicy.maxConcurrentSessions).append('\n')
         requiredCapabilities.map { it.name }.sorted().forEach { append("capability=").append(it).append('\n') }
+        factDependencies.sortedBy { it.id }.forEach {
+            append("fact=").append(it.id).append(":v").append(it.version).append(":").append(it.label).append('\n')
+        }
     }
 
     private fun ActionSpec.semanticForm(): String = "${actionId.name}:" + when (val a = args) {
@@ -82,6 +85,14 @@ object Normalizer {
         is ActionArgs.Dnd -> "allowPriority=${a.allowPriority}"
         is ActionArgs.Notify -> "message=${a.message}"
         is ActionArgs.PinnedNote -> "message=${a.message}"
+        is ActionArgs.OpenApp -> "package=${a.packageName}"
+        is ActionArgs.ComposeMessage -> "contact=${a.contactHint.orEmpty()},text=${a.text}"
+        is ActionArgs.CalendarEvent -> "title=${a.title},minutes=${a.durationMinutes}"
+        is ActionArgs.Alarm -> "hour=${a.hour},minute=${a.minute},label=${a.label.orEmpty()}"
+        is ActionArgs.MediaControl -> "command=${a.command.name}"
+        is ActionArgs.RingerMode -> "mode=${a.mode.name}"
+        is ActionArgs.OpenLink -> "url=${a.url}"
+        is ActionArgs.UseUtility -> "utility=${a.utilityId.name},state=${a.state.name}"
         ActionArgs.None -> "none"
     }
 

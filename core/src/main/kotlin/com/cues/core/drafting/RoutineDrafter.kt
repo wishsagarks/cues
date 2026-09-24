@@ -1,6 +1,7 @@
 package com.cues.core.drafting
 
 import com.cues.core.compile.Finding
+import com.cues.core.inference.InferenceReport
 import com.cues.core.model.DraftSourceId
 import com.cues.core.model.Routine
 
@@ -39,6 +40,8 @@ sealed interface DraftResult {
         val consumed: List<IntRange> = emptyList(),
         val clauses: List<ClauseSpan> = emptyList(),
         val elapsedMillis: Long = 0,
+        /** Set only by a drafter backed by a local model — null for the parser. */
+        val inferenceReport: InferenceReport? = null,
     ) : DraftResult
 
     /** The request was understood well enough to know a question is needed. */
@@ -48,6 +51,15 @@ sealed interface DraftResult {
         val about: String,
         /** Paired-device choices when [about] is `trigger.device`. */
         val deviceCandidates: List<PairedDevice> = emptyList(),
+        /**
+         * The app name text named an "open X" request, when [about] is
+         * `action.app`. Never a package name — the parser has no installed-app
+         * list to resolve one from. The Android layer queries what's actually
+         * installed, filters by this text, and lets the user confirm one; the
+         * re-drafted text then carries the resolved choice back in, the same
+         * pattern [deviceCandidates] already uses for a paired device.
+         */
+        val appQuery: String? = null,
         /**
          * Limitations that explain the question, when there are any.
          *
@@ -59,6 +71,7 @@ sealed interface DraftResult {
         val consumed: List<IntRange> = emptyList(),
         val clauses: List<ClauseSpan> = emptyList(),
         val elapsedMillis: Long = 0,
+        val inferenceReport: InferenceReport? = null,
     ) : DraftResult
 
     /** Nothing usable came back. */
@@ -66,6 +79,7 @@ sealed interface DraftResult {
         override val source: DraftSourceId,
         val reason: String,
         val elapsedMillis: Long = 0,
+        val inferenceReport: InferenceReport? = null,
     ) : DraftResult
 }
 

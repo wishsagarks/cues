@@ -188,12 +188,7 @@ private class LoggingExecutor : ActionExecutor {
 
     override fun execute(actionId: ActionId, args: ActionArgs, sessionId: String): ActionOutcome {
         log += "execute $actionId for session $sessionId"
-        val owns = when (actionId) {
-            ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
-            ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
-            ActionId.NOTIFY_RESULT -> null
-            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
-        }
+        val owns = com.cues.core.registry.ActionRegistry.definition(actionId)?.owns
         return ActionOutcome(ActionState.SUCCEEDED, acquired = owns)
     }
 

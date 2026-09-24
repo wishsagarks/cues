@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Cues: iQOO utility bindings" — per the FDD's Utility Bindings section,
+  this is the last-resort mechanism, used only for reaching a utility with
+  no public API, and only for the two features it is declared for:
+    1. A one-shot, user-invoked read of the current screen ("Cue this
+       screen"), never a continuous listener.
+    2. Replaying a macro the user taught themselves, to turn a cataloged
+       utility on or off.
+  packageNames is intentionally left unset here rather than hard-coded to a
+  guessed OriginOS settings package: which package actually hosts each
+  cataloged utility's toggle is a device-discovery question (Spike U0,
+  tracked in CLEANUP.md), not something this build can assert without the
+  loaner phone. Once discovered, this should be narrowed to exactly those
+  packages plus whatever the user has explicitly taught a macro against.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewClicked|typeViewTextChanged|typeViewScrolled|typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="false"
+    android:canRequestFilterKeyEvents="false"
+    android:canRequestTouchExplorationMode="false"
+    android:description="@string/utility_bindings_accessibility_description"
+    android:notificationTimeout="100"
+    android:settingsActivity="com.cues.app.MainActivity" />

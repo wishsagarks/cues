@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.DeviceDiagnostics
 import com.cues.app.runtime.ManualObservation
+import com.cues.core.CueService
 import java.text.DateFormat
 import java.util.Date
 
@@ -37,6 +38,7 @@ fun DiagnosticsScreen(
     isBakingOff: Boolean = false,
     bakeOffReport: String? = null,
     onRunBakeOff: (() -> Unit)? = null,
+    cueDiagnostics: CueService.Diagnostics? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -59,6 +61,7 @@ fun DiagnosticsScreen(
         DiagnosticCard("Phone", diagnostics.os)
         DiagnosticCard("On-device speech", diagnostics.onDeviceSpeech)
         DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
+        cueDiagnostics?.let { DiagnosticCard("Drafting path", it.render()) }
 
         Button(
             onClick = {
@@ -129,6 +132,20 @@ fun DiagnosticsScreen(
             }
         }
     }
+}
+
+/**
+ * Names the drafter that actually runs and, when a model has drafted at
+ * least once, which backend loaded it — never a claim about what *would*
+ * run, only what already did. See [com.cues.core.inference.InferenceReport].
+ */
+private fun CueService.Diagnostics.render(): String = buildString {
+    append(primaryDrafter.name.lowercase().replace('_', ' '))
+    lastInferenceReport?.let { report ->
+        append(" — last ran on ${report.backend.name}")
+        append(", ${report.loadMs}ms load, ~${"%.1f".format(report.tokensPerSecond)} tok/s")
+    }
+    lastFallbackReason?.let { append(" — fell back: $it") }
 }
 
 @Composable

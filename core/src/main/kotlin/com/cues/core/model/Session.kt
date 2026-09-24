@@ -68,6 +68,17 @@ data class ActionRecord(
     val detail: String? = null,
 )
 
+/**
+ * The exact [ActionRecord.detail] a [ActionState.PENDING] action is stamped
+ * with when the session ends before anyone became available to run it.
+ *
+ * A shared constant, not a re-typed string, so [com.cues.core.session.SessionEngine]
+ * (which writes it) and [com.cues.core.receipt.Receipts] (which looks for it
+ * to report genuinely new information in the Ended receipt) can never drift
+ * apart.
+ */
+const val EXPIRED_WHILE_PENDING_DETAIL = "The session ended before you were available."
+
 @Serializable
 enum class ActionState {
     NOT_STARTED,
@@ -79,6 +90,14 @@ enum class ActionState {
     COMPENSATED,
     /** We could not undo something we did. The session stays visibly unresolved. */
     COMPENSATION_FAILED,
+    /**
+     * A [com.cues.core.registry.Presence.NEEDS_USER] action whose moment
+     * arrived while nobody was at the phone. Never a terminal state: the
+     * engine either succeeds it once the user is present, or converts it to
+     * [BLOCKED] when the session ends still waiting — expiry is a block, not
+     * a silent drop.
+     */
+    PENDING,
 }
 
 /**
@@ -106,4 +125,14 @@ enum class OwnedResource {
     FOCUS_TIMER,
     DND_CONTRIBUTION,
     PINNED_NOTE,
+    /** The ringer mode Cues set. Restored on exit only if it is still the mode Cues left it in. */
+    RINGER_MODE,
+
+    /**
+     * A utility toggle Cues turned on via [com.cues.core.model.ActionId.USE_UTILITY].
+     * Restored on exit only if the toggle is still in the state Cues set it
+     * to, the same rule [RINGER_MODE] already follows — see
+     * `AndroidActionExecutor.releaseRingerMode`'s doc comment for why.
+     */
+    UTILITY_CONTRIBUTION,
 }

@@ -45,7 +45,12 @@ import kotlinx.coroutines.isActive
  * since [LaunchedEffect] is cancelled with its call site.
  */
 @Composable
-fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
+fun ReceiptScreen(
+    loadReceipts: () -> List<ReceiptEntry>,
+    onBack: () -> Unit,
+    /** Reads a receipt's exact rendered text aloud — see ReplySpeaker. Optional so this screen stays previewable without one. */
+    onSpeak: (String) -> Unit = {},
+) {
     var receipts by remember { mutableStateOf(loadReceipts()) }
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -74,7 +79,7 @@ fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(receipts, key = { it.sessionId + it.atMillis }) { entry ->
-                    ReceiptCard(entry)
+                    ReceiptCard(entry, onSpeak)
                 }
             }
         }
@@ -89,7 +94,7 @@ fun ReceiptScreen(loadReceipts: () -> List<ReceiptEntry>, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ReceiptCard(entry: ReceiptEntry) {
+private fun ReceiptCard(entry: ReceiptEntry, onSpeak: (String) -> Unit) {
     val lines = entry.text.lines().filter { it.isNotBlank() }
     val headline = lines.firstOrNull().orEmpty()
     val detail = lines.drop(1)
@@ -100,7 +105,15 @@ private fun ReceiptCard(entry: ReceiptEntry) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).animateContentSize(),
     ) {
         Column(Modifier.padding(13.dp)) {
-            Text(TIME_FORMAT.format(Date(entry.atMillis)), style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(TIME_FORMAT.format(Date(entry.atMillis)), style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+                // Speaks exactly entry.text — the same string on screen,
+                // never a summary — see ReplySpeaker.
+                OutlinedButton(onClick = { onSpeak(entry.text) }) { Text("Read aloud") }
+            }
             Text(headline, style = MaterialTheme.typography.bodyMedium)
             detail.forEach {
                 Text(

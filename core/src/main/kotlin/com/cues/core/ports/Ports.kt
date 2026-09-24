@@ -10,6 +10,10 @@ import com.cues.core.model.Session
 import com.cues.core.model.NamedContext
 import com.cues.core.model.Patch
 import com.cues.core.model.Place
+import com.cues.core.model.Fact
+import com.cues.core.model.UiMacro
+import com.cues.core.model.UtilityBinding
+import com.cues.core.model.UtilityId
 
 /**
  * The seams between decision-making and the world.
@@ -103,6 +107,34 @@ interface PlaceStore {
     fun deletePlace(id: String)
 }
 
+interface FactStore {
+    fun findFact(id: String): Fact?
+    fun allFacts(): List<Fact>
+    fun saveFact(fact: Fact)
+    fun deleteFact(id: String)
+}
+
+/** Persistence for taught [UiMacro]s — the on/off pairs behind a [UtilityBinding], and nothing else yet. */
+interface MacroStore {
+    fun findMacro(id: String): UiMacro?
+    fun allMacros(): List<UiMacro>
+    fun saveMacro(macro: UiMacro)
+    fun deleteMacro(id: String)
+}
+
+/** Which taught macro pair, if any, is bound to each cataloged utility. */
+interface UtilityBindingStore {
+    fun findBinding(utilityId: UtilityId): UtilityBinding?
+    fun allBindings(): List<UtilityBinding>
+    fun saveBinding(binding: UtilityBinding)
+    fun deleteBinding(utilityId: UtilityId)
+}
+
+/** Optional semantic ranker. `null` means the on-device model is unavailable. */
+fun interface Embedder {
+    fun embed(text: String): FloatArray?
+}
+
 /**
  * What the OS currently grants.
  *
@@ -113,6 +145,18 @@ interface PlaceStore {
  */
 fun interface CapabilityProvider {
     fun granted(): Set<Capability>
+}
+
+/**
+ * Whether someone is at the phone right now — screen on and unlocked.
+ *
+ * The one signal a [com.cues.core.registry.Presence.NEEDS_USER] action is
+ * gated on. Defaults to "always present" wherever a caller doesn't wire a
+ * real reading (every existing test, the CLI), which preserves today's
+ * behaviour for the four actions that predate this port.
+ */
+fun interface DeviceAttention {
+    fun isUserPresent(): Boolean
 }
 
 /** One OS-facing signal listener, selected from the signals armed routines need. */

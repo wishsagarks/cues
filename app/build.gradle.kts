@@ -77,7 +77,29 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
 
-    // The on-device drafting path. Carried at equal weight with the grammar
-    // parser until measured latency on the loaner phone decides between them.
-    implementation(libs.mediapipe.tasks.genai)
+    // The on-device drafting path: LiteRT-LM, which SPRINT_4_5 named as the
+    // contingency to MediaPipe LLM Inference and which this sprint confirmed
+    // resolves with real published releases and documented NPU/GPU/CPU
+    // backends — see docs/API_VERIFICATION.md and CLEANUP.md CL-18 for why
+    // this is pinned to 0.16.1 rather than the newest release. Carried at
+    // equal weight with the grammar parser until measured latency on the
+    // loaner phone decides between them.
+    implementation(libs.litertlm.android)
+
+    // Timetable import: a real camera capture, plus offline text recognition.
+    // mlkit-text-recognition is the bundled variant — its model ships in the
+    // APK and needs no network — never play-services-mlkit-text-recognition,
+    // which downloads one. See docs/API_VERIFICATION.md and CLEANUP.md CL-20.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.text.recognition)
+
+    // Cue Cards, offline: zxing-core renders a QR bitmap (pure Java, no
+    // Android or network dependency at all), and the bundled ML Kit barcode
+    // scanner reads one back from a captured/picked image. See
+    // docs/API_VERIFICATION.md and CLEANUP.md CL-21.
+    implementation(libs.zxing.core)
+    implementation(libs.mlkit.barcode.scanning)
 }

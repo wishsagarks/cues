@@ -10,6 +10,10 @@
 #   ./dev t              core tests            (no Android SDK needed)
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
 #   ./dev today          print the deterministic fixture forecast
+#   ./dev chat "text"    one Ask Cues conversation turn
+#   ./dev coach          replay the evidence-backed coach fixture
+#   ./dev card           export/tamper/reimport a sample Cue Card, phone-to-phone
+#   ./dev console        build a self-contained Cue Console HTML from fixture data
 #   ./dev sim            full lifecycle through CueService: draft to timeout
 #   ./dev bo             score the checked-in corpus (not a device measurement)
 #   ./dev b              assemble debug APK
@@ -83,6 +87,19 @@ case "$cmd" in
     ;;
 
   today) $GW -q :core:demo -Pq="--today" ;;
+
+  chat)
+    [ $# -ge 1 ] || { red 'Usage: ./dev chat "ask Cues about a cue"'; exit 1; }
+    $GW -q :core:chat -Pq="$1"
+    ;;
+
+  coach) $GW -q :core:coach ;;
+
+  card) $GW -q :core:card ;;
+
+  console)
+    $GW -q :core:console -Pq="${1:-build/console.html}"
+    ;;
 
   sim)
     $GW -q :core:sim

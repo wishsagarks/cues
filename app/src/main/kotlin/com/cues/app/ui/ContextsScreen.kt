@@ -180,6 +180,16 @@ private fun NewContextForm(
 ) {
     var label by remember { mutableStateOf("") }
     val selected = remember { mutableStateOf(setOf<Int>()) }
+
+    // The Desk suggestion: laptop connected + charging is the one combination
+    // this screen offers a one-tap shortcut for, because it is the demo cue
+    // the Cues Brain plan names explicitly ("At my desk, quiet notifications
+    // and pin today's plan"). Still just a pre-fill — the user reviews and
+    // names it themselves before Save does anything.
+    val chargingIndex = availableSignals.indexOfFirst { it.condition is Condition.ChargingState && (it.condition as Condition.ChargingState).charging }
+    val deviceIndex = availableSignals.indexOfFirst { it.condition is Condition.DeviceConnected }
+    val canSuggestDesk = chargingIndex >= 0 && deviceIndex >= 0 && label.isBlank() && selected.value.isEmpty()
+
     Surface(color = cuesColors.bg300, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             OutlinedTextField(
@@ -188,6 +198,15 @@ private fun NewContextForm(
                 label = { Text("Name (e.g. Desk)") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (canSuggestDesk) {
+                TextButton(
+                    onClick = {
+                        label = "Desk"
+                        selected.value = setOf(chargingIndex, deviceIndex)
+                    },
+                    modifier = Modifier.padding(top = 4.dp),
+                ) { Text("Suggest: Desk (charging + ${availableSignals[deviceIndex].label.substringBefore(" is")})") }
+            }
             Spacer(Modifier.height(8.dp))
             if (availableSignals.isEmpty()) {
                 Text(

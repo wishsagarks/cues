@@ -34,6 +34,14 @@ object ReviewCopy {
             is ActionArgs.Dnd -> "request our quiet-notifications rule"
             is ActionArgs.Notify -> "show \"${args.message}\""
             is ActionArgs.PinnedNote -> "keep \"${args.message}\" pinned"
+            is ActionArgs.OpenApp -> "open ${args.label} — you finish this"
+            is ActionArgs.ComposeMessage -> "pre-fill a message: \"${args.text}\" — you send it"
+            is ActionArgs.CalendarEvent -> "add a calendar event: \"${args.title}\" — you save it"
+            is ActionArgs.Alarm -> "ask the clock app to set an alarm for %02d:%02d".format(args.hour, args.minute)
+            is ActionArgs.MediaControl -> "send a ${args.command.name.lowercase()} media command"
+            is ActionArgs.RingerMode -> "set the ringer to ${args.mode.name.lowercase()}"
+            is ActionArgs.OpenLink -> "open ${args.url} — you finish this"
+            is ActionArgs.UseUtility -> "turn ${args.utilityId.name.lowercase().replace('_', ' ')} ${args.state.name.lowercase()}"
             ActionArgs.None -> spec.actionId.friendly().lowercase()
         }
     }
@@ -50,6 +58,15 @@ object ReviewCopy {
                 ActionId.REQUEST_DND -> "release our quiet rule"
                 ActionId.NOTIFY_RESULT -> null
                 ActionId.PINNED_NOTE -> "remove our pinned note"
+                ActionId.RINGER_MODE -> "restore the ringer, if nothing else has changed it since"
+                ActionId.USE_UTILITY -> "restore the utility to what it was, if nothing else has changed it since"
+                ActionId.OPEN_APP,
+                ActionId.COMPOSE_MESSAGE,
+                ActionId.ADD_CALENDAR_EVENT,
+                ActionId.SET_ALARM,
+                ActionId.MEDIA_CONTROL,
+                ActionId.OPEN_LINK,
+                -> null
             }
         }
         if (owned.isEmpty()) return "nothing to release"
@@ -82,6 +99,7 @@ object ReviewCopy {
         Capability.LOCATION_FOR_WIFI_NAME -> "location for a Wi-Fi name"
         Capability.LOCATION_FOREGROUND -> "foreground location"
         Capability.LOCATION_BACKGROUND -> "background location"
+        Capability.ACCESSIBILITY_SERVICE -> "the Cues utility-bindings accessibility service"
     }
 
     /** Explains the actual, bounded use of each requested capability before approval. */
@@ -130,10 +148,18 @@ object ReviewCopy {
             purpose = "Receive an arrival or exit for a place-trigger cue you approved.",
             frequency = "Only while an armed cue uses that declared place transition.",
         )
+
+        Capability.ACCESSIBILITY_SERVICE -> PermissionCheckCopy(
+            purpose = "Replay a macro you taught, only against the exact toggle it was taught on.",
+            frequency = "Used only when a USE_UTILITY action in this cue fires, and only while you are present.",
+        )
     }
 
     fun ActionRisk.friendlyName(): String = when (this) {
         ActionRisk.OWNED_AND_REVERSIBLE -> "Owned & reversible"
         ActionRisk.LOCAL_NOTICE -> "Local notice"
+        ActionRisk.HANDOFF -> "Handoff — you finish this"
+        ActionRisk.EXTERNAL_UNOWNED -> "Cues cannot undo this"
+        ActionRisk.UI_AUTOMATION -> "Automates another app's screen"
     }
 }

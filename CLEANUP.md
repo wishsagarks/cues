@@ -367,3 +367,377 @@ repo could not measure.
 **Remove when:** either R11 is answered and a `ProgressStyle` notification is
 built and confirmed on the loaner, or this entry is replaced with a recorded
 decision to keep the current notification and why.
+
+---
+
+## CL-16 — Declared Memory facts cannot yet be referenced from a spoken end condition
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`Fact`, `FactStore`, "remember …" and approval-invalidation on edit/delete are
+built and tested (`FactTest`). `Routine.factDependencies` exists and is proven
+to invalidate approval when a referenced fact changes or is deleted. What is
+not built: a natural-language path from `GrammarParser` (or the `Refiner`) to
+actually attach a `FactReference` while drafting — "quiet my phone every
+evening until my exam" still returns "Time-scheduled content tasks aren't
+supported" rather than resolving "my exam" against Declared Memory and adding
+an end condition for it. There is also no `EndCondition` variant for "until an
+absolute date," which a fact like `Oct 12` would need — today's
+`EndCondition.AtTime` is a recurring time-of-day, not a calendar date.
+
+Today a fact reference can only be attached programmatically (as the tests
+do); no user-facing flow produces one.
+
+**Remove when:** either a dated `EndCondition` is added with matching
+evaluator/session support and `GrammarParser`/`Refiner` can resolve "my
+`<label>`" against `FactStore` into a `FactReference`, or this is explicitly
+descoped for the event and the assistant states plainly that it cannot end a
+cue on a remembered date yet.
+
+---
+
+## CL-17 — Ringer-mode restore does not survive a process death
+
+**Status:** open · **Raised:** 24 Sep 2026 · **Updated:** 24 Sep 2026
+
+`AndroidActionExecutor.ringerModeBefore` remembers what ringer mode a
+session replaced, the same way `zenRuleIds` remembers a session's zen rule
+id — but unlike a zen rule, a ringer mode carries no marker of who set it,
+so there is nothing in live system state for a `reconcileZenRules()`-style
+method to rebuild this map from after a process restart. A session that
+dies mid-run with the ringer silenced will not have it restored on cleanup
+retry; the resource stays as Cues left it rather than guessing at a value
+it can no longer know.
+
+**Closed as of this update:** all seven Phase C actions now have
+`GrammarParser` phrasing, including the five that name an external entity.
+`OPEN_APP` — the one genuinely needing a picker, since the parser has no
+installed-app list to resolve a name against — asks
+`NeedsClarification(about = "action.app", appQuery = "spotify")`; the
+Android layer queries `PackageManager` for launcher-visible apps (declared
+in `<queries>`, not the `QUERY_ALL_PACKAGES` permission), ranks them against
+the query, and the picked app re-drafts through a machine-written
+`(selected app: pkg|Label)` marker the parser resolves deterministically —
+never from surrounding prose, the same discipline the existing paired-device
+picker already follows. `COMPOSE_MESSAGE`, `ADD_CALENDAR_EVENT`, `SET_ALARM`
+and `OPEN_LINK` needed no picker at all: a contact hint, an event title, a
+clock time and a URL are all things the phrasing itself already states, and
+none of them names something Cues has to look up on the device first.
+
+**Remove when:** a durable ringer-mode record is added (e.g. alongside
+`CleanupObligation`) and confirmed to survive a restart on the loaner, or
+this is accepted as a standing limitation and stated as such in the Review
+screen.
+
+---
+
+## CL-18 — LiteRT-LM is real and wired, but its NPU claim and its version pin are both unverified on a device
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`OnDeviceLlmDrafter` no longer wraps a stub. `LiteRtLmSession`
+(`app/.../drafting/LiteRtLmSession.kt`) is a genuine integration against
+`com.google.ai.edge.litertlm:litertlm-android`, compiled and resolved in this
+sprint — not merely read from documentation the way the rest of
+`docs/API_VERIFICATION.md` was gathered. It tries `Backend.NPU`, then
+`Backend.GPU`, then `Backend.CPU`, and reports whichever tier's
+`Engine.initialize()` returned without throwing as an `InferenceReport`,
+surfaced in Diagnostics and on each Assistant turn ("answered from …").
+Several things about it are still unverified or disclosed as limited by
+design, rather than untested oversights:
+
+1. **The version pin exists because of a real compiler incompatibility, not
+   caution.** `litertlm-android` releases 0.17.0 and 0.17.1 depend on
+   `kotlin-reflect:2.4.0`; that artifact's own `.class` files carry Kotlin
+   2.4.0 metadata, which this project's 2.2.21 compiler cannot read at all —
+   `-Xskip-metadata-version-check` would not have been enough, since the
+   library's own bytecode is unreadable, not just a transitive version
+   conflict. Every release through 0.16.1 depends on `kotlin-reflect:2.2.21`,
+   matching this project exactly, so the pin is `litertlm = "0.16.1"`.
+   Re-verify this by hand (check that release's POM for its `kotlin-reflect`
+   version) before ever bumping it.
+2. **No model has been side-loaded or run.** `LiteRtLmSession` expects a
+   `.litertlm` file at `filesDir/models/model.litertlm`; nothing in the app
+   places one there. Every build without one falls back to the parser,
+   exactly as the old stub did — this sprint changed the failure's *cause*
+   (a missing file, not an unconditional throw) but not its outcome.
+3. **The NPU allowlist (`SM8750`, `SM8650`, `SM8550`) is copied from
+   `docs/API_VERIFICATION.md`'s published table, not from a reading of the
+   loaner's own `Build.SOC_MODEL`.** If the event phone's SoC is not in that
+   published table — plausible for a newer iQOO 15-class chip, per the same
+   doc — NPU is correctly treated as unavailable and the session falls to
+   GPU, but that fallback itself has never run.
+4. **"Backend" is a request that succeeded, not an independent read-back.**
+   Unlike `AndroidActionExecutor`'s acquire-then-verify checks,
+   `litertlm-android`'s public Kotlin API exposes no separate "which backend
+   actually executed" query. `InferenceReport.backend` is the tier whose
+   `Engine.initialize()` didn't throw — the strongest signal the library
+   offers, and weaker than every other "verified" claim in this codebase.
+   Say so plainly if this ships in a demo.
+5. **The GPU backend's required `<uses-native-library>` entries
+   (`libvndksupport.so`, `libOpenCL.so`) are added per
+   `docs/API_VERIFICATION.md` but never confirmed present at those exact
+   names on the loaner.**
+6. **`Embedder` (for `PersonalIndex`'s fuzzy "my deep work thing" resolution)
+   is now threaded all the way from `CueService` through to `PersonalIndex`,
+   but `CuesApplication` still passes none** — no on-device embedding model
+   or API has been identified or verified, unlike the chat path above. Fuzzy
+   resolution in the real app therefore still falls back to lexical matching
+   only, same as before this sprint's `CueService` constructor gained the
+   parameter.
+
+**Remove when:** each numbered item above has a device result — a
+side-loaded model that actually ran, a confirmed or corrected NPU allowlist
+entry for the loaner's real `Build.SOC_MODEL`, and a measured GPU fallback —
+recorded here or in `docs/MEASUREMENTS.md`, with the source of each number
+noted. Item 6 retires separately, when an embedding runtime is chosen and
+verified the same way this chat path was.
+
+---
+
+## CL-19 — Text-to-speech is wired but never heard on a device
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`app/.../voice/ReplySpeaker.kt` wraps `android.speech.tts.TextToSpeech`
+against the official API (`docs/API_VERIFICATION.md`'s "Text to speech"
+entry): it speaks exactly a reply's or a receipt's own rendered string,
+never a paraphrase, and it cannot approve a draft or confirm a
+`PendingCommand` — those calls are nowhere near it. "Speak replies" (Home,
+off by default) and "Read aloud" (each Receipts card) both call it.
+
+Unverified: whether the device has a usable TTS engine and voice data
+installed at all — `TextToSpeech`'s init callback can report failure, which
+`ReplySpeaker` treats as "never ready" and silently no-ops rather than
+crashing, but that fallback path has not been exercised on a phone with a
+missing or misconfigured engine. Locale is set to `Locale.getDefault()`
+rather than the fixed `en-IN` `LocalSpeechInput` uses for recognition — not
+yet decided whether replies should also be pinned to en-IN for consistency.
+
+**Remove when:** confirmed on the loaner that speech synthesis actually
+plays, and a decision is recorded on whether the reply voice's locale should
+match the recognizer's fixed en-IN.
+
+---
+
+## CL-20 — Timetable import: a new camera permission, and a real but unverified CameraX/ML Kit integration
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 12 adds a genuinely new permission — `android.permission.CAMERA` — for
+exactly one feature: "point at your timetable" (`app/.../camera/TimetableCaptureScreen.kt`).
+This is a deliberate, disclosed addition, not scope creep; it is requested
+only from that one screen, never in the background, and the screen releases
+the camera (`ProcessCameraProvider.unbindAll()`) the moment it leaves
+composition.
+
+**What is genuinely built and tested:**
+- `core/.../imports/TimetableExtractor.kt` is pure Kotlin, fully tested
+  (`TimetableExtractorTest.kt`), including that a line shaped like an
+  attempted instruction rather than a timetable row produces no entry and no
+  proposal — the same trust boundary the rest of this app already holds
+  imported/shared text to.
+- A clean row's generated sentence was verified to round-trip through the
+  *real* `GrammarParser` (not mocked) into a `PINNED_NOTE` action bounded by
+  `EndCondition.AtTime`, with the day expressed as a `Condition.DaysOfWeek` —
+  confirmed empirically via `./dev d`, not assumed from reading the grammar.
+- `app/.../camera/TimetableCaptureScreen.kt` and `TimetableOcr.kt` compile
+  against the real CameraX 1.5.3 and ML Kit 16.0.1 APIs — pinned down from
+  1.6.2 after its AAR metadata demanded a newer AGP than this project uses
+  (see `docs/API_VERIFICATION.md`).
+
+**What is not verified, because `:app` cannot be exercised in this
+environment:**
+1. The CameraX preview, capture and lifecycle binding have never run against
+   a real camera. `ImageCapture.takePicture` writing to `context.cacheDir`
+   and its callback wiring is read from official samples, not tested here.
+2. ML Kit's bundled recognizer has never actually run OCR on a photographed
+   or picked timetable image — accuracy, lighting sensitivity and rotation
+   handling are all unverified.
+3. `TimetableEntry.proposedSentence()` lowercases a label's casing (see its
+   own doc comment) because the grammar parser lowercases its entire input;
+   "Math — Room 204" becomes a pinned note reading "math - room 204". Cosmetic,
+   not a safety issue, but worth fixing if it reads poorly in practice.
+4. The Photo Picker path (`ActivityResultContracts.PickVisualMedia`) needs no
+   runtime permission on modern Android, but has not been confirmed on
+   OriginOS 7, which sometimes substitutes its own gallery/picker UI.
+5. `<uses-native-library>`-style GPU-only concerns don't apply here, but the
+   camera's autofocus/back-camera assumption (`CameraSelector.DEFAULT_BACK_CAMERA`)
+   has not been checked against the loaner's actual camera set.
+
+**Remove when:** a real capture → OCR → import review round trip has run on
+the loaner phone, with results (recognition accuracy, capture latency,
+whether the label-casing loss is worth fixing) recorded here or in
+`docs/MEASUREMENTS.md`.
+
+---
+
+## CL-21 — Cue Cards: the format is fully tested, the QR camera path is not
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+**What is genuinely built and tested, entirely in `:core`:**
+- `core/.../share/CueCard.kt` / `CueCards`: export, tamper-checked decode, and
+  reimport with device/place/context re-resolution by label — never by the
+  sender's own id or version. `CueCardTest.kt` covers a clean round trip,
+  approval/status/capability fields being structurally absent from the wire
+  format (not just empty), a missing device on the receiving phone refusing
+  the import, a same-label-different-address device correctly rebinding to
+  the *receiver's* id, a named context resolving the same way, a tampered
+  card being refused before any resolution is attempted, malformed input,
+  and a from-the-future card schema being refused. `./dev card` runs a full
+  phone-to-phone demo (different device addresses on each side) and prints
+  every step, including the caught tamper.
+- Two real, disclosed simplifications: (1) `Trigger`/`Condition` variants
+  with no device/place/context reference (times, days, durations, action
+  args) pass through the card unresolved and unvalidated beyond the digest
+  check — they were already closed, already-compiled data before export, so
+  this is the same trust the rest of the app already gives a normalized
+  routine. (2) A missing entity refuses the *whole* import rather than
+  offering a picker to substitute one — simple and safe, but a friend
+  missing one named place currently can't import the other 90% of a more
+  complex cue.
+
+**What is not verified, because `:app` cannot be exercised here:**
+1. `app/.../camera/CueCardScanScreen.kt` and `QrCode`/`CueCardScanner` compile
+   against real CameraX 1.5.3 and ML Kit barcode-scanning 17.3.0 APIs, but
+   neither a QR render nor a QR scan has run on a device. Print size,
+   scanning distance, and glare/lighting sensitivity are all unknown.
+2. `app/.../ui/CueCardShareScreen.kt`'s QR bitmap has never been displayed or
+   photographed by a second phone.
+3. The "share as text" fallback uses `ACTION_SEND text/plain`; whether
+   OriginOS's own share sheet or Office Kit (Phase E) mangles a ~1KB JSON
+   payload in transit is unconfirmed.
+4. `MissingEntity`'s message names the device/place/context, but there is no
+   in-app flow yet to add that entity and retry the same scan — the user has
+   to close the scan, add it via Contexts/pairing, and scan again.
+
+**Remove when:** a real phone-to-phone QR share and scan has run on the
+loaner (or two loaners), and the text-share fallback has been confirmed over
+at least one real share target, with results recorded here or in
+`docs/MEASUREMENTS.md`.
+
+---
+
+## CL-22 — Cue Console: the export and page are verified, Office Kit transport is not
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+**What is genuinely built and verified:**
+- `core/.../export/CuesExporter.kt` builds a read-only JSON snapshot from a
+  phone's routines, receipts, forecast, coach evidence, ledger and last
+  inference report — every field is the same rendered text the phone's own
+  screens already show (`ReviewCopy`, receipt text, forecast reasons), never
+  a re-derived summary. `CuesExporterTest.kt` (6 tests) checks every section
+  is present, an armed routine's status travels as-is, a missing inference
+  report is shown as absent rather than fabricated, and an empty phone
+  exports empty sections rather than erroring.
+- `core/src/main/resources/console/template.html` is a single, dependency-free
+  static page (no CDN, no fetch — the export JSON is embedded inline so a
+  `file://`-opened page needs no server and hits no local-file CORS
+  restriction). `./dev console`'s fixture output was opened in a real browser
+  and every section (cues, forecast, coach evidence, receipts, diagnostics,
+  ledger) confirmed rendering correctly — not just assumed from reading the
+  template.
+- `app/.../bridge/ExportImport.kt` builds the same Console from a phone's live
+  `CueService`/`JsonFileStore` state and shares it through a `FileProvider`
+  (a new, scoped `<provider>` and `res/xml/file_paths.xml`, restricted to one
+  cache subdirectory) — `content://`, never a raw `file://` a receiving app
+  could not open.
+
+**What is not verified, because this needs a real Office Kit connection:**
+1. Whether Office Kit's transfer path accepts an arbitrary shared file at all,
+   and whether the ~9KB (fixture size; a real phone's history will be larger)
+   HTML survives the transfer intact.
+2. Whether the exported page, once on the laptop, actually opens correctly
+   from Windows/Mac Office Kit's own file landing location — a `file://`
+   double-click has only been tested from this repo's own build output, not
+   from wherever Office Kit deposits a received file.
+3. The `.cue.txt`/`.cuecard` *drop-onto-the-phone* half of the Desk Bridge
+   (author on the laptop, import as data) is not built this pass — Cue Cards
+   already have an import path (`CueCards.reimport`, Task 13), but nothing
+   yet routes an Office-Kit-delivered file into it automatically; today it
+   would have to go through the existing QR-scan or manual text-share paths.
+4. The "Desk" named-context quick-fill (`ContextsScreen.kt`'s "Suggest: Desk"
+   button, pre-filling charging + a connected device) has not been exercised
+   with a real paired laptop.
+
+**Remove when:** a real Office Kit transfer of an exported Console has been
+confirmed end to end (phone export → Office Kit → laptop open), and either a
+`.cue.txt`/`.cuecard` file-drop import path is built or this is explicitly
+descoped with the QR/text-share paths named as the supported alternative.
+
+---
+
+## CL-23 — Utility Bindings: the macro contract is fully tested, the accessibility replay is not
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Tasks 15/16 add the last-resort mechanism the FDD's "Utility Bindings"
+section describes: a taught macro replayed through an accessibility service,
+used only for `USE_UTILITY` (Eye protection, Ultra saver, Game Mode today —
+`core/.../registry/UtilityCatalog.kt`'s closed list).
+
+**What is genuinely built and tested, entirely in `:core`:**
+- `model/UiMacro.kt`, `compile/MacroValidator.kt`: the step budget (8), the
+  password-field refusal, the package denylist and the click-word/currency
+  denylist are all covered in `MacroValidatorTest.kt`, including the
+  deliberate distinction that a macro may *scroll past* a denylisted label
+  but may never *tap* one, and that "send"/"pay"/etc. only match as whole
+  words (no false positive on "sender").
+- `registry/UtilityCatalog.kt`: every `UtilityId` has a definition (enforced
+  at class-init time, not just by convention), and `isKnownRawId` correctly
+  rejects a raw string that isn't in the closed list — `UtilityCatalogTest.kt`.
+- `ActionId.USE_UTILITY`'s registry entry (`UI_AUTOMATION` risk, `NEEDS_USER`
+  presence, derives `Capability.ACCESSIBILITY_SERVICE`) — `ActionRegistryTest.kt`.
+
+**What is not verified, because `:app` cannot be exercised in this
+environment (no Android SDK here — see CLAUDE.md):**
+1. `app/.../runtime/CuesAccessibilityService.kt`'s node-tree walk
+   (`findNode`), step replay (`performAction` for click/set-text/scroll) and
+   the accessibility-event-to-`UiStep` recording path have never run against
+   a real screen. Selector matching (`viewIdResourceName`/`text`/
+   `contentDescription`), the 2s-per-step/one-retry timing, and whether
+   `AccessibilityWindowInfo.root` genuinely comes back null for a
+   `FLAG_SECURE` window on OriginOS 7 are all unconfirmed.
+2. The one-shot "Cue this screen" read (`captureScreenText`) has never
+   captured a real window's text, and is not yet wired into the Assistant
+   conversation as a data-only turn — today it only reaches
+   `MainActivity`'s `EXTRA_SCREEN_CAPTURE` intent extra via `ScreenTile`, and
+   nothing reads that extra back out yet. **Follow-up:** have
+   `MainActivity.onCreate`/`onNewIntent` read `EXTRA_SCREEN_CAPTURE` and feed
+   it into the Assistant's draft box, the same way a share-target text would.
+3. `ScreenTile.kt`'s ordering — capture the screen, *then* collapse the QS
+   panel and navigate — assumes the accessibility tree still reports the app
+   *behind* Quick Settings as active at tap time. This is a real device
+   question, not something this build can assert.
+4. `USE_UTILITY`'s release (`AndroidActionExecutor.releaseUtility`) cannot
+   cheaply verify the toggle is still in the state Cues set before restoring
+   it, unlike `RINGER_MODE` (CL-17's neighbour): a live check needs the
+   target app's own screen in the foreground, which release does not force
+   open just to look. It replays the opposite macro unconditionally instead.
+   A user who already flipped the toggle back by hand before the session
+   ended may see it flipped again — the acceptance test in the Cues Brain
+   plan ("flip it manually mid-session: Cues does not override it") is not
+   met by this pass.
+5. `res/xml/utility_bindings_accessibility.xml` leaves `packageNames` unset
+   (any package), because which OriginOS package actually hosts each
+   cataloged utility's toggle is exactly the device-discovery question Spike
+   U0 exists for. Narrowing it to the discovered packages plus whatever the
+   user has taught a macro against is a real, disclosed gap, not an
+   oversight — see the FDD's utility-catalog mechanism list.
+6. Whether "Cues: iQOO utility bindings" actually appears and can be enabled
+   in OriginOS 7's Accessibility settings, and what its consent screen looks
+   like there, is unconfirmed.
+7. A `USE_UTILITY` action is reachable today only through the Utility
+   Bindings screen's own "Test on"/"Test off" buttons (a bare
+   `executor.execute` call outside any routine) — it is not yet reachable
+   from cue drafting (no `GrammarParser` phrase, no chat/`IntentRouter`
+   support). Teaching and testing a binding works end to end; attaching it to
+   an approved, scheduled cue does not yet.
+
+**Remove when:** a taught Eye protection on/off pair has actually run on the
+loaner — teach, test on, test off, and a real cue session that arms, fires
+`USE_UTILITY`, and releases it — with results recorded here or in
+`docs/MEASUREMENTS.md`, and item 7's grammar/chat reachability gap is closed
+or explicitly re-scoped.

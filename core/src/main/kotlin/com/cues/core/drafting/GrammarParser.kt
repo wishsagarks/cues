@@ -43,6 +43,15 @@ class GrammarParser(
         val normalized = text.lowercase().replace(Regex("[\\u2018\\u2019]"), "'")
         val consumed = mutableListOf<IntRange>()
 
+        // Read against the ORIGINAL text, not normalized: this is the one
+        // place a real display label — "Spotify", not "spotify" — needs to
+        // survive into the routine. Everything else this parser extracts is
+        // meaning it derives itself, so case never matters; a picked app's
+        // label is the one piece of data that passes straight through.
+        val resolvedApp = OPEN_APP_RESOLVED.find(text)?.let { m ->
+            ResolvedApp(m.groupValues[1].trim(), m.groupValues[2].trim())
+        }
+
         var trigger = parseTrigger(normalized, consumed)
 
         if (trigger is AmbiguousDevice) {
@@ -65,7 +74,25 @@ class GrammarParser(
         }
         if (trigger == null) return noTriggerResult(normalized)
         val resolvedTrigger = (trigger as ResolvedTrigger).trigger
-        val actions = parseActions(normalized, consumed)
+        val actions = parseActions(normalized, consumed, resolvedApp)
+
+        // An "open X" request with no resolved-app marker yet: ask which
+        // installed app the user meant before going any further, the same
+        // priority AmbiguousDevice gets above. Skipped once the marker is
+        // present, because that means the picker already ran and parseActions
+        // has already turned it into a concrete ActionSpec.OpenApp.
+        if (resolvedApp == null) {
+            parseAppOpenRequest(normalized)?.let { appQuery ->
+                return DraftResult.NeedsClarification(
+                    id,
+                    "Which app did you mean by \"$appQuery\"?",
+                    about = "action.app",
+                    appQuery = appQuery,
+                    consumed = consumed,
+                    clauses = ClauseAccounting.classify(text, consumed),
+                )
+            }
+        }
 
         if (actions.isEmpty()) {
             return DraftResult.NeedsClarification(
@@ -370,7 +397,10 @@ class GrammarParser(
 
     // ------------------------------------------------------------- actions
 
-    private fun parseActions(text: String, consumed: MutableList<IntRange>): List<ActionSpec> = buildList {
+    /** An app the picker already resolved, carrying its original-cased label — see [parse]. */
+    private data class ResolvedApp(val packageName: String, val label: String)
+
+    private fun parseActions(text: String, consumed: MutableList<IntRange>, resolvedApp: ResolvedApp? = null): List<ActionSpec> = buildList {
         val timerMatch = Regex("\\b(\\d{1,3})[\\s-]*(minute|min|hour|hr)s?\\b").find(text)
         val wantsTimer = timerMatch != null || TIMER_WORD.containsMatchIn(text)
 
@@ -405,7 +435,75 @@ class GrammarParser(
                 ?: "Cues session is active."
             add(ActionSpec(ActionId.PINNED_NOTE, ActionArgs.PinnedNote(message)))
         }
+
+        // Deliberately worded to avoid "quiet|silence|mute|dnd|don't disturb" —
+        // this is a different, owned resource from REQUEST_DND's zen rule, and
+        // sharing a keyword with it would draft both actions for one phrase.
+        RINGER_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val mode = if ((match.groups[1] ?: match.groups[2])?.value == "vibrate") {
+                RingerModeKind.VIBRATE
+            } else {
+                RingerModeKind.SILENT
+            }
+            add(ActionSpec(ActionId.RINGER_MODE, ActionArgs.RingerMode(mode)))
+        }
+
+        MEDIA_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val command = when (match.groups[1]?.value) {
+                "pause", "stop" -> MediaCommand.PAUSE
+                "skip", "next" -> MediaCommand.NEXT
+                "previous", "back" -> MediaCommand.PREVIOUS
+                else -> MediaCommand.PLAY
+            }
+            add(ActionSpec(ActionId.MEDIA_CONTROL, ActionArgs.MediaControl(command)))
+        }
+
+        // Only present once the app picker has already run — see the
+        // action.app clarification in parse(). packageName/label come solely
+        // from [resolvedApp] (read against the original, case-preserved text),
+        // never from surrounding prose in this lowercased copy.
+        if (resolvedApp != null) {
+            OPEN_APP_RESOLVED.find(text)?.let { consumed += it.range }
+            OPEN_APP_REQUEST.find(text)?.let { consumed += it.range }
+            add(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp(resolvedApp.packageName, resolvedApp.label)))
+        }
+
+        // "Never sends" — see ActionRisk.HANDOFF. contactHint is whatever free
+        // text follows "to", resolved by the OS share sheet, never by Cues.
+        MESSAGE_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
+            val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
+                ?: "Sent from Cues."
+            add(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage(contactHint, body)))
+        }
+
+        CALENDAR_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val title = match.groups["title"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
+                ?: "Cues event"
+            add(ActionSpec(ActionId.ADD_CALENDAR_EVENT, ActionArgs.CalendarEvent(title, DEFAULT_CALENDAR_MINUTES)))
+        }
+
+        ALARM_PATTERN.find(text)?.let { match ->
+            parseTime(match.groupValues[1])?.let { time ->
+                consumed += match.range
+                add(ActionSpec(ActionId.SET_ALARM, ActionArgs.Alarm(time.hour, time.minute)))
+            }
+        }
+
+        LINK_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val url = match.groupValues[1].trimEnd('.', ',', ')', ';')
+            add(ActionSpec(ActionId.OPEN_LINK, ActionArgs.OpenLink(url)))
+        }
     }
+
+    /** The app name text named after "open"/"launch", when no picker has resolved one yet. */
+    private fun parseAppOpenRequest(text: String): String? =
+        OPEN_APP_REQUEST.find(text)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
 
     // ------------------------------------------------------------- endings
 
@@ -531,6 +629,39 @@ class GrammarParser(
 
         val CHARGER_WORDS = listOf("charger", "charging", "plugged in", "plug in", "on charge")
         val TIMER_WORD = Regex("\\b(focus|timer|pomodoro|deep work|session)\\b")
+        val RINGER_PATTERN = Regex("\\b(?:ringer|phone)\\s*(?:to|on)\\s*(silent|vibrate)\\b|\\b(silent|vibrate)\\s+mode\\b")
+        val MEDIA_PATTERN = Regex(
+            "\\b(pause|stop|play|resume|skip|next|previous|back)\\s+(?:the\\s+)?(?:music|playback|song|track)\\b",
+        )
+
+        /** A machine-written marker only the app picker produces — see the `action.app` clarification in [parse]. */
+        val OPEN_APP_RESOLVED = Regex("\\(selected app:\\s*([^|)]+)\\|([^)]+)\\)")
+
+        /**
+         * "Open X"/"launch X", asked about rather than guessed at.
+         *
+         * Excludes an http(s)/tel target so a link ("open https://…") is never
+         * mistaken for an app-name request — [LINK_PATTERN] owns that case.
+         */
+        val OPEN_APP_REQUEST = Regex(
+            "\\b(?:open|launch)\\s+(?:the\\s+)?(?!https?://|tel:)([a-z][a-z0-9 &'-]{1,40}?)(?:\\s+app)?" +
+                "(?=\\s+(?:and|when|if|until)\\b|[.,]|$)",
+        )
+
+        val MESSAGE_PATTERN = Regex(
+            "\\b(?:text|message)\\s+(?:(?<contact>my\\s+\\w+|him|her|them|[a-z]+)\\s+)?" +
+                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until)\\b|[.,]|$)",
+        )
+
+        val CALENDAR_PATTERN = Regex(
+            "\\b(?:add|create)\\s+(?:a\\s+)?calendar\\s+event" +
+                "(?:\\s+(?:for|titled|called)\\s+(?<title>.+?))?(?=\\s+(?:and|when|if|until)\\b|[.,]|$)",
+        )
+        const val DEFAULT_CALENDAR_MINUTES = 30
+
+        val ALARM_PATTERN = Regex("\\b(?:set|create)\\s+an?\\s+alarm\\s+(?:for|at)\\s+($TIME)\\b")
+
+        val LINK_PATTERN = Regex("\\b(?:open|visit)\\s+(https?://\\S+|tel:\\S+)")
         val DEVICE_WORDS = listOf(
             "earbuds", "ear buds", "buds", "headphones", "headset",
             "airpods", "speaker", "watch", "car",

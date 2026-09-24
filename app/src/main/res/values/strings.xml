@@ -7,4 +7,13 @@
     <string name="session_notification_title">Focus session running</string>
     <string name="session_notification_remaining">%1$d minutes left</string>
     <string name="session_notification_stop">Stop</string>
+
+    <string name="utility_bindings_accessibility_description">
+        Lets Cues read the current screen once when you ask it to ("Cue this
+        screen"), and replay macros you teach it to turn Eye protection,
+        Ultra saver or Game Mode on or off. Cues never generates or edits
+        these steps itself, never reads password fields, and never runs a
+        macro against Settings, the Play Store, banking, payment or password
+        apps.
+    </string>
 </resources>

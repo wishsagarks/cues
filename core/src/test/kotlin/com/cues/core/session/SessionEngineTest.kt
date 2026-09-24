@@ -79,6 +79,63 @@ class SessionEngineTest {
         assertEquals(listOf(OwnedResource.FOCUS_TIMER), session.obligations.map { it.resource })
     }
 
+    private fun handoffRoutine() = Fixtures.heroRoutine(conditions = emptyList()).copy(
+        actions = listOf(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp("com.example.app", "Example"))),
+        endConditions = listOf(EndCondition.ManualStop),
+    )
+
+    @Test
+    fun `a NEEDS_USER action waits rather than attempting when nobody is present`() {
+        val executor = RecordingExecutor()
+        val engine = SessionEngine(store, executor, clock, attention = ToggleAttention(present = false))
+
+        val session = assertIs<EngineResult.Started>(
+            engine.onTriggerEvent(handoffRoutine(), Fixtures.connect(), Fixtures.snapshot()),
+        ).session
+
+        assertEquals(SessionState.PARTIAL, session.state)
+        assertEquals(ActionState.PENDING, session.actions.single().state)
+        assertTrue(executor.executed.isEmpty(), "a PENDING action must never be attempted")
+        assertTrue(session.obligations.isEmpty(), "nothing was acquired yet")
+    }
+
+    @Test
+    fun `retryPendingActions runs a pending action once someone is present`() {
+        val attention = ToggleAttention(present = false)
+        val executor = RecordingExecutor()
+        val engine = SessionEngine(store, executor, clock, attention = attention)
+        val routine = handoffRoutine()
+
+        val session = assertIs<EngineResult.Started>(
+            engine.onTriggerEvent(routine, Fixtures.connect(), Fixtures.snapshot()),
+        ).session
+
+        attention.present = true
+        val retried = engine.retryPendingActions(routine, session.id)
+
+        assertEquals(listOf(ActionId.OPEN_APP), executor.executed, "retry is the first real attempt")
+        assertEquals(ActionState.SUCCEEDED, retried?.actions?.single()?.state)
+        assertEquals(SessionState.ACTIVE, retried?.state)
+    }
+
+    @Test
+    fun `an unattended NEEDS_USER action is blocked, not dropped, when the session ends`() {
+        val executor = RecordingExecutor()
+        val engine = SessionEngine(store, executor, clock, attention = ToggleAttention(present = false))
+        val routine = handoffRoutine()
+
+        val session = assertIs<EngineResult.Started>(
+            engine.onTriggerEvent(routine, Fixtures.connect(), Fixtures.snapshot()),
+        ).session
+
+        val ended = engine.end(routine, session, EndReason.MANUAL_STOP)
+
+        val record = ended.actions.single()
+        assertEquals(ActionState.BLOCKED, record.state)
+        assertEquals(EXPIRED_WHILE_PENDING_DETAIL, record.detail)
+        assertTrue(executor.executed.isEmpty(), "expiry is not an attempt")
+    }
+
     @Test
     fun `a session is persisted before any side effect runs`() {
         val routine = Fixtures.heroRoutine()

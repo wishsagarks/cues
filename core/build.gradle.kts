@@ -70,3 +70,36 @@ tasks.register<JavaExec>("bakeoff") {
     mainClass.set("com.cues.core.cli.BakeOffMainKt")
     classpath = sourceSets["main"].runtimeClasspath
 }
+
+tasks.register<JavaExec>("chat") {
+    group = "cues"
+    description = "Runs one Ask Cues conversation turn without a device."
+    mainClass.set("com.cues.core.cli.ChatMain")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+    if (project.hasProperty("q")) args(project.property("q").toString())
+}
+
+tasks.register<JavaExec>("coach") {
+    group = "cues"
+    description = "Replays the deterministic coach fixture."
+    mainClass.set("com.cues.core.cli.CoachMain")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
+tasks.register<JavaExec>("card") {
+    group = "cues"
+    description = "Exports, tampers with and reimports a sample Cue Card, phone-to-phone."
+    mainClass.set("com.cues.core.cli.CardMain")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
+
+tasks.register<JavaExec>("console") {
+    group = "cues"
+    description = "Builds a self-contained Cue Console HTML from a fixture dataset — no device, no server."
+    mainClass.set("com.cues.core.cli.ConsoleMain")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+    if (project.hasProperty("q")) args(project.property("q").toString())
+}

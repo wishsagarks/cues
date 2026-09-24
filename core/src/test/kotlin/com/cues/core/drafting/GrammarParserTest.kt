@@ -103,6 +103,113 @@ class GrammarParserTest {
     }
 
     @Test
+    fun `ringer phrasing drafts a ringer action, not a quiet-notifications rule`() {
+        val result = parser().parse("when charging, put the phone on vibrate")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val action = routine.actions.single()
+        assertEquals(ActionId.RINGER_MODE, action.actionId)
+        assertEquals(RingerModeKind.VIBRATE, (action.args as ActionArgs.RingerMode).mode)
+    }
+
+    @Test
+    fun `ringer and quiet-notifications can be drafted together without colliding`() {
+        val result = parser().parse("when charging, quiet notifications and put the phone on silent")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        assertEquals(
+            setOf(ActionId.REQUEST_DND, ActionId.RINGER_MODE),
+            routine.actions.map { it.actionId }.toSet(),
+        )
+    }
+
+    @Test
+    fun `media phrasing drafts the matching media command`() {
+        val result = parser().parse("when charging, pause the music")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val action = routine.actions.single()
+        assertEquals(ActionId.MEDIA_CONTROL, action.actionId)
+        assertEquals(MediaCommand.PAUSE, (action.args as ActionArgs.MediaControl).command)
+    }
+
+    @Test
+    fun `opening an app by name asks which one, rather than guessing a package`() {
+        val result = parser().parse("when charging, open spotify")
+
+        val clarification = assertIs<DraftResult.NeedsClarification>(result)
+        assertEquals("action.app", clarification.about)
+        assertEquals("spotify", clarification.appQuery)
+    }
+
+    @Test
+    fun `a resolved app marker drafts OPEN_APP with exactly the picked package, never a guess`() {
+        // The exact re-draft shape the app layer sends once the user has
+        // picked one from an installed-app query — see AndroidActionExecutor
+        // and MainActivity's app-picker wiring.
+        val result = parser().parse(
+            "when charging, open spotify (selected app: com.spotify.music|Spotify)",
+        )
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val action = routine.actions.single { it.actionId == ActionId.OPEN_APP }
+        assertEquals(ActionArgs.OpenApp("com.spotify.music", "Spotify"), action.args)
+    }
+
+    @Test
+    fun `opening a link is not mistaken for an app-name request`() {
+        val result = parser().parse("when charging, open https://example.com/page")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val action = routine.actions.single()
+        assertEquals(ActionId.OPEN_LINK, action.actionId)
+        assertEquals("https://example.com/page", (action.args as ActionArgs.OpenLink).url)
+    }
+
+    @Test
+    fun `a pre-filled message names its contact and body, and never sends anything`() {
+        val result = parser().parse("when charging, message my mom saying I'm charging now")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val args = routine.actions.single().args as ActionArgs.ComposeMessage
+        assertEquals("my mom", args.contactHint)
+        assertEquals("i'm charging now", args.text)
+    }
+
+    @Test
+    fun `calling or emailing someone remains disclosed as unsupported`() {
+        // Paired with a recognized action, the same way the app-open
+        // disclosure test above must be: with nothing else to do, the parser
+        // asks the generic "what should happen" question first rather than
+        // ever reaching disclosure — a standing, pre-existing gap, not one
+        // this phrasing introduces.
+        val result = parser().parse("when charging, start a timer and call my mom")
+
+        val drafted = assertIs<DraftResult.Drafted>(result)
+        assertTrue(drafted.unsupported.any { it.explanation.contains("does not send messages") })
+        assertEquals(listOf(ActionId.START_FOCUS_TIMER), drafted.routine.actions.map { it.actionId })
+    }
+
+    @Test
+    fun `a calendar event names its title and begins when the action runs, not at draft time`() {
+        val result = parser().parse("when charging, add a calendar event for a study block")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val args = routine.actions.single().args as ActionArgs.CalendarEvent
+        assertEquals("a study block", args.title)
+    }
+
+    @Test
+    fun `setting an alarm parses the spoken time`() {
+        val result = parser().parse("when charging, set an alarm for 7:30 am")
+
+        val routine = assertIs<DraftResult.Drafted>(result).routine
+        val args = routine.actions.single().args as ActionArgs.Alarm
+        assertEquals(7, args.hour)
+        assertEquals(30, args.minute)
+    }
+
+    @Test
     fun `a Jovi-style scheduled content request is refused rather than forced into a cue`() {
         val result = parser().parse("every morning at 8 compile the news")
 

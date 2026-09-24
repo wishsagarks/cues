@@ -46,10 +46,12 @@ object Receipts {
             session.actions.forEach { record ->
                 add(
                     when (record.state) {
-                        ActionState.SUCCEEDED -> "${record.actionId.friendly()}: done."
+                        ActionState.SUCCEEDED -> "${record.actionId.friendly()}: done.${record.actionId.unownedCaveat()}"
                         // Named as refused, not folded into a general success.
                         ActionState.BLOCKED -> "${record.actionId.friendly()}: blocked. ${record.detail.orEmpty()}".trim()
                         ActionState.FAILED -> "${record.actionId.friendly()}: failed. ${record.detail.orEmpty()}".trim()
+                        ActionState.PENDING ->
+                            "${record.actionId.friendly()}: waiting for you. ${record.detail.orEmpty()}".trim()
                         else -> "${record.actionId.friendly()}: ${record.state.name.lowercase()}."
                     },
                 )
@@ -61,7 +63,13 @@ object Receipts {
             }
         }
 
-        val headline = if (session.state == SessionState.PARTIAL) "Started, with something blocked" else "Started"
+        val headline = when {
+            session.state != SessionState.PARTIAL -> "Started"
+            session.actions.any { it.state == ActionState.BLOCKED || it.state == ActionState.FAILED } ->
+                "Started, with something blocked"
+            session.actions.any { it.state == ActionState.PENDING } -> "Started, waiting on you for one step"
+            else -> "Started, with something blocked"
+        }
         return Receipt(headline, lines)
     }
 
@@ -131,6 +139,14 @@ object Receipts {
             if (session.state == SessionState.CLEANUP_PENDING) {
                 add("This session is not finished cleaning up. You can retry it from the cue's page.")
             }
+
+            // New information relative to the Started receipt: a step that was
+            // still waiting on you when the session ended is expired, not
+            // dropped silently — see SessionEngine's PENDING -> BLOCKED
+            // conversion at exit, tagged with this exact detail text.
+            session.actions.filter { it.detail == EXPIRED_WHILE_PENDING_DETAIL }.forEach { record ->
+                add("${record.actionId.friendly()}: never happened. ${record.detail}")
+            }
         }
 
         val headline = if (session.state == SessionState.CLEANUP_PENDING) "Ended, with cleanup outstanding" else "Ended"
@@ -143,12 +159,29 @@ internal fun ActionId.friendly(): String = when (this) {
     ActionId.REQUEST_DND -> "Quiet notifications"
     ActionId.NOTIFY_RESULT -> "Result note"
     ActionId.PINNED_NOTE -> "Pinned note"
+    ActionId.OPEN_APP -> "Open app"
+    ActionId.COMPOSE_MESSAGE -> "Pre-filled message"
+    ActionId.ADD_CALENDAR_EVENT -> "Calendar event"
+    ActionId.SET_ALARM -> "Alarm"
+    ActionId.MEDIA_CONTROL -> "Media control"
+    ActionId.RINGER_MODE -> "Ringer"
+    ActionId.OPEN_LINK -> "Link"
+    ActionId.USE_UTILITY -> "Utility toggle"
+}
+
+/** " You finish this." or " Cues cannot undo this." — only for the two risk classes that need the caveat. */
+internal fun ActionId.unownedCaveat(): String = when (com.cues.core.registry.ActionRegistry.definition(this)?.risk) {
+    com.cues.core.registry.ActionRisk.HANDOFF -> " You finish this."
+    com.cues.core.registry.ActionRisk.EXTERNAL_UNOWNED -> " Cues cannot undo this."
+    else -> ""
 }
 
 internal fun OwnedResource.friendly(): String = when (this) {
     OwnedResource.FOCUS_TIMER -> "focus timer"
     OwnedResource.DND_CONTRIBUTION -> "quiet rule"
     OwnedResource.PINNED_NOTE -> "pinned note"
+    OwnedResource.RINGER_MODE -> "ringer mode"
+    OwnedResource.UTILITY_CONTRIBUTION -> "utility toggle"
 }
 
 internal fun Routine.timerMinutes(): Int? = actions

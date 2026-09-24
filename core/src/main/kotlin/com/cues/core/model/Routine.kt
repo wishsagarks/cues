@@ -48,6 +48,8 @@ data class Routine(
     val draftedBy: DraftSourceId? = null,
     /** Text the drafter could not map to the closed vocabulary. Approval blocks until it is resolved. */
     val unaccountedClauses: List<String> = emptyList(),
+    /** Explicit facts this behavior was compiled against. A fact revision requires re-review. */
+    val factDependencies: Set<FactReference> = emptySet(),
 )
 
 /**
@@ -70,6 +72,15 @@ enum class DraftSourceId {
 
     /** A small language model running on the phone. */
     ON_DEVICE_LLM,
+
+    /**
+     * Reconstructed from a [com.cues.core.share.CueCard] someone else
+     * exported — structured, already-compiled data, not language
+     * understanding of any kind. Every device, place and context reference
+     * inside it is re-resolved against this phone's own stores before this
+     * label is ever attached; see `CueCards.reimport`.
+     */
+    IMPORTED_CARD,
 }
 
 @Serializable
@@ -268,6 +279,41 @@ enum class ActionId {
 
     /** Keep bounded user text visible while the session is active. */
     PINNED_NOTE,
+
+    /**
+     * Opens another app, chosen by the user from an installed-app picker at
+     * Review — never a package name a drafter supplied. Success means
+     * "opened"; the user finishes the task themselves.
+     */
+    OPEN_APP,
+
+    /** Pre-fills a message. Never sends one — see [ActionRisk.HANDOFF]. */
+    COMPOSE_MESSAGE,
+
+    /** Opens the calendar app's own "add event" screen, pre-filled. The user saves it. */
+    ADD_CALENDAR_EVENT,
+
+    /** Asks the clock app to set an alarm. A state Cues did not own before and cannot release. */
+    SET_ALARM,
+
+    /** A media-key press: play, pause, next or previous, for whatever app currently holds focus. */
+    MEDIA_CONTROL,
+
+    /** Sets the ringer to silent or vibrate. Owned: restored only if nothing else has since changed it. */
+    RINGER_MODE,
+
+    /** Opens an https or tel link. The scheme is checked against a closed allowlist, never trusted from a draft. */
+    OPEN_LINK,
+
+    /**
+     * Turns one cataloged iQOO utility on or off by replaying a taught
+     * [UiMacro] through [com.cues.core.registry.UtilityCatalog]'s closed
+     * list. The highest risk class in the registry — see
+     * [com.cues.core.registry.ActionRisk.UI_AUTOMATION] — because it is the
+     * one action whose mechanism can be GUI automation rather than a public
+     * API.
+     */
+    USE_UTILITY,
 }
 
 @Serializable
@@ -291,7 +337,66 @@ sealed interface ActionArgs {
     @Serializable
     @SerialName("pinnedNote")
     data class PinnedNote(val message: String) : ActionArgs
+
+    /**
+     * [packageName] and [label] are chosen from an installed-app picker in
+     * Review, never accepted verbatim from a drafter — the picker is what
+     * makes this a reference to something real on the phone rather than a
+     * string a model made up.
+     */
+    @Serializable
+    @SerialName("openApp")
+    data class OpenApp(val packageName: String, val label: String) : ActionArgs
+
+    /** [contactHint] is free text shown to the user in the share sheet, resolved by the OS, never by Cues. */
+    @Serializable
+    @SerialName("composeMessage")
+    data class ComposeMessage(val contactHint: String? = null, val text: String) : ActionArgs
+
+    /**
+     * No stored moment on purpose: unlike a fact-dated reminder (not yet
+     * wired — see CLEANUP.md CL-16), this event begins when the *action*
+     * runs, i.e. at session start, exactly the way every other action here
+     * takes effect at its trigger moment rather than at whatever moment the
+     * cue happened to be drafted or approved.
+     */
+    @Serializable
+    @SerialName("calendarEvent")
+    data class CalendarEvent(val title: String, val durationMinutes: Int) : ActionArgs
+
+    @Serializable
+    @SerialName("alarm")
+    data class Alarm(val hour: Int, val minute: Int, val label: String? = null) : ActionArgs
+
+    @Serializable
+    @SerialName("mediaControl")
+    data class MediaControl(val command: MediaCommand) : ActionArgs
+
+    @Serializable
+    @SerialName("ringerMode")
+    data class RingerMode(val mode: RingerModeKind) : ActionArgs
+
+    /** [url] is validated against a closed scheme allowlist by [com.cues.core.registry.ActionRegistry]. */
+    @Serializable
+    @SerialName("openLink")
+    data class OpenLink(val url: String) : ActionArgs
+
+    /**
+     * [utilityId] must name an entry in [com.cues.core.registry.UtilityCatalog] —
+     * a closed list, never a string a drafter invented. Which macro actually
+     * runs is resolved at execution time from the taught [com.cues.core.model.UtilityBinding]
+     * for this utility, not stored here.
+     */
+    @Serializable
+    @SerialName("useUtility")
+    data class UseUtility(val utilityId: UtilityId, val state: UtilityState) : ActionArgs
 }
+
+@Serializable
+enum class MediaCommand { PLAY, PAUSE, NEXT, PREVIOUS }
+
+@Serializable
+enum class RingerModeKind { SILENT, VIBRATE }
 
 // ------------------------------------------------------------ end and exit
 
@@ -366,4 +471,11 @@ enum class Capability {
     LOCATION_FOR_WIFI_NAME,
     LOCATION_FOREGROUND,
     LOCATION_BACKGROUND,
+
+    /**
+     * "Cues: iQOO utility bindings" enabled in system Accessibility settings.
+     * A live read of that grant, never cached — the same rule every other
+     * member of this enum already follows.
+     */
+    ACCESSIBILITY_SERVICE,
 }

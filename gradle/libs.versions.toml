@@ -23,7 +23,30 @@ splashscreen = "1.0.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
 datastore = "1.1.1"
-mediapipeGenai = "0.10.18"
+
+# Verified on 24 Sep 2026: com.google.ai.edge.litertlm:litertlm-android
+# genuinely resolves on Google's Maven, with real published releases up to
+# 0.17.1 — see docs/API_VERIFICATION.md. Pinned to 0.16.1, not latest.release:
+# 0.17.0+ depends on kotlin-reflect 2.4.0, whose classes carry Kotlin 2.4.0
+# metadata this project's 2.2.21 compiler cannot read at all (not a version
+# clash Gradle's resolution strategy can paper over — the library's own
+# .class files are unreadable). Every release through 0.16.1 depends on
+# kotlin-reflect 2.2.21, matching this project's own Kotlin version exactly.
+# Replaces the MediaPipe LLM Inference candidate (mediapipeGenai/tasks-genai)
+# SPRINT_4_5 named first: that one never got past "not wired up"; this one is
+# a real integration, still unverified on the loaner. See CLEANUP.md CL-18.
+litertlm = "0.16.1"
+
+# Verified on 24 Sep 2026: androidx.camera:* and com.google.mlkit:text-recognition
+# (the bundled, offline variant — never play-services-mlkit-text-recognition,
+# which downloads its model) — see docs/API_VERIFICATION.md and CLEANUP.md
+# CL-20. CameraX pinned to 1.5.3, not the newer 1.6.2: 1.6.2's own AAR
+# metadata requires Android Gradle Plugin 8.9.1+, this project uses 8.7.3,
+# and 1.5.3 only requires 8.6.0+.
+cameraX = "1.5.3"
+mlkitTextRecognition = "16.0.1"
+mlkitBarcodeScanning = "17.3.0"
+zxingCore = "3.5.3"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
@@ -47,7 +70,14 @@ compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
-mediapipe-tasks-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
+litertlm-android = { module = "com.google.ai.edge.litertlm:litertlm-android", version.ref = "litertlm" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "cameraX" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraX" }
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcodeScanning" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

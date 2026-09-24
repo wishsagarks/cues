@@ -48,7 +48,54 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!--
+      "Point at your timetable" (Task 12). One-shot, user-invoked capture
+      only — no background camera use, and gallery import via the system
+      Photo Picker needs no storage/media permission of its own.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!--
+      Package visibility (API 30+): without this, queryIntentActivities sees
+      only Cues itself. This <queries> declaration is the sanctioned,
+      Play-reviewable way to see every launcher-visible app — the same set
+      the home screen and app drawer already show — for the OPEN_APP picker.
+      It grants no broader visibility than that filter, and nothing here can
+      see an app's data, only that it exists and how it launches.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- COMPOSE_MESSAGE's ACTION_SENDTO / smsto: handoff. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <!-- ADD_CALENDAR_EVENT's ACTION_INSERT into the calendar provider. -->
+        <intent>
+            <action android:name="android.intent.action.INSERT" />
+            <data android:mimeType="vnd.android.cursor.dir/event" />
+        </intent>
+        <!-- SET_ALARM's AlarmClock.ACTION_SET_ALARM. -->
+        <intent>
+            <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+        <!-- OPEN_LINK's two allowed schemes — see ActionRegistry.ALLOWED_LINK_SCHEMES. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
+    </queries>
 
     <application
         android:name=".CuesApplication"
@@ -57,6 +104,14 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cues">
+
+        <!--
+          LiteRT-LM's GPU backend (a fallback tier below NPU) needs these
+          declared explicitly, per docs/API_VERIFICATION.md. required="false"
+          because the CPU tier must keep working on a device without them.
+        -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
 
         <activity
             android:name=".MainActivity"
@@ -148,6 +203,59 @@
 
         <!-- The session notification's own stop action (4.4). -->
         <receiver android:name=".runtime.StopSessionReceiver" android:exported="false" />
+
+        <!--
+          The Desk Bridge's only reason for a provider: sharing the generated
+          Cue Console HTML file via the share sheet (Office Kit or otherwise)
+          needs a content:// Uri — Android forbids sharing a raw file:// path
+          outside this app. grantUriPermissions is scoped to the paths in
+          file_paths.xml, currently just the one cache subdirectory this
+          writes the console to.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
+          "Cues: iQOO utility bindings" (Task 16). Off by default; the user
+          enables it from system Accessibility settings after reading its
+          own consent text (@string/utility_bindings_accessibility_description).
+          exported="true" with the BIND_ACCESSIBILITY_SERVICE permission is
+          the platform-mandated shape for every accessibility service — the
+          permission is what actually restricts binding to the system,
+          the same reasoning the broadcast receivers above already document.
+        -->
+        <service
+            android:name=".runtime.CuesAccessibilityService"
+            android:exported="true"
+            android:label="Cues: iQOO utility bindings"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/utility_bindings_accessibility" />
+        </service>
+
+        <!-- "Cue this screen" (Task 16): a Quick Settings entry point for the one-shot read. -->
+        <service
+            android:name=".runtime.ScreenTile"
+            android:exported="true"
+            android:icon="@drawable/cues_logo"
+            android:label="Cue this screen"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
+        </service>
 
     </application>
 </manifest>

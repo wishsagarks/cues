@@ -3,7 +3,21 @@ package com.cues.core
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.Approvals
 import com.cues.core.approval.DeleteResult
+import com.cues.core.assistant.AssistantIntent
+import com.cues.core.assistant.AssistantReply
+import com.cues.core.assistant.ControlKind
+import com.cues.core.assistant.Conversation
+import com.cues.core.assistant.IntentRouter
+import com.cues.core.assistant.PendingCommand
+import com.cues.core.assistant.Refiner
+import com.cues.core.assistant.ReplyChip
+import com.cues.core.assistant.ReplyCode
+import com.cues.core.assistant.ReplySource
+import com.cues.core.assistant.Turn
+import com.cues.core.assistant.UnsupportedRoute
 import com.cues.core.context.SnapshotBuilder
+import com.cues.core.context.PersonalIndex
+import com.cues.core.context.ReferenceResolution
 import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.ClauseKind
@@ -14,6 +28,7 @@ import com.cues.core.model.Capability
 import com.cues.core.model.ContextValue
 import com.cues.core.model.EventKind
 import com.cues.core.model.Routine
+import com.cues.core.model.RoutineStatus
 import com.cues.core.model.Session
 import com.cues.core.model.TriggerEvent
 import com.cues.core.model.UnknownReason
@@ -26,6 +41,9 @@ import com.cues.core.ports.SessionStore
 import com.cues.core.ports.NamedContextStore
 import com.cues.core.ports.PatchStore
 import com.cues.core.ports.PlaceStore
+import com.cues.core.ports.FactStore
+import com.cues.core.ports.Embedder
+import com.cues.core.inference.InferenceReport
 import com.cues.core.receipt.Receipts
 import com.cues.core.session.EngineResult
 import com.cues.core.session.SessionEngine
@@ -37,6 +55,8 @@ import com.cues.core.eval.Reason
 import com.cues.core.eval.ReasonCode
 import com.cues.core.eval.Truth
 import java.time.ZoneId
+import com.cues.core.coach.LedgerEvent
+import com.cues.core.coach.UsageLedger
 
 /**
  * The one class Android calls for everything. Android supplies ports and a
@@ -61,9 +81,21 @@ class CueService(
     private val patches: PatchStore? = null,
     contexts: NamedContextStore? = null,
     places: PlaceStore? = null,
+    private val intentRouter: IntentRouter = IntentRouter(),
+    private val facts: FactStore? = null,
+    private val usageLedger: UsageLedger? = null,
+    /**
+     * Optional semantic ranker for [PersonalIndex], e.g. "my deep work thing"
+     * -> the Study cue. `null` — the default until a verified on-device
+     * embedding runtime exists — means fuzzy references fall back to
+     * [PersonalIndex]'s own lexical matching, exactly as before this field
+     * existed.
+     */
+    private val embedder: Embedder? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock)
+    private var lastInferenceReport: InferenceReport? = null
 
     init {
         contexts?.let { ContextualStores.contexts = it }
@@ -81,7 +113,7 @@ class CueService(
      * Nothing is persisted yet; a draft is not reviewable until [review] and
      * not armed until [approveAndArm].
      */
-    suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text)) {
+    suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text).also(::recordInference)) {
         is DraftResult.Drafted -> {
             // Accounting is always derived locally from the submitted request;
             // a model never gets to assert that it understood a clause. Only
@@ -103,6 +135,252 @@ class CueService(
             )
         }
         is DraftResult.NeedsClarification, is DraftResult.Failed -> result
+    }
+
+    /**
+     * Handles one authoring conversation turn.
+     *
+     * This method can create inert drafts and pending commands, but it never
+     * approves a draft or executes a control command. Those remain explicit
+     * user actions in Review and confirmation UI respectively.
+     */
+    suspend fun converse(conversation: Conversation, text: String): Turn {
+        val intent = intentRouter.route(text)
+        val turn = when (intent) {
+            is AssistantIntent.Create -> createTurn(text, intent)
+            is AssistantIntent.Refine -> refineTurn(conversation, text, intent)
+            is AssistantIntent.Control -> controlTurn(conversation, text, intent)
+            is AssistantIntent.Remember -> rememberTurn(text, intent)
+            is AssistantIntent.Explain -> explainTurn(conversation, text, intent)
+            AssistantIntent.Forecast -> Turn(
+                text,
+                intent,
+                AssistantReply(
+                    ReplyCode.FORECAST_READY,
+                    mapOf("summary" to "${routines.armed().size} armed cue${if (routines.armed().size == 1) "" else "s"} can be evaluated today."),
+                    ReplySource.FORECAST,
+                ),
+            )
+            AssistantIntent.ListCues -> {
+                val all = routines.all()
+                Turn(
+                    text,
+                    intent,
+                    AssistantReply(
+                        ReplyCode.CUES_LIST,
+                        mapOf("summary" to all.joinToString(prefix = "Your cues: ", separator = ", ") { it.title }),
+                        ReplySource.ROUTINE_STORE,
+                    ),
+                )
+            }
+            AssistantIntent.Capabilities -> Turn(
+                text,
+                intent,
+                AssistantReply(ReplyCode.CAPABILITIES, answeredFrom = ReplySource.ROUTINE_STORE),
+            )
+            is AssistantIntent.Unsupported -> if (intent.routeTo == UnsupportedRoute.SYSTEM_AGENT) {
+                Turn(
+                    text,
+                    intent,
+                    AssistantReply(
+                        ReplyCode.HANDOFF_TO_SYSTEM_AGENT,
+                        answeredFrom = ReplySource.PARSER,
+                        chips = listOf(ReplyChip.Handoff()),
+                    ),
+                )
+            } else {
+                Turn(text, intent, AssistantReply(ReplyCode.UNSUPPORTED, answeredFrom = ReplySource.PARSER))
+            }
+        }
+        turn.draft?.let {
+            conversation.currentDraft = it
+            conversation.lastRoutineId = it.id
+        }
+        conversation.turns += turn
+        return turn
+    }
+
+    private suspend fun createTurn(text: String, intent: AssistantIntent.Create): Turn = when (val result = draft(intent.text)) {
+        is DraftResult.Drafted -> Turn(
+            text,
+            intent,
+            AssistantReply(
+                ReplyCode.DRAFT_READY,
+                // Present only for a model-backed draft, per InferenceReport's
+                // own caveat about what "backend" does and does not confirm.
+                result.inferenceReport?.let { mapOf("backend" to it.backend.name) }.orEmpty(),
+                result.source.replySource(),
+            ),
+            draft = result.routine,
+        )
+        is DraftResult.NeedsClarification -> Turn(
+            text,
+            intent,
+            AssistantReply(
+                ReplyCode.NEEDS_CLARIFICATION,
+                // "appQuery" is the app-layer's cue to run an installed-app
+                // query and show its own picker — the parser has no such list
+                // to offer chips from, unlike a paired device.
+                buildMap {
+                    put("question", result.question)
+                    result.appQuery?.let { put("appQuery", it) }
+                },
+                result.source.replySource(),
+                result.deviceCandidates.map { ReplyChip.Choice(it.id, it.label) },
+            ),
+        )
+        is DraftResult.Failed -> Turn(
+            text,
+            intent,
+            AssistantReply(ReplyCode.DRAFT_FAILED, mapOf("reason" to result.reason), result.source.replySource()),
+        )
+    }
+
+    private fun refineTurn(
+        conversation: Conversation,
+        text: String,
+        intent: AssistantIntent.Refine,
+    ): Turn {
+        val draft = conversation.currentDraft
+            ?: return Turn(text, intent, AssistantReply(ReplyCode.NO_DRAFT_TO_REFINE, answeredFrom = ReplySource.PARSER))
+        val refined = Refiner.apply(draft, intent.operation).routine
+        return Turn(
+            text,
+            intent,
+            AssistantReply(ReplyCode.DRAFT_REFINED, answeredFrom = ReplySource.PARSER),
+            draft = refined,
+        )
+    }
+
+    private fun controlTurn(
+        conversation: Conversation,
+        text: String,
+        intent: AssistantIntent.Control,
+    ): Turn {
+        val routineId = when {
+            intent.reference.lowercase() in setOf("this", "this cue", "that", "that one") ->
+                conversation.currentDraft?.id ?: conversation.lastRoutineId
+            else -> when (val resolution = PersonalIndex(routines, embedder).resolveRoutine(intent.reference, conversation.lastRoutineId)) {
+                is ReferenceResolution.Resolved -> resolution.routine.id
+                else -> null
+            }
+        }
+        if (routineId == null) {
+            return Turn(text, intent, AssistantReply(ReplyCode.ROUTINE_NOT_FOUND, answeredFrom = ReplySource.ROUTINE_STORE))
+        }
+        val pending = PendingCommand(kind = intent.kind, routineId = routineId)
+        return Turn(
+            text,
+            intent,
+            AssistantReply(
+                ReplyCode.CONFIRM_COMMAND,
+                answeredFrom = ReplySource.ROUTINE_STORE,
+                chips = listOf(ReplyChip.Confirm(pending.id, "Confirm ${intent.kind.name.lowercase().replace('_', ' ')}")),
+            ),
+            pendingCommand = pending,
+        )
+    }
+
+    private fun explainTurn(
+        conversation: Conversation,
+        text: String,
+        intent: AssistantIntent.Explain,
+    ): Turn {
+        val resolution = PersonalIndex(routines, embedder).resolveRoutine(intent.reference, conversation.lastRoutineId)
+        val reply = when (resolution) {
+            is ReferenceResolution.Resolved -> AssistantReply(
+                ReplyCode.EXPLANATION,
+                mapOf("summary" to "${resolution.routine.title} is ${resolution.routine.status.name.lowercase()}. Its recorded run reasons appear in Receipts."),
+                ReplySource.RECEIPTS,
+            )
+            is ReferenceResolution.NeedsClarification -> AssistantReply(
+                ReplyCode.NEEDS_CLARIFICATION,
+                mapOf("question" to "Which cue did you mean?"),
+                ReplySource.ROUTINE_STORE,
+                resolution.candidates.map { ReplyChip.Choice(it.id, it.title) },
+            )
+            is ReferenceResolution.NeedsConfirmation -> AssistantReply(
+                ReplyCode.NEEDS_CLARIFICATION,
+                mapOf("question" to "Did you mean ${resolution.candidates.first().title}?"),
+                ReplySource.ROUTINE_STORE,
+                resolution.candidates.map { ReplyChip.Choice(it.id, it.title) },
+            )
+            ReferenceResolution.NotFound -> AssistantReply(ReplyCode.ROUTINE_NOT_FOUND, answeredFrom = ReplySource.ROUTINE_STORE)
+        }
+        return Turn(text, intent, reply)
+    }
+
+    private fun rememberTurn(text: String, intent: AssistantIntent.Remember): Turn {
+        val store = facts
+            ?: return Turn(text, intent, AssistantReply(ReplyCode.UNSUPPORTED, answeredFrom = ReplySource.ROUTINE_STORE))
+        val id = intent.label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "fact" }
+        val existing = store.findFact(id)
+        val fact = com.cues.core.model.Fact(
+            id = id,
+            version = (existing?.version ?: 0) + 1,
+            kind = inferFactKind(intent.value),
+            label = intent.label,
+            value = intent.value,
+            source = com.cues.core.model.FactSource.SAID,
+            createdAt = clock.nowMillis(),
+        )
+        saveFact(fact)
+        return Turn(
+            text,
+            intent,
+            AssistantReply(
+                ReplyCode.FACT_REMEMBERED,
+                mapOf("label" to fact.label, "value" to fact.value),
+                ReplySource.ROUTINE_STORE,
+            ),
+        )
+    }
+
+    fun saveFact(fact: com.cues.core.model.Fact) {
+        val store = facts ?: return
+        val previous = store.findFact(fact.id)
+        store.saveFact(fact)
+        if (previous != null && previous != fact) invalidateFactDependents(fact.id, fact.version)
+    }
+
+    fun deleteFact(id: String) {
+        facts?.deleteFact(id)
+        invalidateFactDependents(id, null)
+    }
+
+    fun listFacts(): List<com.cues.core.model.Fact> = facts?.allFacts().orEmpty()
+
+    private fun invalidateFactDependents(id: String, currentVersion: Int?) {
+        routines.all().filter { routine ->
+            routine.factDependencies.any { it.id == id && (currentVersion == null || it.version != currentVersion) }
+        }.forEach { routine ->
+            routines.save(routine.copy(approvedDigest = null, status = RoutineStatus.REVIEWABLE))
+        }
+    }
+
+    private fun inferFactKind(value: String): com.cues.core.model.FactKind = when {
+        Regex("^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\s+\\d{1,2}(?:,?\\s+\\d{4})?$", RegexOption.IGNORE_CASE)
+            .matches(value.trim()) -> com.cues.core.model.FactKind.DATE
+        Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value.trim()) -> com.cues.core.model.FactKind.DATE
+        else -> com.cues.core.model.FactKind.TEXT
+    }
+
+    /** Runs only after a confirmation chip/tap. Never called from [converse]. */
+    fun confirm(command: PendingCommand): Boolean = when (command.kind) {
+        ControlKind.PAUSE -> command.routineId?.let(::pause) != null
+        ControlKind.RESUME -> command.routineId?.let(::resume) != null
+        ControlKind.SKIP_TODAY -> command.routineId?.let(::skipToday) != null
+        ControlKind.STOP -> command.sessionId?.let(::onManualStop) != null
+    }
+
+    private fun DraftSourceId.replySource(): ReplySource = when (this) {
+        DraftSourceId.GRAMMAR_PARSER -> ReplySource.PARSER
+        DraftSourceId.ON_DEVICE_LLM -> ReplySource.ON_DEVICE_LLM
+        // Never actually reached today: a Cue Card import goes straight to
+        // Review, not through converse(). Kept exhaustive anyway, because an
+        // exhaustive `when` is exactly what caught every other drafter
+        // provenance gap in this file.
+        DraftSourceId.IMPORTED_CARD -> ReplySource.ROUTINE_STORE
     }
 
     /** Normalizes and validates without changing status. Safe to call repeatedly while editing. */
@@ -182,13 +460,19 @@ class CueService(
     fun skipToday(routineId: String): Patch? {
         val routine = routines.findRoutine(routineId) ?: return null
         val date = java.time.Instant.ofEpochMilli(clock.nowMillis()).atZone(zoneId()).toLocalDate().toString()
-        return Patch(routineId, routine.version, PatchKind.SkipOccurrence(date), clock.nowMillis()).also { patches?.savePatch(it) }
+        return Patch(routineId, routine.version, PatchKind.SkipOccurrence(date), clock.nowMillis()).also {
+            patches?.savePatch(it)
+            usageLedger?.appendLedger(LedgerEvent.PatchCreated("skip-today", localDay(clock.nowMillis()), clock.nowMillis()))
+        }
     }
 
     fun pauseUntil(routineId: String, millis: Long): Patch? {
         val routine = routines.findRoutine(routineId) ?: return null
         require(millis > clock.nowMillis()) { "Pause expiry must be in the future." }
-        return Patch(routineId, routine.version, PatchKind.SkipUntil(millis), clock.nowMillis()).also { patches?.savePatch(it) }
+        return Patch(routineId, routine.version, PatchKind.SkipUntil(millis), clock.nowMillis()).also {
+            patches?.savePatch(it)
+            usageLedger?.appendLedger(LedgerEvent.PatchCreated("pause-until", localDay(clock.nowMillis()), clock.nowMillis()))
+        }
     }
 
     fun clearPatch(routineId: String) = patches?.clearPatch(routineId)
@@ -234,6 +518,15 @@ class CueService(
         batteryPercent: ContextValue<Int> = unread(UnknownReason.NEVER_OBSERVED),
         insidePlaces: ContextValue<Set<String>> = unread(UnknownReason.NEVER_OBSERVED),
     ): List<EngineResult> {
+        usageLedger?.takeIf { it.signalOptIn }?.appendLedger(
+            LedgerEvent.SignalObserved(
+                kind = event.kind.name.lowercase(),
+                key = event.deviceId ?: event.kind.name.lowercase(),
+                minuteOfDay = java.time.Instant.ofEpochMilli(event.atMillis).atZone(zoneId()).let { it.hour * 60 + it.minute },
+                weekday = localDay(event.atMillis),
+                atMillis = event.atMillis,
+            ),
+        )
         val snapshot = SnapshotBuilder.build(
             nowMillis = event.atMillis,
             zoneId = zoneId(),
@@ -362,6 +655,14 @@ class CueService(
         val primaryDrafter: DraftSourceId,
         /** Why the most recent draft fell back, if it did. Null when nothing has fallen back yet. */
         val lastFallbackReason: String?,
+        /**
+         * What actually ran the local model on the most recent draft that
+         * used one — NPU, GPU or CPU, per [InferenceReport]'s own caveat
+         * about what that claim does and does not cover. Null until a
+         * model-backed draft has run at all, e.g. every draft on a build
+         * with no side-loaded model.
+         */
+        val lastInferenceReport: InferenceReport?,
     )
 
     /**
@@ -374,7 +675,18 @@ class CueService(
         return Diagnostics(
             primaryDrafter = drafter.id,
             lastFallbackReason = composite?.lastFallbackReason,
+            lastInferenceReport = lastInferenceReport,
         )
+    }
+
+    /** Keeps [lastInferenceReport] current from whichever [DraftResult] variant carries one, if any. */
+    private fun recordInference(result: DraftResult) {
+        val report = when (result) {
+            is DraftResult.Drafted -> result.inferenceReport
+            is DraftResult.NeedsClarification -> result.inferenceReport
+            is DraftResult.Failed -> result.inferenceReport
+        }
+        if (report != null) lastInferenceReport = report
     }
 
     // ------------------------------------------------------------- receipts
@@ -382,6 +694,45 @@ class CueService(
     private fun recordReceipt(routine: Routine, result: EngineResult) {
         val receipt = Receipts.forResult(routine, result)
         receipts.record(sessionIdFor(routine, result), listOf(receipt.headline) + receipt.lines)
+        when (result) {
+            is EngineResult.Started -> {
+                result.session.actions.filter { it.state == com.cues.core.model.ActionState.BLOCKED }.forEach {
+                    usageLedger?.appendLedger(LedgerEvent.ActionBlocked(it.actionId.name, clock.nowMillis()))
+                }
+                if (routine.trigger is com.cues.core.model.Trigger.Manual) {
+                    val time = java.time.Instant.ofEpochMilli(clock.nowMillis()).atZone(zoneId())
+                    usageLedger?.appendLedger(LedgerEvent.ManualStart(time.hour * 60 + time.minute, localDay(clock.nowMillis()), clock.nowMillis()))
+                }
+            }
+            is EngineResult.Ended -> {
+                val planned = routine.actions.firstOrNull { it.actionId == com.cues.core.model.ActionId.START_FOCUS_TIMER }
+                    ?.let { (it.args as? com.cues.core.model.ActionArgs.FocusTimer)?.durationMinutes } ?: 0
+                val actual = ((result.session.endedAtMillis ?: clock.nowMillis()) - result.session.startedAtMillis)
+                    .coerceAtLeast(0) / 60_000L
+                usageLedger?.appendLedger(
+                    LedgerEvent.SessionEnded(
+                        routine.id, planned, actual.toInt(), result.session.endReason?.name.orEmpty(),
+                        result.session.endedAtMillis ?: clock.nowMillis(),
+                    ),
+                )
+            }
+            is EngineResult.Skipped -> result.reasons.firstOrNull()?.let {
+                usageLedger?.appendLedger(LedgerEvent.Skipped(it.code.name, atMillis = clock.nowMillis()))
+            }
+            else -> Unit
+        }
+    }
+
+    private fun localDay(atMillis: Long): com.cues.core.model.Day = when (
+        java.time.Instant.ofEpochMilli(atMillis).atZone(zoneId()).dayOfWeek
+    ) {
+        java.time.DayOfWeek.MONDAY -> com.cues.core.model.Day.MON
+        java.time.DayOfWeek.TUESDAY -> com.cues.core.model.Day.TUE
+        java.time.DayOfWeek.WEDNESDAY -> com.cues.core.model.Day.WED
+        java.time.DayOfWeek.THURSDAY -> com.cues.core.model.Day.THU
+        java.time.DayOfWeek.FRIDAY -> com.cues.core.model.Day.FRI
+        java.time.DayOfWeek.SATURDAY -> com.cues.core.model.Day.SAT
+        java.time.DayOfWeek.SUNDAY -> com.cues.core.model.Day.SUN
     }
 
     private fun sessionIdFor(routine: Routine, result: EngineResult): String = when (result) {

@@ -7,12 +7,23 @@ import com.cues.core.model.SessionState
 import com.cues.core.model.NamedContext
 import com.cues.core.model.Patch
 import com.cues.core.model.Place
+import com.cues.core.model.Fact
+import com.cues.core.model.UiMacro
+import com.cues.core.model.UtilityBinding
+import com.cues.core.model.UtilityId
 import com.cues.core.ports.ReceiptSink
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
 import com.cues.core.ports.NamedContextStore
 import com.cues.core.ports.PatchStore
 import com.cues.core.ports.PlaceStore
+import com.cues.core.ports.FactStore
+import com.cues.core.ports.MacroStore
+import com.cues.core.ports.UtilityBindingStore
+import com.cues.core.coach.CoachState
+import com.cues.core.coach.CoachStateStore
+import com.cues.core.coach.LedgerEvent
+import com.cues.core.coach.UsageLedger
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -45,7 +56,10 @@ data class ReceiptEntry(val sessionId: String, val atMillis: Long, val text: Str
 class JsonFileStore(
     root: File,
     private val maxReceiptFiles: Int = 200,
-) : RoutineStore, SessionStore, ReceiptSink, NamedContextStore, PatchStore, PlaceStore {
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    initialSignalOptIn: Boolean = false,
+) : RoutineStore, SessionStore, ReceiptSink, NamedContextStore, PatchStore, PlaceStore, FactStore,
+    UsageLedger, CoachStateStore, MacroStore, UtilityBindingStore {
 
     private val routinesDir = File(root, "routines").apply { mkdirs() }
     private val sessionsDir = File(root, "sessions").apply { mkdirs() }
@@ -54,6 +68,14 @@ class JsonFileStore(
     private val contextsDir = File(root, "contexts").apply { mkdirs() }
     private val patchesDir = File(root, "patches").apply { mkdirs() }
     private val placesDir = File(root, "places").apply { mkdirs() }
+    private val factsDir = File(root, "facts").apply { mkdirs() }
+    private val macrosDir = File(root, "macros").apply { mkdirs() }
+    private val utilityBindingsDir = File(root, "utility-bindings").apply { mkdirs() }
+    private val ledgerDir = File(root, "ledger/events").apply { mkdirs() }
+    private val coachStateFile = File(root, "ledger/coach-state.json")
+    private val signalOptInFile = File(root, "ledger/signal-opt-in.txt").also { file ->
+        if (!file.exists()) file.writeText(initialSignalOptIn.toString())
+    }
 
     private val json = Json {
         prettyPrint = true
@@ -90,6 +112,53 @@ class JsonFileStore(
     override fun allPlaces(): List<Place> = placesDir.listJsonFiles().mapNotNull { readPlace(it) }
     override fun savePlace(place: Place) = writeAtomic(File(placesDir, "${place.id}.json"), place)
     override fun deletePlace(id: String) { File(placesDir, "$id.json").delete() }
+
+    override fun findFact(id: String): Fact? = readFact(File(factsDir, "$id.json"))
+    override fun allFacts(): List<Fact> = factsDir.listJsonFiles().mapNotNull { readFact(it) }
+    override fun saveFact(fact: Fact) = writeAtomic(File(factsDir, "${fact.id}.json"), fact)
+    override fun deleteFact(id: String) { File(factsDir, "$id.json").delete() }
+
+    // ---------------------------------------------------------- MacroStore
+
+    override fun findMacro(id: String): UiMacro? = readMacro(File(macrosDir, "$id.json"))
+    override fun allMacros(): List<UiMacro> = macrosDir.listJsonFiles().mapNotNull { readMacro(it) }
+    override fun saveMacro(macro: UiMacro) = writeAtomic(File(macrosDir, "${macro.id}.json"), macro)
+    override fun deleteMacro(id: String) { File(macrosDir, "$id.json").delete() }
+
+    // ------------------------------------------------- UtilityBindingStore
+
+    override fun findBinding(utilityId: UtilityId): UtilityBinding? =
+        readBinding(File(utilityBindingsDir, "${utilityId.name}.json"))
+    override fun allBindings(): List<UtilityBinding> = utilityBindingsDir.listJsonFiles().mapNotNull { readBinding(it) }
+    override fun saveBinding(binding: UtilityBinding) =
+        writeAtomic(File(utilityBindingsDir, "${binding.utilityId.name}.json"), binding)
+    override fun deleteBinding(utilityId: UtilityId) { File(utilityBindingsDir, "${utilityId.name}.json").delete() }
+
+    // --------------------------------------------------------- learning data
+
+    override val signalOptIn: Boolean get() = signalOptInFile.readText().trim().toBooleanStrictOrNull() ?: false
+    override fun setSignalOptIn(enabled: Boolean) = writeAtomicText(signalOptInFile, enabled.toString())
+
+    override fun appendLedger(event: LedgerEvent) {
+        writeAtomic(File(ledgerDir, "${event.atMillis}-${java.util.UUID.randomUUID()}.json"), event)
+        val cutoff = nowMillis() - 14L * 86_400_000L
+        ledgerDir.listJsonFiles().forEach { file ->
+            val value = readLedgerEvent(file)
+            if (value == null || value.atMillis < cutoff) file.delete()
+        }
+    }
+
+    override fun ledgerEvents(): List<LedgerEvent> = ledgerDir.listJsonFiles()
+        .mapNotNull { readLedgerEvent(it) }
+        .sortedBy { it.atMillis }
+
+    override fun wipeLedger() {
+        ledgerDir.listJsonFiles().forEach { it.delete() }
+        coachStateFile.delete()
+    }
+
+    override fun loadCoachState(): CoachState = readCoachState(coachStateFile) ?: CoachState()
+    override fun saveCoachState(state: CoachState) = writeAtomic(coachStateFile, state)
 
     // -------------------------------------------------------- SessionStore
 
@@ -176,6 +245,11 @@ class JsonFileStore(
     private fun readContext(file: File): NamedContext? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readPatch(file: File): Patch? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readPlace(file: File): Place? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readFact(file: File): Fact? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readMacro(file: File): UiMacro? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readBinding(file: File): UtilityBinding? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readLedgerEvent(file: File): LedgerEvent? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readCoachState(file: File): CoachState? = readOrQuarantine(file) { json.decodeFromString(it) }
 
     private inline fun <T> readOrQuarantine(file: File, decode: (String) -> T): T? {
         if (!file.isFile) return null

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scopes the FileProvider to exactly the cache subdirectory
+  ExportImport.writeShareableConsole writes the Cue Console to — nothing
+  else under app storage is reachable through it.
+-->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -42,6 +42,11 @@ import com.cues.app.ui.ReceiptScreen
 import com.cues.app.ui.ReviewScreen
 import com.cues.app.ui.RoutineDetailScreen
 import com.cues.app.ui.TodayScreen
+import com.cues.app.ui.MemoryScreen
+import com.cues.app.ui.LearningSettings
+import com.cues.core.coach.CoachPolicy
+import com.cues.core.coach.Detectors
+import com.cues.core.coach.Suggestion
 import com.cues.core.CueService
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.DeleteResult
@@ -60,8 +65,13 @@ import com.cues.core.rehearsal.Rehearsal
 import com.cues.core.review.forecastToday
 import com.cues.core.session.isLive
 import com.cues.core.store.JsonFileStore
+import com.cues.core.assistant.Conversation
+import com.cues.core.assistant.ReplyCode
+import com.cues.core.assistant.Turn
 import com.cues.app.runtime.DeviceDiagnosticsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.ZoneId
 import java.util.UUID
 
@@ -76,6 +86,13 @@ import java.util.UUID
 class MainActivity : ComponentActivity() {
 
     private lateinit var localSpeechInput: LocalSpeechInput
+    private lateinit var replySpeaker: com.cues.app.voice.ReplySpeaker
+
+    // "Cue this screen" (Task 16): text captured by ScreenTile /
+    // CuesAccessibilityService, handed in via EXTRA_SCREEN_CAPTURE. Read
+    // here rather than inside the composable tree because it can arrive
+    // through onNewIntent, well after setContent already ran once.
+    private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // One system-owned splash handoff on every supported Android version.
@@ -85,6 +102,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val app = application as CuesApplication
         localSpeechInput = LocalSpeechInput(this)
+        replySpeaker = com.cues.app.voice.ReplySpeaker(this)
+        incomingScreenText = intent?.getStringExtra(com.cues.app.runtime.CuesAccessibilityService.EXTRA_SCREEN_CAPTURE)
 
         setContent {
             CuesTheme {
@@ -97,13 +116,26 @@ class MainActivity : ComponentActivity() {
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
                     runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices()) },
                     localSpeechInput = localSpeechInput,
+                    pairedDevices = app::pairedDevices,
+                    replySpeaker = replySpeaker,
+                    testUtilityAction = app::testUseUtility,
+                    incomingScreenText = incomingScreenText,
                 )
             }
         }
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(com.cues.app.runtime.CuesAccessibilityService.EXTRA_SCREEN_CAPTURE)?.let {
+            incomingScreenText = it
+        }
+    }
+
     override fun onDestroy() {
         if (::localSpeechInput.isInitialized) localSpeechInput.stop()
+        if (::replySpeaker.isInitialized) replySpeaker.shutdown()
         super.onDestroy()
     }
 }
@@ -116,6 +148,13 @@ private sealed interface Screen {
     data object Diagnostics : Screen
     data object Today : Screen
     data object Contexts : Screen
+    data object Memory : Screen
+    data object Learning : Screen
+    data object TimetableCapture : Screen
+    data class ImportReview(val result: com.cues.core.imports.TimetableExtractionResult) : Screen
+    data class CueCardShare(val routine: Routine) : Screen
+    data object CueCardScan : Screen
+    data object UtilityBindings : Screen
 }
 
 /**
@@ -156,6 +195,10 @@ private fun CuesApp(
     syncAdapters: () -> Unit,
     runBakeOff: suspend () -> com.cues.core.corpus.BakeOffReport,
     localSpeechInput: LocalSpeechInput,
+    pairedDevices: () -> List<PairedDevice>,
+    replySpeaker: com.cues.app.voice.ReplySpeaker,
+    testUtilityAction: (com.cues.core.model.UtilityId, com.cues.core.model.UtilityState) -> com.cues.core.ports.ActionOutcome,
+    incomingScreenText: String? = null,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     var routines by remember { mutableStateOf(cueService.list()) }
@@ -167,7 +210,21 @@ private fun CuesApp(
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
+    var appQuery by remember { mutableStateOf<String?>(null) }
+    var appCandidates by remember { mutableStateOf<List<com.cues.app.runtime.InstalledApp>?>(null) }
+    var appSourceText by remember { mutableStateOf<String?>(null) }
     var adapterStatuses by remember { mutableStateOf(monitoring.statuses(adapterHealth())) }
+    val conversation = remember { Conversation() }
+    var assistantTurns by remember { mutableStateOf<List<Turn>>(emptyList()) }
+    // Session-only, off by default: a convenience for reading Cues' own
+    // exact reply text aloud, never a paraphrase and never voice acting on
+    // anything by itself — see ReplySpeaker's own doc comment.
+    var speakReplies by remember { mutableStateOf(false) }
+    var utilityTestResult by remember { mutableStateOf<String?>(null) }
+    val coachPolicy = remember { CoachPolicy(store) }
+    var coachSuggestion by remember {
+        mutableStateOf<Suggestion?>(coachPolicy.next(Detectors.all(store.ledgerEvents(), System.currentTimeMillis()), System.currentTimeMillis()))
+    }
 
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
@@ -212,22 +269,37 @@ private fun CuesApp(
     fun draft(text: String) {
         isDrafting = true
         scope.launch {
-            when (val result = cueService.draft(text)) {
-                is DraftResult.Drafted -> {
+            val turn = cueService.converse(conversation, text)
+            assistantTurns = conversation.turns.toList()
+            if (speakReplies) replySpeaker.speak(turn.reply.text)
+            val draftedRoutine = turn.draft
+            when {
+                draftedRoutine != null -> {
                     missingCapabilities = emptySet()
-                    screen = Screen.Review(result.routine)
+                    screen = Screen.Review(draftedRoutine)
                 }
-
-                is DraftResult.NeedsClarification -> {
-                    if (result.about == "trigger.device" && result.deviceCandidates.isNotEmpty()) {
+                turn.reply.args["appQuery"] != null -> {
+                    val query = turn.reply.args.getValue("appQuery")
+                    appSourceText = text
+                    appQuery = query
+                    // Queried fresh each time rather than cached: an app can be
+                    // installed or removed between one "open X" and the next,
+                    // and this list is cheap enough that staleness buys nothing.
+                    appCandidates = com.cues.app.runtime.rankInstalledApps(
+                        com.cues.app.runtime.installedApps(context), query,
+                    )
+                }
+                turn.reply.code == ReplyCode.NEEDS_CLARIFICATION -> {
+                    val ids = turn.reply.chips.filterIsInstance<com.cues.core.assistant.ReplyChip.Choice>().map { it.id }.toSet()
+                    val candidates = pairedDevices().filter { it.id in ids }
+                    if (candidates.isNotEmpty()) {
                         deviceSourceText = text
-                        deviceCandidates = result.deviceCandidates
+                        deviceCandidates = candidates
                     } else {
-                        notify(result.question)
+                        notify(turn.reply.text)
                     }
                 }
-
-                is DraftResult.Failed -> notify("Could not draft that: ${result.reason}")
+                else -> notify(turn.reply.text)
             }
             isDrafting = false
         }
@@ -257,6 +329,24 @@ private fun CuesApp(
                     onOpenDiagnostics = { screen = Screen.Diagnostics },
                     onOpenToday = { screen = Screen.Today },
                     onOpenContexts = { screen = Screen.Contexts },
+                    onOpenMemory = { screen = Screen.Memory },
+                    onOpenLearning = { screen = Screen.Learning },
+                    onOpenTimetableCapture = { screen = Screen.TimetableCapture },
+                    onOpenCueCardScan = { screen = Screen.CueCardScan },
+                    onOpenUtilityBindings = { screen = Screen.UtilityBindings },
+                    onExportConsole = {
+                        // A snapshot of what's true right now, shared through
+                        // whatever the sheet offers (Office Kit included) —
+                        // never a live link back into this phone.
+                        val html = com.cues.app.bridge.ExportImport.buildConsoleHtml(context, cueService, store)
+                        val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
+                        context.startActivity(com.cues.app.bridge.ExportImport.shareIntent(context, uri))
+                    },
+                    speakReplies = speakReplies,
+                    onToggleSpeakReplies = {
+                        speakReplies = !speakReplies
+                        if (!speakReplies) replySpeaker.stop()
+                    },
                     onStartVoice = { onTranscript, onUnavailable ->
                         localSpeechInput.start(onTranscript, onUnavailable)
                     },
@@ -270,6 +360,45 @@ private fun CuesApp(
                     onDismissDevicePicker = {
                         deviceCandidates = null
                         deviceSourceText = null
+                    },
+                    appQuery = appQuery,
+                    appCandidates = appCandidates,
+                    onSelectApp = { app ->
+                        val source = appSourceText
+                        appCandidates = null
+                        appQuery = null
+                        appSourceText = null
+                        // A machine-written marker only this call site ever
+                        // produces — GrammarParser trusts it because nothing
+                        // else can generate it, never because it looks
+                        // plausible. See GrammarParser.ResolvedApp.
+                        if (source != null) draft("$source (selected app: ${app.packageName}|${app.label})")
+                    },
+                    onDismissAppPicker = {
+                        appCandidates = null
+                        appQuery = null
+                        appSourceText = null
+                    },
+                    assistantTurns = assistantTurns,
+                    onConfirmCommand = { command ->
+                        if (cueService.confirm(command)) {
+                            refresh()
+                            notify("Done. The confirmed command was applied.")
+                        } else notify("That command no longer has a valid target.")
+                    },
+                    onHandoffToJovi = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_ASSIST)
+                        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+                        else notify("No system assistant is available on this phone.")
+                    },
+                    coachSuggestion = coachSuggestion,
+                    onAcceptSuggestion = { suggestion ->
+                        coachSuggestion = null
+                        draft(suggestion.proposal)
+                    },
+                    onDismissSuggestion = { suggestion, permanent ->
+                        coachPolicy.dismiss(suggestion.patternKey, System.currentTimeMillis(), permanent)
+                        coachSuggestion = null
                     },
                 )
 
@@ -351,6 +480,7 @@ private fun CuesApp(
                                 cueService.clearPatch(routine.id)
                                 refresh()
                             },
+                            onShareAsCard = { screen = Screen.CueCardShare(routine) },
                         )
                     }
                 }
@@ -358,6 +488,7 @@ private fun CuesApp(
                 Screen.Receipts -> ReceiptScreen(
                     loadReceipts = { store.receipts() },
                     onBack = { screen = Screen.Home },
+                    onSpeak = replySpeaker::speak,
                 )
 
                 Screen.Diagnostics -> DiagnosticsScreen(
@@ -380,6 +511,7 @@ private fun CuesApp(
                     isBakingOff = isBakingOff,
                     bakeOffReport = bakeOffReport,
                     onRunBakeOff = ::runBakeOffNow,
+                    cueDiagnostics = cueService.diagnostics(),
                 )
 
                 Screen.Today -> {
@@ -424,6 +556,122 @@ private fun CuesApp(
                             store.deletePlace(id)
                             places = store.allPlaces()
                         },
+                        onBack = { screen = Screen.Home },
+                    )
+                }
+
+                Screen.Memory -> MemoryScreen(
+                    facts = cueService.listFacts(),
+                    onDelete = { fact ->
+                        cueService.deleteFact(fact.id)
+                        refresh()
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                Screen.Learning -> LearningSettings(
+                    enabled = store.signalOptIn,
+                    events = store.ledgerEvents(),
+                    onEnabledChange = store::setSignalOptIn,
+                    onWipe = {
+                        store.wipeLedger()
+                        coachSuggestion = null
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                Screen.TimetableCapture -> com.cues.app.camera.TimetableCaptureScreen(
+                    onRecognized = { text ->
+                        // The recognized text is untrusted data from here on,
+                        // exactly like shared or typed text — the extractor
+                        // decides what, if anything, it proposes.
+                        screen = Screen.ImportReview(com.cues.core.imports.TimetableExtractor.extract(text))
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                is Screen.ImportReview -> com.cues.app.ui.ImportReviewScreen(
+                    result = current.result,
+                    onReviewEntry = { entry ->
+                        entry.proposedSentence()?.let { sentence ->
+                            // The same drafter, Review and Approve path any
+                            // typed or spoken cue goes through — an import
+                            // proposal earns no shortcut around it.
+                            draft(sentence)
+                        }
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                is Screen.CueCardShare -> com.cues.app.ui.CueCardShareScreen(
+                    routine = current.routine,
+                    onShareAsText = { text ->
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "Share Cue Card"))
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                Screen.CueCardScan -> com.cues.app.camera.CueCardScanScreen(
+                    onScanned = { payload ->
+                        // Untrusted text until CueCards.decode checks its
+                        // digest — nothing here trusts a package/permission
+                        // claim, and every device/place/context reference is
+                        // re-resolved against this phone's own stores.
+                        when (val result = com.cues.core.share.CueCards.reimport(
+                            payload, pairedDevices(), store.allContexts(), store.allPlaces(),
+                        )) {
+                            is com.cues.core.share.ReimportResult.Ready -> screen = Screen.Review(result.routine)
+                            is com.cues.core.share.ReimportResult.MissingEntity ->
+                                notify("You don't have a ${result.kind} named \"${result.label}\" yet. Add it, then scan again.")
+                            com.cues.core.share.ReimportResult.Tampered ->
+                                notify("This card could not be verified — it may be corrupted or edited.")
+                            is com.cues.core.share.ReimportResult.Malformed ->
+                                notify("This does not look like a Cue Card. ${result.reason}")
+                            is com.cues.core.share.ReimportResult.UnsupportedSchema ->
+                                notify("This card was made by a newer version of Cues.")
+                        }
+                    },
+                    onBack = { screen = Screen.Home },
+                )
+
+                Screen.UtilityBindings -> {
+                    var bindingsRefresh by remember { mutableStateOf(0) }
+                    val bindingsById = remember(bindingsRefresh) { store.allBindings().associateBy { it.utilityId } }
+                    com.cues.app.ui.UtilityBindingScreen(
+                        bindings = bindingsById,
+                        onSave = { utilityId, state, macro ->
+                            val validation = com.cues.core.compile.MacroValidator.validate(macro)
+                            if (!validation.isValid) {
+                                validation.errors.map { it.message }
+                            } else {
+                                store.saveMacro(macro)
+                                val existing = bindingsById[utilityId]
+                                    ?: com.cues.core.model.UtilityBinding(utilityId, onMacroId = "", offMacroId = "")
+                                val updated = if (state == com.cues.core.model.UtilityState.ON) {
+                                    existing.copy(onMacroId = macro.id)
+                                } else {
+                                    existing.copy(offMacroId = macro.id)
+                                }
+                                store.saveBinding(updated)
+                                bindingsRefresh++
+                                emptyList()
+                            }
+                        },
+                        onDeleteBinding = { utilityId ->
+                            store.deleteBinding(utilityId)
+                            bindingsRefresh++
+                        },
+                        onTest = { utilityId, state ->
+                            scope.launch {
+                                val outcome = withContext(Dispatchers.IO) { testUtilityAction(utilityId, state) }
+                                utilityTestResult = "${outcome.state.name.lowercase()}: ${outcome.detail.orEmpty()}"
+                            }
+                        },
+                        lastTestResult = utilityTestResult,
                         onBack = { screen = Screen.Home },
                     )
                 }

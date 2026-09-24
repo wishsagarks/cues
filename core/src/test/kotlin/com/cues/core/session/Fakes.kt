@@ -4,9 +4,15 @@ import com.cues.core.model.*
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.ActionOutcome
 import com.cues.core.ports.Clock
+import com.cues.core.ports.DeviceAttention
 import com.cues.core.ports.SessionStore
 import com.cues.core.ports.SignalAdapter
 import com.cues.core.ports.ListenerHealth
+
+/** A [DeviceAttention] a test can flip mid-scenario, unlike a fixed lambda. */
+class ToggleAttention(var present: Boolean = true) : DeviceAttention {
+    override fun isUserPresent(): Boolean = present
+}
 
 /** A clock the test drives by hand, so lifecycle tests never sleep. */
 class FakeClock(var now: Long) : Clock {
@@ -64,12 +70,7 @@ class RecordingExecutor(
         if (actionId in blocked) {
             return ActionOutcome(ActionState.BLOCKED, "Permission not granted.")
         }
-        val owns = when (actionId) {
-            ActionId.START_FOCUS_TIMER -> OwnedResource.FOCUS_TIMER
-            ActionId.REQUEST_DND -> OwnedResource.DND_CONTRIBUTION
-            ActionId.NOTIFY_RESULT -> null
-            ActionId.PINNED_NOTE -> OwnedResource.PINNED_NOTE
-        }
+        val owns = com.cues.core.registry.ActionRegistry.definition(actionId)?.owns
         return ActionOutcome(ActionState.SUCCEEDED, acquired = owns)
     }
 

@@ -9,7 +9,10 @@ import com.cues.core.eval.Truth
 import com.cues.core.model.*
 import com.cues.core.ports.ActionExecutor
 import com.cues.core.ports.Clock
+import com.cues.core.ports.DeviceAttention
 import com.cues.core.ports.SessionStore
+import com.cues.core.registry.ActionRegistry
+import com.cues.core.registry.Presence
 import com.cues.core.signals.SignalRegistry
 
 /** What the engine did, and why, in a form a receipt can render without interpreting. */
@@ -40,6 +43,8 @@ class SessionEngine(
     private val clock: Clock,
     private val freshness: FreshnessPolicy = FreshnessPolicy(),
     private val idGenerator: () -> String = { "session-" + java.util.UUID.randomUUID() },
+    /** Defaults to "always present", which is exactly today's behaviour for every action that predates this. */
+    private val attention: DeviceAttention = DeviceAttention { true },
 ) {
 
     // ----------------------------------------------------------- admission
@@ -142,6 +147,16 @@ class SessionEngine(
         val obligations = mutableListOf<CleanupObligation>()
 
         routine.actions.forEach { spec ->
+            val definition = ActionRegistry.definition(spec.actionId)
+            if (definition?.presence == Presence.NEEDS_USER && !attention.isUserPresent()) {
+                // Never attempted: a NEEDS_USER action with nobody at the
+                // phone is not a failed attempt, it is a deferred one. It
+                // waits here, unattempted, until retryPendingActions is
+                // called once someone is present, or the session ends still
+                // waiting — see the PENDING -> BLOCKED conversion below.
+                records += ActionRecord(spec.actionId, ActionState.PENDING, "Ready when you are.")
+                return@forEach
+            }
             val outcome = executor.execute(spec.actionId, spec.args, session.id)
             records += ActionRecord(spec.actionId, outcome.state, outcome.detail)
             // Ownership is recorded the moment it is acquired, not at exit.
@@ -240,7 +255,18 @@ class SessionEngine(
      * again when the user grants the permission.
      */
     private fun releaseAndFinalize(routine: Routine, session: Session, reason: EndReason): Session {
-        val ending = session.copy(state = SessionState.ENDING)
+        // Expiry is a block, not a silent drop: a NEEDS_USER action that never
+        // got its moment while someone was present is stamped BLOCKED here,
+        // with a detail Receipts recognizes as new information worth telling
+        // the user again in the Ended receipt, not the Started one.
+        val settledActions = session.actions.map { record ->
+            if (record.state == ActionState.PENDING) {
+                ActionRecord(record.actionId, ActionState.BLOCKED, EXPIRED_WHILE_PENDING_DETAIL)
+            } else {
+                record
+            }
+        }
+        val ending = session.copy(state = SessionState.ENDING, actions = settledActions)
         store.save(ending)
 
         val released = mutableListOf<CleanupObligation>()
@@ -275,7 +301,14 @@ class SessionEngine(
 
         val ended = ending.copy(
             // An unreleased resource keeps the session visibly unfinished
-            // rather than quietly filed as done.
+            // rather than quietly filed as done. A terminal SessionState has
+            // no PARTIAL-but-finished member — PARTIAL is deliberately one of
+            // the *live* states (isLive() relies on that for admission: a
+            // still-running session with one blocked action must still block
+            // a duplicate start) — so an action that never succeeded, expired
+            // PENDING included, stays visible in [ActionRecord] and in the
+            // Ended receipt (see EXPIRED_WHILE_PENDING_DETAIL) rather than by
+            // repurposing the terminal state itself.
             state = if (anyFailure) SessionState.CLEANUP_PENDING else SessionState.COMPLETED,
             obligations = released,
             // Preserved across a cleanup retry: the session ended when it
@@ -291,6 +324,45 @@ class SessionEngine(
     /** Records that the user changed one of our effects themselves. */
     fun markUserOverride(sessionId: String) {
         store.find(sessionId)?.let { store.save(it.copy(userOverride = true)) }
+    }
+
+    /**
+     * Called once someone is confirmed present — a tap on the "Ready when
+     * you are" notification, or the app resuming to a live session. Attempts
+     * every [ActionState.PENDING] action now, exactly as [start] would have
+     * attempted it at the time.
+     *
+     * Takes [routine], the same way [onGraceElapsed] and [onExitEvent] do,
+     * rather than caching a [com.cues.core.model.ActionSpec.args] copy on the
+     * session: the routine is already the durable source of an action's
+     * arguments, and re-reading it here means a process restart between
+     * "waiting" and "retried" needs no state of its own to survive.
+     *
+     * A no-op, safely, on a session that has since ended or holds nothing
+     * pending — the caller does not have to know which is true before asking.
+     */
+    fun retryPendingActions(routine: Routine, sessionId: String): Session? {
+        val session = store.find(sessionId) ?: return null
+        if (!session.state.isLive()) return null
+        if (session.actions.none { it.state == ActionState.PENDING }) return session
+
+        val argsByAction = routine.actions.associate { it.actionId to it.args }
+        val obligations = session.obligations.toMutableList()
+        val actions = session.actions.map { record ->
+            if (record.state != ActionState.PENDING) return@map record
+            val args = argsByAction[record.actionId] ?: ActionArgs.None
+            val outcome = executor.execute(record.actionId, args, session.id)
+            outcome.acquired?.let { obligations += CleanupObligation(it, clock.nowMillis()) }
+            ActionRecord(record.actionId, outcome.state, outcome.detail)
+        }
+
+        val updated = session.copy(
+            actions = actions,
+            obligations = obligations,
+            state = if (actions.all { it.state == ActionState.SUCCEEDED }) SessionState.ACTIVE else SessionState.PARTIAL,
+        )
+        store.save(updated)
+        return updated
     }
 
     // ------------------------------------------------------------ recovery

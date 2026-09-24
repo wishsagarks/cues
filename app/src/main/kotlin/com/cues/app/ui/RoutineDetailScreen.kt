@@ -53,6 +53,7 @@ fun RoutineDetailScreen(
     /** Absolute epoch millis this pause should hold until. */
     onPauseUntil: ((epochMillis: Long) -> Unit)? = null,
     onClearPatch: (() -> Unit)? = null,
+    onShareAsCard: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
@@ -85,6 +86,19 @@ fun RoutineDetailScreen(
             dryRun.value = onDryRun()
         }, modifier = Modifier.fillMaxWidth()) {
             Text("What would happen right now?")
+        }
+        if (onShareAsCard != null) {
+            OutlinedButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onShareAsCard()
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                // Never "share this app's behavior on you" — this cue's own
+                // WHEN/IF/DO/UNTIL, and nothing this phone approved.
+                Text("Share as a Cue Card")
+            }
         }
         dryRun.value?.let { row ->
             Text("${row.label}: ${row.outcome}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))

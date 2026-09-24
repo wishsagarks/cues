@@ -1,0 +1,78 @@
+# Cues Brain execution checklist
+
+- [x] Task 0 — Repository/spec audit and green baseline
+- [x] Task 1 — Official API/dependency gate
+- [x] Task 2 — Conversation core (IntentRouter, Refiner, Explainer, ReplyCopy, PersonalIndex, Jovi handoff route)
+- [x] Task 3 — Declared Memory and personal index (`Fact`/`FactStore`, approval invalidation on edit/delete; see CL-16 for the still-missing NL "until my exam" wiring)
+- [x] Task 4 — Chat CLI and Assistant/Memory UI (`./dev chat`, `AssistantHistory`, `MemoryScreen`, wired into `HomeScreen`/`MainActivity`)
+- [x] Checkpoint — Conversation green (196 core tests incl. injection-safety test; `./dev b`/`./dev perms` clean)
+- [x] Task 5 — Usage ledger and coach detectors (`UsageLedger`/`CoachStateStore` on `JsonFileStore`, 6 detectors, `CoachPolicy` mute/daily-limit, wired into `CueService.recordReceipt`/`skipToday`/`pauseUntil`/`onDeviceEvent`)
+- [x] Task 6 — Coach CLI and UI (`./dev coach`, `LearningSettings`, Home suggestion card wired to accept→draft / dismiss→mute)
+- [x] Checkpoint — Coach green (detector/policy tests pass; accepting only seeds `draft()`, never arms)
+- [x] Task 7 — Typed action and utility registry (`ActionRisk.HANDOFF`/`EXTERNAL_UNOWNED`, `Presence`, 7 new `ActionId`s + validators; `ActionRegistryTest`)
+- [x] Task 8 — Presence and pending session semantics (`DeviceAttention` port, `ActionState.PENDING`, `SessionEngine.retryPendingActions`, expiry → `BLOCKED` with `EXPIRED_WHILE_PENDING_DETAIL`, disclosed in the Ended receipt)
+- [~] Task 9 — Android cross-app/OriginOS surfaces — **partial, most of it now closed.**
+  - Done: `AndroidActionExecutor` implements all 7 actions against official Android intents/APIs (unverified on device per this repo's usual disclosure).
+  - Done: all 7 actions are reachable via `GrammarParser` phrasing. The 5 that name an external entity (`OPEN_APP`, `COMPOSE_MESSAGE`, `ADD_CALENDAR_EVENT`, `SET_ALARM`, `OPEN_LINK`) needed no picker except `OPEN_APP`.
+  - Done: the `OPEN_APP` installed-app picker — `DraftResult.NeedsClarification(about="action.app", appQuery=...)`, `app/.../runtime/InstalledApps.kt` querying `PackageManager` via a declared `<queries>` block (no `QUERY_ALL_PACKAGES`), `AppPickerDialog` in `HomeScreen.kt`, wired in `MainActivity.kt`, and a `(selected app: pkg|Label)` marker `GrammarParser` resolves deterministically. Fixed a real bug along the way: `ActionArgs.CalendarEvent` was storing an absolute `atMillis` computed at draft time instead of at session-start (execution) time — corrected before any phrasing was built around it.
+  - **Not done:** calendar condition kit (`Condition.CalendarBusy`/`NotBusy`); share target/shortcuts; Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
+- [ ] Checkpoint — Typed actions green (core-side criteria met — see below; Android-side device criteria still open)
+- [x] Task 10 — LiteRT-LM inference reports and embeddings.
+  - `core/.../inference/Inference.kt` (`InferenceBackend`, `InferenceReport`), `DraftResult.inferenceReport` on all 3 variants, `CueService.diagnostics().lastInferenceReport` and each turn's `args["backend"]`.
+  - `app/.../drafting/LiteRtLmSession.kt`: a real, compiled `com.google.ai.edge.litertlm:litertlm-android:0.16.1` integration (not a stub) with an explicit NPU → GPU → CPU → parser-only fallback chain, wired into `CuesApplication` in place of the old `MediaPipeLlmSession` stub.
+  - Found and fixed a real dependency-resolution bug along the way: 0.17.0+ of that artifact is compiler-incompatible with this project's Kotlin version; pinned to 0.16.1 instead, with the reason recorded in `docs/API_VERIFICATION.md` and CL-18.
+  - `Embedder` (built earlier) is now threaded from `CueService` through to `PersonalIndex`, but `CuesApplication` still passes none — no on-device embedding runtime identified/verified yet (CL-18 item 6).
+  - Tests: `InferenceReportPlumbingTest.kt` (a fake model-backed drafter's report survives into Diagnostics and a turn's reply; a parser-only draft claims no backend).
+  - Not done, disclosed in CL-18: no model has been side-loaded or actually run; the NPU SoC allowlist and the GPU native-library fallback are both unconfirmed on a real loaner.
+- [x] Task 11 — Exact-copy TTS.
+  - `app/.../voice/ReplySpeaker.kt` wraps `android.speech.tts.TextToSpeech`; speaks exactly a reply's or receipt's own rendered text, never a paraphrase.
+  - "Speak replies" toggle on Home (off by default, session-only), speaks each new Assistant turn's reply when on.
+  - "Read aloud" button on every Receipts card.
+  - Cannot approve a draft or confirm a `PendingCommand` — nothing wires it to either call.
+  - Not done, disclosed in CL-19: never actually heard on a device; locale left at device-default rather than pinned to en-IN like the recognizer.
+- [x] Task 12 — Timetable extraction and camera/import review.
+  - `core/.../imports/TimetableExtractor.kt`: pure, fully tested — day/time/label/room extraction, AM/PM ambiguity and unrecognized-day flagging, a 200-line size guard, and an explicit test that instruction-shaped text produces no entry.
+  - Verified via `./dev d` (not assumed) that a clean entry's generated sentence round-trips through the real `GrammarParser` into a bounded `PINNED_NOTE` cue.
+  - `app/.../camera/TimetableCaptureScreen.kt` + `TimetableOcr.kt`: real CameraX (pinned 1.5.3, not 1.6.2 — AGP mismatch found and fixed the same way as the LiteRT-LM pin) + bundled ML Kit text recognition, plus a Photo Picker fallback needing no storage permission.
+  - `app/.../ui/ImportReviewScreen.kt`: multi-row review; each row's "Review this cue" reuses the exact same `draft()` → Review → Approve path as any typed cue — nothing arms from the import screen itself.
+  - New, deliberate `CAMERA` permission, one-shot and released the moment the capture screen closes.
+  - Verified: `./dev t`/`./dev b`/`./dev perms` all green; `INTERNET` still absent even with ML Kit's Play-Services-adjacent transitive deps.
+  - Not done, disclosed in CL-20: no real camera/OCR round trip has run on a device; pinned-note label casing is lowercased by the parser (cosmetic).
+- [ ] Checkpoint — Brain and camera green
+- [x] Task 13 — Cue Cards and QR.
+  - `core/.../share/CueCard.kt`: versioned card format, digest-checked decode, and reimport that re-resolves every device/place/context by label against the receiving phone's own stores — never the sender's id/version. New `DraftSourceId.IMPORTED_CARD`.
+  - `CueCardTest.kt` (9 tests): clean round-trip, structural absence of approval/status/capabilities, missing-entity refusal, correct rebinding to a *different* address under the same label, tamper detection, malformed input, future-schema refusal, and digest stability.
+  - `./dev card`: a full phone-to-phone demo (two different device addresses) — export, tamper, reimport — verified to actually run, not just pass unit tests.
+  - App layer: `CueCardShareScreen.kt` (renders a QR via zxing-core, plus a text-share fallback) and `CueCardScanScreen.kt` (CameraX capture or gallery pick → ML Kit barcode scan → `CueCards.reimport` → straight to the ordinary Review screen, or a clear message on failure). Wired from Routine Detail ("Share as a Cue Card") and Home ("Scan a Cue Card").
+  - Verified: `./dev t`/`./dev b`/`./dev perms` all green; `INTERNET` still absent with zxing-core and ML Kit barcode scanning added.
+  - Not done, disclosed in CL-21: no real QR render/scan/share round trip has run on a device; a missing entity refuses the whole import with no in-app "add it and retry" flow yet.
+- [x] Task 14 — Desk Bridge and static Console.
+  - `core/.../export/CuesExporter.kt`: read-only JSON export (routines' own review text, receipts, forecast, coach evidence, ledger, last inference report) — 6 tests, including "no inference report yet is shown as absent, never fabricated" and "an empty phone exports empty sections, not an error."
+  - `core/src/main/resources/console/template.html` + `ConsoleMain`/`ConsoleHtml`: a single self-contained HTML file (JSON embedded inline, no fetch, no CDN). `./dev console`'s output was actually opened in a browser and every section confirmed rendering (not just assumed).
+  - `app/.../bridge/ExportImport.kt`: builds the same Console from live phone state and shares it via a new `FileProvider` (scoped `<provider>` + `file_paths.xml`) — `content://`, never a bare `file://`.
+  - `ContextsScreen.kt`: a "Suggest: Desk" one-tap pre-fill (charging + a connected device) when both signals are available — the Desk named-context template, built on infrastructure that already existed rather than new UI.
+  - Coordinated with a concurrent peer session also working this repo (Task 15/16, utility bindings/macros) to avoid clobbering shared files (`registry/receipt/reviewcopy/normalizer/ports/store`, then `AndroidManifest.xml`/`app/build.gradle.kts`) — see the session transcript.
+  - Not done, disclosed in CL-22: no real Office Kit transfer has run; the `.cue.txt`/`.cuecard` *drop-onto-the-phone* half of the bridge has no automatic routing yet (QR scan / manual text share are the working paths); the Desk quick-fill is untested with a real paired laptop.
+- [ ] Checkpoint — Bridge green
+- [~] Task 15 — Macro contracts and validator (in progress, peer session: `UiMacro.kt`, `MacroValidator.kt`)
+- [~] Task 16 — Accessibility utility bindings and one-shot screen read (in progress, peer session: `UtilityCatalog.kt`, `USE_UTILITY`, `CuesAccessibilityService.kt`)
+- [ ] Task 17 — AppFunctions provider
+- [ ] Checkpoint — Ecosystem green
+- [ ] Task 18 — Documentation and claim discipline
+- [ ] Task 19 — iQOO device verification matrix
+- [ ] Task 20 — Final regression, offline demo, disclosure report
+
+### Checkpoint — Typed actions, detail (24 Sep 2026)
+
+- [x] Core tests prove risk, validation, presence, restoration-if-unchanged, UNKNOWN→BLOCKED-not-guessed, and PARTIAL-while-pending behavior (213 core tests green).
+- [x] Review surfaces every non-owned effect (`ActionRisk.friendlyName()`, per-action "you finish this." / "Cues cannot undo this." captions) and never accepts a model-supplied package/URL scheme (`OpenApp`/`OpenLink` validated against a picker-only shape and a closed scheme allowlist).
+- [x] APK builds and `INTERNET` remains absent (`./dev b`, `./dev perms`).
+- [ ] Device-side: nothing above has run on the loaner yet — see CL-17 for what's still simulated/unverified.
+
+## Standing verification after each applicable slice
+
+- [ ] Focused tests written failing first and then made green
+- [ ] `./dev t`
+- [ ] `./dev b`
+- [ ] `./dev perms` (must report no `INTERNET`)
+- [ ] Device-dependent claims remain explicitly unverified until observed

@@ -2,6 +2,7 @@ package com.cues.app
 
 import android.app.Application
 import android.util.Log
+import com.cues.app.drafting.LiteRtLmSession
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
@@ -15,6 +16,11 @@ import com.cues.core.CueService
 import com.cues.core.drafting.DifferentialDrafter
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.PairedDevice
+import com.cues.core.model.ActionArgs
+import com.cues.core.model.ActionId
+import com.cues.core.model.UtilityId
+import com.cues.core.model.UtilityState
+import com.cues.core.ports.ActionOutcome
 import com.cues.core.ports.Clock
 import com.cues.core.signals.AdapterSupervisor
 import com.cues.core.store.JsonFileStore
@@ -75,7 +81,17 @@ class CuesApplication : Application() {
     /** Sprint 3.0's target-phone results, kept outside the rule store. */
     val deviceDiagnostics: DeviceDiagnosticsRepository by lazy { DeviceDiagnosticsRepository(this) }
 
-    private val executor by lazy { AndroidActionExecutor(this) }
+    private val executor by lazy { AndroidActionExecutor(this, macros = store, utilityBindings = store) }
+
+    /**
+     * Runs [com.cues.core.model.ActionId.USE_UTILITY] directly, outside any
+     * routine or session — the Utility Bindings screen's "Test on"/"Test
+     * off" buttons, so teaching a binding can be proven before it is ever
+     * attached to an approved cue. Blocks the calling thread (macro replay
+     * polls with bounded waits); callers must not run it on the main thread.
+     */
+    fun testUseUtility(utilityId: UtilityId, state: UtilityState): ActionOutcome =
+        executor.execute(ActionId.USE_UTILITY, ActionArgs.UseUtility(utilityId, state), "utility-test")
     private val capabilities by lazy { AndroidCapabilityProvider(this) }
 
     /**
@@ -90,9 +106,18 @@ class CuesApplication : Application() {
      * "which is intended?" the moment the two disagree, instead of quietly
      * running only the winner going forward.
      */
+    /**
+     * Where a side-loaded `.litertlm` model is expected, under private app
+     * storage — never `getExternalFilesDir`, and never written by this app.
+     * A dev pushes it with `adb push model.litertlm <this path>`; nothing
+     * here downloads one. Its absence is the ordinary, honest case: every
+     * build without one falls all the way back to the parser.
+     */
+    private val modelFile: File by lazy { File(filesDir, "models/model.litertlm") }
+
     private val drafter by lazy {
         DifferentialDrafter(
-            first = OnDeviceLlmDrafter(),
+            first = OnDeviceLlmDrafter(session = LiteRtLmSession(this, modelFile.path)),
             second = GrammarParser(
                 pairedDeviceProvider = ::pairedDevices,
                 contextsProvider = { store.allContexts() },
@@ -114,6 +139,8 @@ class CuesApplication : Application() {
             patches = store,
             contexts = store,
             places = store,
+            facts = store,
+            usageLedger = store,
         )
     }
 

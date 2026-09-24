@@ -60,6 +60,9 @@ import com.cues.core.model.Routine
 import com.cues.core.review.ReviewCopy
 import com.cues.core.review.Template
 import com.cues.core.review.Templates
+import com.cues.core.assistant.PendingCommand
+import com.cues.core.assistant.Turn
+import com.cues.core.coach.Suggestion
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,10 +83,28 @@ fun HomeScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenToday: () -> Unit,
     onOpenContexts: () -> Unit,
+    onOpenMemory: () -> Unit,
+    onOpenLearning: () -> Unit,
+    onOpenUtilityBindings: () -> Unit = {},
+    onOpenTimetableCapture: () -> Unit = {},
+    onOpenCueCardScan: () -> Unit = {},
+    onExportConsole: () -> Unit = {},
+    speakReplies: Boolean = false,
+    onToggleSpeakReplies: () -> Unit = {},
     onStartVoice: (onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) -> Unit,
     deviceCandidates: List<PairedDevice>?,
     onSelectDevice: (PairedDevice) -> Unit,
     onDismissDevicePicker: () -> Unit,
+    appQuery: String? = null,
+    appCandidates: List<com.cues.app.runtime.InstalledApp>? = null,
+    onSelectApp: (com.cues.app.runtime.InstalledApp) -> Unit = {},
+    onDismissAppPicker: () -> Unit = {},
+    assistantTurns: List<Turn> = emptyList(),
+    onConfirmCommand: (PendingCommand) -> Unit = { _ -> },
+    onHandoffToJovi: () -> Unit = {},
+    coachSuggestion: Suggestion? = null,
+    onAcceptSuggestion: (Suggestion) -> Unit = { _ -> },
+    onDismissSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
 ) {
     var text by remember { mutableStateOf("") }
     var isListening by remember { mutableStateOf(false) }
@@ -195,16 +216,57 @@ fun HomeScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onOpenContexts()
                     }) { Text("Contexts & places") }
+                    TextButton(onClick = onOpenMemory) { Text("Memory") }
+                    TextButton(onClick = onOpenLearning) { Text("Learning") }
+                    TextButton(onClick = onOpenTimetableCapture) { Text("Import timetable") }
+                    TextButton(onClick = onOpenCueCardScan) { Text("Scan a Cue Card") }
+                    TextButton(onClick = onExportConsole) { Text("Export Cue Console") }
+                    TextButton(onClick = onOpenUtilityBindings) { Text("Utility bindings") }
                 }
             }
         }
 
         Spacer(Modifier.height(20.dp))
 
+        if (assistantTurns.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "ASK CUES",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cuesColors.ink200,
+                )
+                // Reads back Cues' own exact reply text — never a paraphrase,
+                // never something that can approve or confirm on its own. See
+                // ReplySpeaker.
+                TextButton(onClick = onToggleSpeakReplies) {
+                    Text(if (speakReplies) "Speaking replies" else "Speak replies")
+                }
+            }
+        }
+        AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
+        coachSuggestion?.let { suggestion ->
+            Surface(color = cuesColors.bg300, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Cues noticed a pattern", style = MaterialTheme.typography.titleMedium)
+                    suggestion.evidence.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall, color = cuesColors.ink200) }
+                    Text(suggestion.proposal, modifier = Modifier.padding(top = 6.dp))
+                    Row {
+                        TextButton(onClick = { onAcceptSuggestion(suggestion) }) { Text("Review idea") }
+                        TextButton(onClick = { onDismissSuggestion(suggestion, false) }) { Text("Not now") }
+                        TextButton(onClick = { onDismissSuggestion(suggestion, true) }) { Text("Never") }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            label = { Text("Describe a cue") },
+            label = { Text("Ask Cues about your cues") },
             placeholder = { Text("When my earbuds connect after 6 PM on weekdays...") },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -249,7 +311,7 @@ fun HomeScreen(
             if (isDrafting) {
                 CircularProgressIndicator(modifier = Modifier.height(18.dp))
             } else {
-                Text("Draft")
+                Text("Ask Cues")
             }
         }
 
@@ -296,6 +358,15 @@ fun HomeScreen(
             candidates = candidates,
             onSelectDevice = onSelectDevice,
             onDismiss = onDismissDevicePicker,
+        )
+    }
+
+    appCandidates?.let { candidates ->
+        AppPickerDialog(
+            query = appQuery.orEmpty(),
+            candidates = candidates,
+            onSelectApp = onSelectApp,
+            onDismiss = onDismissAppPicker,
         )
     }
 }
@@ -404,6 +475,50 @@ private fun DevicePickerDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(device.label) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Which installed app "open X" meant. The list is never empty text a model
+ * guessed at — [candidates] comes from an actual `PackageManager` query,
+ * ranked against [query], and the choice re-drafts with that exact package
+ * name and label — see [com.cues.core.drafting.GrammarParser]'s
+ * `action.app` clarification.
+ */
+@Composable
+private fun AppPickerDialog(
+    query: String,
+    candidates: List<com.cues.app.runtime.InstalledApp>,
+    onSelectApp: (com.cues.app.runtime.InstalledApp) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Which app did you mean?") },
+        text = {
+            if (candidates.isEmpty()) {
+                Text(
+                    "No installed app matches \"$query\".",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cuesColors.ink200,
+                )
+            } else {
+                LazyColumn(modifier = Modifier.height(280.dp)) {
+                    items(candidates, key = { it.packageName }) { app ->
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSelectApp(app)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(app.label) }
+                    }
                 }
             }
         },
