@@ -597,9 +597,18 @@ class CueService(
     }
 
     /** True when [routine]'s trigger is even the right shape for this event — same kind, same device. */
-    private fun TriggerEvent.couldStart(routine: Routine): Boolean =
-        SignalRegistry.listensFor(routine.trigger, kind) &&
+    private fun TriggerEvent.couldStart(routine: Routine): Boolean {
+        // A manual run names its target explicitly (CL-28): Trigger.Manual
+        // itself is a singleton with nothing of its own to match against, so
+        // without this check every armed manual cue would start from one
+        // MANUAL_RUN event. An unscoped one (routineId == null) starts none,
+        // rather than guessing.
+        if (kind == EventKind.MANUAL_RUN && routine.trigger is com.cues.core.model.Trigger.Manual) {
+            return routineId == routine.id
+        }
+        return SignalRegistry.listensFor(routine.trigger, kind) &&
             SignalRegistry.match(routine.trigger, this).truth == com.cues.core.eval.Truth.MATCH
+    }
 
     /**
      * The exact-alarm callback for one session's deadline.

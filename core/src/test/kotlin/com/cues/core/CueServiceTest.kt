@@ -132,6 +132,35 @@ class CueServiceTest {
     }
 
     @Test
+    fun `a manual run only starts the routine it names, never every armed manual cue`() = runTest {
+        val targeted = Fixtures.heroRoutine(conditions = emptyList()).copy(
+            id = "manual-a", trigger = Trigger.Manual, endConditions = listOf(EndCondition.ManualStop),
+        )
+        val other = targeted.copy(id = "manual-b")
+        store.save(targeted)
+        store.save(other)
+
+        val results = service.onDeviceEvent(TriggerEvent(EventKind.MANUAL_RUN, Fixtures.NOW, routineId = "manual-a"))
+
+        val started = results.filterIsInstance<EngineResult.Started>()
+        assertEquals(1, started.size, "CL-28: an untargeted manual run must not start every armed manual cue")
+        assertEquals("manual-a", started.single().session.routineId)
+        assertTrue(store.activeFor("manual-b").isEmpty(), "the un-named routine must not have started at all")
+    }
+
+    @Test
+    fun `an unscoped manual run starts nothing rather than guessing`() = runTest {
+        val routine = Fixtures.heroRoutine(conditions = emptyList()).copy(
+            id = "manual-a", trigger = Trigger.Manual, endConditions = listOf(EndCondition.ManualStop),
+        )
+        store.save(routine)
+
+        val results = service.onDeviceEvent(TriggerEvent(EventKind.MANUAL_RUN, Fixtures.NOW))
+
+        assertTrue(results.isEmpty(), "no routineId names no target, so nothing may start")
+    }
+
+    @Test
     fun `a NEEDS_USER action waits, and CueService retryPendingActions runs it once someone is present`() = runTest {
         val attention = ToggleAttention(present = false)
         val serviceWithAttention = CueService(

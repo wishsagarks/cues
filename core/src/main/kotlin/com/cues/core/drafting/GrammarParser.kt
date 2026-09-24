@@ -499,6 +499,17 @@ class GrammarParser(
             val url = match.groupValues[1].trimEnd('.', ',', ')', ';')
             add(ActionSpec(ActionId.OPEN_LINK, ActionArgs.OpenLink(url)))
         }
+
+        UTILITY_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val utilityId = when (match.groupValues[2]) {
+                "eye protection" -> UtilityId.EYE_PROTECTION
+                "ultra saver" -> UtilityId.ULTRA_SAVER
+                else -> UtilityId.GAME_MODE
+            }
+            val state = if (match.groupValues[1] in setOf("turn on", "enable")) UtilityState.ON else UtilityState.OFF
+            add(ActionSpec(ActionId.USE_UTILITY, ActionArgs.UseUtility(utilityId, state)))
+        }
     }
 
     /** The app name text named after "open"/"launch", when no picker has resolved one yet. */
@@ -662,6 +673,14 @@ class GrammarParser(
         val ALARM_PATTERN = Regex("\\b(?:set|create)\\s+an?\\s+alarm\\s+(?:for|at)\\s+($TIME)\\b")
 
         val LINK_PATTERN = Regex("\\b(?:open|visit)\\s+(https?://\\S+|tel:\\S+)")
+
+        // CL-23 item 7: the only phrasing that reaches USE_UTILITY. The
+        // catalog's own labels ("Eye protection", "Ultra saver", "Game
+        // Mode") are the only names recognized — a closed vocabulary over a
+        // closed action, the same discipline every other action here keeps.
+        val UTILITY_PATTERN = Regex(
+            "\\b(turn on|turn off|enable|disable)\\s+(eye protection|ultra saver|game mode)\\b",
+        )
         val DEVICE_WORDS = listOf(
             "earbuds", "ear buds", "buds", "headphones", "headset",
             "airpods", "speaker", "watch", "car",

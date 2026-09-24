@@ -100,6 +100,15 @@ data class TriggerEvent(
     val zoneId: String? = null,
     val networkLabel: String? = null,
     val provenance: EventProvenance = EventProvenance.PHYSICAL,
+    /**
+     * Which routine a manual run (`EventKind.MANUAL_RUN`) targets. Every
+     * other trigger kind identifies its target through its own fields
+     * (`deviceId`, `networkLabel`, ...); a manual run has none of its own,
+     * so without this, one `MANUAL_RUN` event would start every armed
+     * `Trigger.Manual` routine at once — see `CueService.couldStart` and
+     * CLEANUP.md CL-28.
+     */
+    val routineId: String? = null,
 )
 
 @Serializable

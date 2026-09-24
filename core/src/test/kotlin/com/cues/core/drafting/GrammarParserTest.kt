@@ -124,6 +124,20 @@ class GrammarParserTest {
     }
 
     @Test
+    fun `utility phrasing drafts USE_UTILITY with the named utility and state (CL-23 item 7)`() {
+        val on = assertIs<DraftResult.Drafted>(parser().parse("when charging, turn on eye protection")).routine
+        val onAction = on.actions.single()
+        assertEquals(ActionId.USE_UTILITY, onAction.actionId)
+        assertEquals(UtilityId.EYE_PROTECTION, (onAction.args as ActionArgs.UseUtility).utilityId)
+        assertEquals(UtilityState.ON, (onAction.args as ActionArgs.UseUtility).state)
+
+        val off = assertIs<DraftResult.Drafted>(parser().parse("when charging, disable ultra saver")).routine
+        val offAction = off.actions.single()
+        assertEquals(UtilityId.ULTRA_SAVER, (offAction.args as ActionArgs.UseUtility).utilityId)
+        assertEquals(UtilityState.OFF, (offAction.args as ActionArgs.UseUtility).state)
+    }
+
+    @Test
     fun `media phrasing drafts the matching media command`() {
         val result = parser().parse("when charging, pause the music")
 
