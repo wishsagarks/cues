@@ -103,3 +103,12 @@ tasks.register<JavaExec>("console") {
     jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
     if (project.hasProperty("q")) args(project.property("q").toString())
 }
+
+// `./dev insights` routes here.
+tasks.register<JavaExec>("insights") {
+    group = "cues"
+    description = "Drives a synthetic week through CueService and prints its Insights report — no device."
+    mainClass.set("com.cues.core.cli.InsightsMainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}

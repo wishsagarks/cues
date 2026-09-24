@@ -174,13 +174,27 @@ object Detectors {
         unknownBlocker(events, now), blockedAction(events, now), signalWithoutCue(events, now),
     ).filterIsInstance<Detection.Suggest>().map { it.suggestion }
 
-    private inline fun guarded(events: List<LedgerEvent>, now: Long, detect: () -> Detection): Detection {
+    private inline fun guarded(events: List<LedgerEvent>, now: Long, detect: () -> Detection): Detection =
+        if (conclusionsSuppressed(events, now)) Detection.NotEnoughData() else detect()
+
+    /** Milliseconds of the coach's window that recorded coverage gaps say Cues could not see. */
+    fun coverageMissingMillis(events: List<LedgerEvent>, now: Long): Long {
         val start = now - WINDOW
-        val missing = events.filterIsInstance<LedgerEvent.CoverageGap>().sumOf { gap ->
+        return events.filterIsInstance<LedgerEvent.CoverageGap>().sumOf { gap ->
             (minOf(now, gap.toMillis) - maxOf(start, gap.fromMillis)).coerceAtLeast(0)
         }
-        return if (missing > WINDOW * 0.30) Detection.NotEnoughData() else detect()
     }
+
+    /**
+     * True when the coach refuses to draw conclusions because more than 30%
+     * of its window is coverage gaps. Public so Insights can say so using this
+     * exact rule rather than a second opinion about the same data.
+     */
+    fun conclusionsSuppressed(events: List<LedgerEvent>, now: Long): Boolean =
+        coverageMissingMillis(events, now) > WINDOW * 0.30
+
+    /** The span the coach looks back over, and the only span the ledger keeps. */
+    const val COACH_WINDOW_MILLIS: Long = WINDOW
 
     private fun formatMinute(minute: Int) = "%02d:%02d".format(minute / 60, minute % 60)
 }

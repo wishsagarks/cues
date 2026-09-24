@@ -43,7 +43,9 @@ import com.cues.core.ports.PlaceStore
 import com.cues.core.ports.FactStore
 import com.cues.core.ports.Embedder
 import com.cues.core.inference.InferenceReport
-import com.cues.core.receipt.Receipts
+import com.cues.core.receipt.ReceiptRecord
+import com.cues.core.receipt.ReceiptRecords
+import com.cues.core.model.EventProvenance
 import com.cues.core.session.EngineResult
 import com.cues.core.session.SessionEngine
 import com.cues.core.signals.SignalRegistry
@@ -101,6 +103,12 @@ class CueService(
      * CL-25 for why a real phone needs a real one wired in.
      */
     private val attention: com.cues.core.ports.DeviceAttention = com.cues.core.ports.DeviceAttention { true },
+    /**
+     * Where structured receipts go, alongside the text ones. Optional, like
+     * [usageLedger]: `null` records text receipts only, exactly as before this
+     * parameter existed. Nothing that decides behaviour reads from it.
+     */
+    private val receiptLog: com.cues.core.ports.ReceiptLog? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock, attention = attention)
@@ -558,19 +566,19 @@ class CueService(
 
             val exit = engine.onExitEvent(routine, event)
             if (exit !is EngineResult.Ignored) {
-                recordReceipt(routine, exit)
+                recordReceipt(routine, exit, event.provenance)
                 results += exit
             }
 
             if (event.couldStart(routine)) {
                 patchReason(routine, event.atMillis)?.let { reason ->
                     val skipped = EngineResult.Skipped(listOf(reason))
-                    recordReceipt(routine, skipped)
+                    recordReceipt(routine, skipped, event.provenance, snapshot)
                     results += skipped
                     return@flatMap results
                 }
                 val start = engine.onTriggerEvent(routine, event, snapshot)
-                recordReceipt(routine, start)
+                recordReceipt(routine, start, event.provenance, snapshot)
                 results += start
             }
 
@@ -624,7 +632,7 @@ class CueService(
     /** The reconnect grace window for one session has elapsed without a reconnect. */
     fun onGraceElapsed(sessionId: String): EngineResult? {
         val routine = routineForSession(sessionId) ?: return null
-        return engine.onGraceElapsed(routine, sessionId).also { recordReceipt(routine, it) }
+        return engine.onGraceElapsed(routine, sessionId).also { recordReceipt(routine, it, EventProvenance.PHYSICAL) }
     }
 
     /** The user's own stop control for a running session. */
@@ -632,8 +640,12 @@ class CueService(
 
     private fun exitFor(sessionId: String, kind: EventKind): EngineResult? {
         val routine = routineForSession(sessionId) ?: return null
-        val event = TriggerEvent(kind, clock.nowMillis())
-        return engine.onExitEvent(routine, event, sessionId).also { recordReceipt(routine, it) }
+        // A stop button is the user's own hand; a deadline alarm is a real
+        // occurrence. Neither is a rehearsal, and the structured receipt keeps
+        // the difference rather than filing both as PHYSICAL.
+        val provenance = if (kind == EventKind.MANUAL_STOP) EventProvenance.MANUAL else EventProvenance.PHYSICAL
+        val event = TriggerEvent(kind, clock.nowMillis(), provenance = provenance)
+        return engine.onExitEvent(routine, event, sessionId).also { recordReceipt(routine, it, provenance) }
     }
 
     private fun routineForSession(sessionId: String): Routine? {
@@ -652,7 +664,7 @@ class CueService(
         val retried = engine.retryPendingCleanup(byId)
 
         (reconciled + retried).forEach { session ->
-            byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session)) }
+            byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session), provenance = null) }
         }
         return reconciled + retried
     }
@@ -680,8 +692,10 @@ class CueService(
         return pending.mapNotNull { session ->
             val routine = byId[session.routineId] ?: return@mapNotNull null
             engine.retryPendingActions(routine, session.id)?.also { updated ->
-                val receipt = com.cues.core.receipt.Receipts.resumed(updated)
-                receipts.record(updated.id, listOf(receipt.headline) + receipt.lines)
+                // Text and structure from one record, the same rule recordReceipt follows.
+                val record = ReceiptRecords.resumed(routine, updated, clock.nowMillis())
+                receipts.record(updated.id, record.textLines)
+                receiptLog?.append(record)
             }
         }
     }
@@ -697,8 +711,36 @@ class CueService(
     fun checkBluetoothCoverage(currentlyConnectedDeviceIds: Set<String>): List<Session> {
         val byId = routines.all().associateBy { it.id }
         val gaps = engine.checkBluetoothCoverage(byId, currentlyConnectedDeviceIds)
-        gaps.forEach { session -> byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session)) } }
+        gaps.forEach { session -> byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session), provenance = null) } }
         return gaps
+    }
+
+    // -------------------------------------------------------------- insights
+
+    /**
+     * The Insights report for [window], computed from this phone's own records.
+     *
+     * Reads are bounded: sessions through [SessionStore.recent] over two
+     * windows (the second only feeds the time-in-cues delta), structured
+     * receipts over one, and the ledger's own 14-day retention. Unfinished
+     * sessions are added from [SessionStore.allUnfinished] whatever their
+     * age, because an outstanding cleanup must never fall out of view just
+     * because nothing has touched its record lately. Blocking I/O — call it
+     * off the main thread.
+     */
+    fun insights(window: com.cues.core.insights.InsightsWindow): com.cues.core.insights.InsightsReport {
+        val now = clock.nowMillis()
+        val windowed = sessions.recent(now - 2 * window.millis)
+        val unfinished = sessions.allUnfinished()
+        return com.cues.core.insights.Insights.compute(
+            sessions = (windowed + unfinished).distinctBy { it.id },
+            receiptRecords = receiptLog?.receiptRecords(now - window.millis).orEmpty(),
+            ledger = usageLedger?.let { com.cues.core.insights.LedgerView(it.signalOptIn, it.ledgerEvents()) },
+            routines = routines.all(),
+            window = window,
+            clock = clock,
+            zone = zoneId(),
+        )
     }
 
     // ---------------------------------------------------------- diagnostics
@@ -744,9 +786,25 @@ class CueService(
 
     // ------------------------------------------------------------- receipts
 
-    private fun recordReceipt(routine: Routine, result: EngineResult) {
-        val receipt = Receipts.forResult(routine, result)
-        receipts.record(sessionIdFor(routine, result), listOf(receipt.headline) + receipt.lines)
+    /**
+     * Files one outcome, as text and as structure.
+     *
+     * Both come from a single [ReceiptRecord], built once from [result]: the
+     * text log is written from the record's own headline and lines, so the
+     * text a person reads and the structure a screen counts cannot disagree.
+     * [provenance] is null only when no event drove this at all — boot
+     * reconciliation and coverage checks.
+     */
+    private fun recordReceipt(
+        routine: Routine,
+        result: EngineResult,
+        provenance: EventProvenance?,
+        observed: com.cues.core.model.ContextSnapshot? = null,
+    ) {
+        val key = sessionIdFor(routine, result)
+        val record = ReceiptRecords.forResult(routine, result, key, clock.nowMillis(), provenance, observed)
+        receipts.record(key, record.textLines)
+        receiptLog?.append(record)
         when (result) {
             is EngineResult.Started -> {
                 result.session.actions.filter { it.state == com.cues.core.model.ActionState.BLOCKED }.forEach {

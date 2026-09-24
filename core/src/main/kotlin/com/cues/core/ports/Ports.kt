@@ -6,6 +6,7 @@ import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.model.ActionState
 import com.cues.core.model.OwnedResource
+import com.cues.core.model.CleanupObligation
 import com.cues.core.model.Session
 import com.cues.core.model.NamedContext
 import com.cues.core.model.Patch
@@ -35,6 +36,19 @@ interface SessionStore {
     fun find(sessionId: String): Session?
     fun activeFor(routineId: String): List<Session>
     fun allUnfinished(): List<Session>
+
+    /**
+     * Sessions that were still running at [sinceMillis] or began after it:
+     * everything whose `endedAtMillis` is null or not before [sinceMillis].
+     *
+     * Exists so a history screen can read a bounded window instead of every
+     * session ever recorded. An implementation may skip, without decoding,
+     * any record that has not been written since [sinceMillis] — which means
+     * an unfinished session untouched for that long can be absent here.
+     * Anything that must see every unfinished session, cleanup included,
+     * asks [allUnfinished] instead; this is a window, not an inventory.
+     */
+    fun recent(sinceMillis: Long): List<Session>
 }
 
 /** The result of asking the registry to perform one action. */
@@ -43,6 +57,13 @@ data class ActionOutcome(
     val detail: String? = null,
     /** What this action now makes the session responsible for releasing. */
     val acquired: OwnedResource? = null,
+    /**
+     * How [state] was confirmed. The engine copies it onto the
+     * [com.cues.core.model.ActionRecord] (or, for a release, the obligation)
+     * unchanged; it is the executor's claim to make, because only the
+     * executor knows whether it re-read anything.
+     */
+    val verification: com.cues.core.model.Verification = com.cues.core.model.Verification.NONE,
 )
 
 /**
@@ -60,10 +81,51 @@ interface ActionExecutor {
      * legitimately try twice.
      */
     fun release(resource: OwnedResource, sessionId: String): ActionOutcome
+
+    /**
+     * Releases one obligation, with the whole session record to hand.
+     *
+     * This is the overload [com.cues.core.session.SessionEngine] calls. It
+     * exists so a release can derive what to restore from durable data —
+     * [CleanupObligation.args], the approved action arguments persisted at
+     * acquisition — instead of from anything held in memory, which a process
+     * death between execute and release would erase.
+     *
+     * The default delegates to the resource-only overload, so an executor
+     * that has not adopted this yet keeps its current behaviour exactly.
+     *
+     * TODO(app): `AndroidActionExecutor` must override this. For
+     * `OwnedResource.UTILITY_CONTRIBUTION` it should take the restore target
+     * from `obligation.args as? ActionArgs.UseUtility` (restore = the opposite
+     * of `args.state`, for `args.utilityId`), not from its in-memory
+     * `utilityRestoreState`; when `args` is null (an obligation recorded
+     * before this field existed) it must return `COMPENSATION_FAILED` with
+     * "Can't tell what to restore", never `SUCCEEDED`. Its `execute` must also
+     * return `Verification.STEPS_CONFIRMED` for `USE_UTILITY` (macro
+     * postconditions only), and `READ_BACK` wherever it already re-reads
+     * platform state. See plan §10.4 and CLEANUP.md CL-23 item 8.
+     */
+    fun release(obligation: CleanupObligation, session: Session): ActionOutcome =
+        release(obligation.resource, session.id)
 }
 
 interface ReceiptSink {
     fun record(sessionId: String, lines: List<String>)
+}
+
+/**
+ * Persistence for structured receipts, alongside the text ones.
+ *
+ * Optional, the same way the usage ledger is: a caller that supplies none
+ * still gets every text receipt, and nothing that decides behaviour ever
+ * reads from here. It exists so Insights and the receipt screens can count
+ * and filter by reason code instead of parsing prose.
+ */
+interface ReceiptLog {
+    fun append(record: com.cues.core.receipt.ReceiptRecord)
+
+    /** Records at or after [sinceMillis], oldest first. */
+    fun receiptRecords(sinceMillis: Long = 0L): List<com.cues.core.receipt.ReceiptRecord>
 }
 
 /**

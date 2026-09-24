@@ -1,5 +1,7 @@
 package com.cues.core.eval
 
+import kotlinx.serialization.Serializable
+
 /**
  * Three-valued logic, because two values are not enough to be honest.
  *
@@ -8,6 +10,7 @@ package com.cues.core.eval
  * into `false` invents a fact, and collapsing it into `true` acts on one.
  * [UNKNOWN] keeps the uncertainty intact until a human sees it.
  */
+@Serializable
 enum class Truth {
     MATCH,
     NO_MATCH,

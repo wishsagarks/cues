@@ -11,7 +11,9 @@ import com.cues.core.model.Fact
 import com.cues.core.model.UiMacro
 import com.cues.core.model.UtilityBinding
 import com.cues.core.model.UtilityId
+import com.cues.core.ports.ReceiptLog
 import com.cues.core.ports.ReceiptSink
+import com.cues.core.receipt.ReceiptRecord
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
 import com.cues.core.ports.NamedContextStore
@@ -58,13 +60,14 @@ class JsonFileStore(
     private val maxReceiptFiles: Int = 200,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     initialSignalOptIn: Boolean = false,
-) : RoutineStore, SessionStore, ReceiptSink, NamedContextStore, PatchStore, PlaceStore, FactStore,
+) : RoutineStore, SessionStore, ReceiptSink, ReceiptLog, NamedContextStore, PatchStore, PlaceStore, FactStore,
     UsageLedger, CoachStateStore, MacroStore, UtilityBindingStore {
 
     private val routinesDir = File(root, "routines").apply { mkdirs() }
     private val sessionsDir = File(root, "sessions").apply { mkdirs() }
     private val quarantineDir = File(root, "quarantine").apply { mkdirs() }
     private val receiptsDir = File(root, "receipts").apply { mkdirs() }
+    private val receiptRecordsDir = File(root, "receipts-v2").apply { mkdirs() }
     private val contextsDir = File(root, "contexts").apply { mkdirs() }
     private val patchesDir = File(root, "patches").apply { mkdirs() }
     private val placesDir = File(root, "places").apply { mkdirs() }
@@ -162,7 +165,64 @@ class JsonFileStore(
 
     // -------------------------------------------------------- SessionStore
 
-    override fun save(session: Session) = writeAtomic(File(sessionsDir, "${session.id}.json"), session)
+    /**
+     * Writes the session, then stamps the file with this store's clock.
+     *
+     * The stamp is what [recent] and [pruneSessions] filter on before
+     * decoding anything, so it has to be the store's notion of "now" — the
+     * same injectable clock the ledger's retention already uses — rather than
+     * whatever the filesystem happened to record.
+     *
+     * Saving a session that has ended is also the moment to prune: it is
+     * exactly when the set of prunable sessions can grow, and the check
+     * decodes only files already older than the retention window.
+     */
+    override fun save(session: Session) {
+        val file = File(sessionsDir, "${session.id}.json")
+        writeAtomic(file, session)
+        file.setLastModified(nowMillis())
+        if (session.endedAtMillis != null) pruneSessions()
+    }
+
+    override fun recent(sinceMillis: Long): List<Session> =
+        sessionsDir.listJsonFiles()
+            // Coarse filesystems keep whole seconds (FAT keeps two), so the
+            // pre-filter is widened slightly; the decoded filter below is exact.
+            .filter { it.lastModified() >= sinceMillis - MTIME_SLACK_MILLIS }
+            .mapNotNull { readSession(it) }
+            .filter { (it.endedAtMillis ?: Long.MAX_VALUE) >= sinceMillis }
+
+    /**
+     * Deletes sessions that ended more than [SESSION_RETENTION_MILLIS] ago
+     * and owe nothing. Returns how many went.
+     *
+     * A session with any unreleased obligation is never deleted, however old:
+     * the FDD requires cleanup obligations to stay visible until resolved, and
+     * the session file is where they live. The same goes for a session with
+     * no end recorded — a crash mid-start leaves exactly that, and it is
+     * evidence that something may still need releasing.
+     */
+    fun pruneSessions(): Int {
+        val cutoff = nowMillis() - SESSION_RETENTION_MILLIS
+        var pruned = 0
+        sessionsDir.listJsonFiles()
+            // A session that ended before the cutoff was last written no
+            // later than its end, unless a cleanup retry touched it since —
+            // and then it is not one we would delete anyway.
+            .filter { it.lastModified() < cutoff }
+            .forEach { file ->
+                val session = readSession(file) ?: return@forEach
+                if (session.isPrunable(cutoff) && file.delete()) pruned++
+            }
+        return pruned
+    }
+
+    private fun Session.isPrunable(cutoff: Long): Boolean {
+        val ended = endedAtMillis ?: return false
+        return ended < cutoff &&
+            state in FINISHED_STATES &&
+            obligations.all { it.released }
+    }
 
     override fun find(sessionId: String): Session? = readSession(File(sessionsDir, "$sessionId.json"))
 
@@ -211,6 +271,50 @@ class JsonFileStore(
         files.take(files.size - maxReceiptFiles).forEach { it.delete() }
     }
 
+    // --------------------------------------------------------- ReceiptLog
+
+    /**
+     * Continues numbering from whatever is already on disk, so a restart
+     * never reuses a sequence number a surviving file still carries.
+     */
+    private val receiptRecordSeq = java.util.concurrent.atomic.AtomicLong(
+        receiptRecordFiles().mapNotNull { it.name.split('-').getOrNull(1)?.toLongOrNull() }.maxOrNull()?.plus(1) ?: 0L,
+    )
+
+    /**
+     * One file per record, named `<padded atMillis>-<padded sequence>-<kind>.json`.
+     *
+     * The padded stamp makes name order time order, so pruning and
+     * [receiptRecords]'s window both work from the directory listing alone,
+     * without decoding a file they are about to skip. The sequence breaks
+     * ties in append order and keeps two receipts from the same instant —
+     * a start and the skip it caused for another cue, say — from ever
+     * sharing a name.
+     */
+    override fun append(record: ReceiptRecord) {
+        val name = "%015d-%012d-%s.json".format(record.atMillis, receiptRecordSeq.getAndIncrement(), record.kind.name)
+        writeAtomic(File(receiptRecordsDir, name), record)
+        pruneReceiptRecords()
+    }
+
+    override fun receiptRecords(sinceMillis: Long): List<ReceiptRecord> =
+        receiptRecordFiles()
+            .filter { (it.stampPrefix() ?: Long.MAX_VALUE) >= sinceMillis }
+            .mapNotNull { readReceiptRecord(it) }
+            .filter { it.atMillis >= sinceMillis }
+            .sortedBy { it.atMillis } // stable: equal stamps keep file (append) order
+
+    private fun receiptRecordFiles(): List<File> = receiptRecordsDir.listJsonFiles().sortedBy { it.name }
+
+    /** Same cap, same oldest-first rule, as the text receipts these mirror. */
+    private fun pruneReceiptRecords() {
+        val files = receiptRecordFiles()
+        if (files.size <= maxReceiptFiles) return
+        files.take(files.size - maxReceiptFiles).forEach { it.delete() }
+    }
+
+    private fun File.stampPrefix(): Long? = name.substringBefore('-').toLongOrNull()
+
     // ------------------------------------------------------------ helpers
 
     /**
@@ -250,6 +354,7 @@ class JsonFileStore(
     private fun readBinding(file: File): UtilityBinding? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readLedgerEvent(file: File): LedgerEvent? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readCoachState(file: File): CoachState? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readReceiptRecord(file: File): ReceiptRecord? = readOrQuarantine(file) { json.decodeFromString(it) }
 
     private inline fun <T> readOrQuarantine(file: File, decode: (String) -> T): T? {
         if (!file.isFile) return null
@@ -277,4 +382,17 @@ class JsonFileStore(
 
     private fun File.listJsonFiles(): List<File> =
         (listFiles() ?: emptyArray()).filter { it.extension == "json" }
+
+    companion object {
+        /**
+         * How long a finished, fully released session is kept. Thirty days
+         * is the longest window Insights reads; nothing older is ever shown.
+         */
+        const val SESSION_RETENTION_MILLIS: Long = 30L * 86_400_000L
+
+        private const val MTIME_SLACK_MILLIS: Long = 2_000L
+
+        /** Terminal states that owe nothing by themselves. CLEANUP_PENDING is deliberately absent. */
+        private val FINISHED_STATES = setOf(SessionState.COMPLETED, SessionState.CANCELLED, SessionState.FAILED)
+    }
 }

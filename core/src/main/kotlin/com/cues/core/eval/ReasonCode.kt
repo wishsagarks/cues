@@ -1,5 +1,7 @@
 package com.cues.core.eval
 
+import kotlinx.serialization.Serializable
+
 /**
  * Why the evaluator decided what it decided.
  *
@@ -8,6 +10,7 @@ package com.cues.core.eval
  * justification can be fluent and wrong, and a user who is deciding whether to
  * trust an unattended rule is exactly the person who cannot afford that.
  */
+@Serializable
 enum class ReasonCode {
     TRIGGER_MATCHED,
     TRIGGER_KIND_MISMATCH,
@@ -72,7 +75,13 @@ enum class ReasonCode {
     COOLDOWN_ACTIVE,
 }
 
-/** One condition's verdict, with the observed values that justify it. */
+/**
+ * One condition's verdict, with the observed values that justify it.
+ *
+ * Serializable so a structured receipt can persist the exact verdicts the
+ * evaluator produced, rather than a re-derivation of them.
+ */
+@Serializable
 data class Reason(
     val code: ReasonCode,
     val truth: Truth,

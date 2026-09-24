@@ -770,6 +770,21 @@ environment (no Android SDK here — see CLAUDE.md):**
    there is no dedicated intent for a bare utility toggle request. Teaching
    and testing a binding from the Utility Bindings screen was already
    end-to-end; now attaching one to a cue is too, in `:core`.
+8. **Restore intent survives process death — `:core` half done, `:app` half
+   open (25 Sep 2026, plan §10.4).** `releaseUtility` kept its restore target
+   only in memory, so after a process death it returned `SUCCEEDED "No prior
+   utility state was held."` while Game Mode stayed on. `:core` now persists
+   the approved `ActionArgs` on each `CleanupObligation` at acquisition,
+   hands release the whole obligation and session
+   (`ActionExecutor.release(obligation, session)`, defaulting to the old
+   overload), and carries `Verification` (`STEPS_CONFIRMED` renders as
+   "assumed" in receipts). `UtilityRestoreTest` proves the data is present
+   and sufficient after a simulated process death, a mid-session edit, and
+   two utilities in one cue. **Not done:** `AndroidActionExecutor` still
+   uses only the resource-only overload, so on a phone the bug is unchanged
+   until it overrides the new one (`TODO(app)` in `Ports.kt`). Same shape as
+   CL-17's ringer restore: a release must never report success for state it
+   cannot account for.
 
 **Remove when:** a taught Eye protection on/off pair has actually run on the
 loaner — teach, test on, test off, and a real cue session that arms, fires
@@ -1301,3 +1316,35 @@ environment:
 or the loaner), the redesigned screens have been seen running, and the
 guava/listenablefuture conflict is resolved or shown unrelated to the AGP
 bump this entry declines to make.
+
+---
+
+## CL-34 — Insights: computed and benchmarked on the JVM, never measured on a phone
+
+**Status:** open · **Raised:** 25 Sep 2026
+
+`core/.../insights/Insights.kt` computes the Insights report from sessions,
+structured receipts (`receipts-v2/`) and the usage ledger.
+`InsightsBenchmarkTest` runs plan §10.2's synthetic worst case (1,200
+sessions, 200 receipts, 14,000 ledger events): a median of 2–3 ms against a
+150 ms budget. That figure is **the pure computation on an Apple M4 laptop
+JVM**, with every input already in memory.
+
+**What is not measured:**
+1. The device cost. The reads that gather the inputs are what §10.2 expects
+   to dominate: `SessionStore.recent` and `allUnfinished` decode one file per
+   session, and `ledgerEvents()` decodes one file per ledger event (up to
+   ~14,000). None of that has run on the loaner.
+2. Whether pruning (sessions ended over 30 days ago, owing nothing, deleted
+   on the next ended save) keeps `allUnfinished()`'s full scan cheap enough
+   in practice. It bounds the file count; the time per file is unknown.
+
+**Consequence worth knowing now:** pruning at 30 days means the 30-day
+window's *previous*-window delta (days 30–60) will almost always read "No
+earlier data". That is honest, not a bug, but the UI should expect it.
+
+**Remove when:** the debug "Insights computed in N ms (N events)" line in
+Checks has been read on the loaner with a realistic ledger, and the figure
+is recorded in `docs/MEASUREMENTS.md` with its source. If it exceeds 300 ms,
+or file reads dominate, first move the ledger to a single append-only file
+(plan §10.2) before considering SQLite/Room.

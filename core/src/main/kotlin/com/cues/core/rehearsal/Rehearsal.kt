@@ -55,6 +55,8 @@ private class ScratchStore : SessionStore {
     override fun find(sessionId: String): Session? = sessions[sessionId]
     override fun activeFor(routineId: String) = sessions.values.filter { it.routineId == routineId }
     override fun allUnfinished() = sessions.values.toList()
+    override fun recent(sinceMillis: Long) =
+        sessions.values.filter { (it.endedAtMillis ?: Long.MAX_VALUE) >= sinceMillis }
 }
 
 /**

@@ -158,9 +158,11 @@ class SessionEngine(
                 return@forEach
             }
             val outcome = executor.execute(spec.actionId, spec.args, session.id)
-            records += ActionRecord(spec.actionId, outcome.state, outcome.detail)
-            // Ownership is recorded the moment it is acquired, not at exit.
-            outcome.acquired?.let { obligations += CleanupObligation(it, clock.nowMillis()) }
+            records += ActionRecord(spec.actionId, outcome.state, outcome.detail, outcome.verification)
+            // Ownership is recorded the moment it is acquired, not at exit —
+            // with the approved arguments that acquired it, so release can
+            // tell what to undo from this record alone after a process death.
+            outcome.acquired?.let { obligations += CleanupObligation(it, clock.nowMillis(), args = spec.args) }
         }
 
         // A blocked action is not a success. A session where the timer ran but
@@ -261,7 +263,7 @@ class SessionEngine(
         // the user again in the Ended receipt, not the Started one.
         val settledActions = session.actions.map { record ->
             if (record.state == ActionState.PENDING) {
-                ActionRecord(record.actionId, ActionState.BLOCKED, EXPIRED_WHILE_PENDING_DETAIL)
+                record.copy(state = ActionState.BLOCKED, detail = EXPIRED_WHILE_PENDING_DETAIL)
             } else {
                 record
             }
@@ -288,11 +290,14 @@ class SessionEngine(
             // Each obligation is attempted independently. One failed release
             // must not strand another resource — a timer we cannot cancel is
             // no reason to leave the phone silent as well.
-            val outcome = runCatching { executor.release(obligation.resource, ending.id) }
+            // The whole obligation and session go to the executor, not just
+            // the resource: what to restore must come from this durable
+            // record, never from memory a process death would have erased.
+            val outcome = runCatching { executor.release(obligation, ending) }
                 .getOrElse { com.cues.core.ports.ActionOutcome(ActionState.COMPENSATION_FAILED, it.message) }
 
             if (outcome.state == ActionState.SUCCEEDED || outcome.state == ActionState.COMPENSATED) {
-                released += obligation.copy(released = true)
+                released += obligation.copy(released = true, releaseVerification = outcome.verification)
             } else {
                 anyFailure = true
                 released += obligation.copy(released = false, failureDetail = outcome.detail ?: "Release failed.")
@@ -352,8 +357,8 @@ class SessionEngine(
             if (record.state != ActionState.PENDING) return@map record
             val args = argsByAction[record.actionId] ?: ActionArgs.None
             val outcome = executor.execute(record.actionId, args, session.id)
-            outcome.acquired?.let { obligations += CleanupObligation(it, clock.nowMillis()) }
-            ActionRecord(record.actionId, outcome.state, outcome.detail)
+            outcome.acquired?.let { obligations += CleanupObligation(it, clock.nowMillis(), args = args) }
+            ActionRecord(record.actionId, outcome.state, outcome.detail, outcome.verification)
         }
 
         val updated = session.copy(

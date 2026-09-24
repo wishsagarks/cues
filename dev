@@ -15,6 +15,7 @@
 #   ./dev card           export/tamper/reimport a sample Cue Card, phone-to-phone
 #   ./dev console        build a self-contained Cue Console HTML from fixture data
 #   ./dev sim            full lifecycle through CueService: draft to timeout
+#   ./dev insights       Insights report from a synthetic week (not device data)
 #   ./dev bo             score the checked-in corpus (not a device measurement)
 #   ./dev demo           offline scripted demo, CLI only, transcript to evidence/
 #   ./dev b              assemble debug APK
@@ -107,6 +108,8 @@ case "$cmd" in
   sim)
     $GW -q :core:sim
     ;;
+
+  insights) $GW -q :core:insights ;;
 
   bo) $GW -q :core:bakeoff ;;
 
