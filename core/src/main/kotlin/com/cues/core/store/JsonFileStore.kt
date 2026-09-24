@@ -165,7 +165,64 @@ class JsonFileStore(
 
     // -------------------------------------------------------- SessionStore
 
-    override fun save(session: Session) = writeAtomic(File(sessionsDir, "${session.id}.json"), session)
+    /**
+     * Writes the session, then stamps the file with this store's clock.
+     *
+     * The stamp is what [recent] and [pruneSessions] filter on before
+     * decoding anything, so it has to be the store's notion of "now" — the
+     * same injectable clock the ledger's retention already uses — rather than
+     * whatever the filesystem happened to record.
+     *
+     * Saving a session that has ended is also the moment to prune: it is
+     * exactly when the set of prunable sessions can grow, and the check
+     * decodes only files already older than the retention window.
+     */
+    override fun save(session: Session) {
+        val file = File(sessionsDir, "${session.id}.json")
+        writeAtomic(file, session)
+        file.setLastModified(nowMillis())
+        if (session.endedAtMillis != null) pruneSessions()
+    }
+
+    override fun recent(sinceMillis: Long): List<Session> =
+        sessionsDir.listJsonFiles()
+            // Coarse filesystems keep whole seconds (FAT keeps two), so the
+            // pre-filter is widened slightly; the decoded filter below is exact.
+            .filter { it.lastModified() >= sinceMillis - MTIME_SLACK_MILLIS }
+            .mapNotNull { readSession(it) }
+            .filter { (it.endedAtMillis ?: Long.MAX_VALUE) >= sinceMillis }
+
+    /**
+     * Deletes sessions that ended more than [SESSION_RETENTION_MILLIS] ago
+     * and owe nothing. Returns how many went.
+     *
+     * A session with any unreleased obligation is never deleted, however old:
+     * the FDD requires cleanup obligations to stay visible until resolved, and
+     * the session file is where they live. The same goes for a session with
+     * no end recorded — a crash mid-start leaves exactly that, and it is
+     * evidence that something may still need releasing.
+     */
+    fun pruneSessions(): Int {
+        val cutoff = nowMillis() - SESSION_RETENTION_MILLIS
+        var pruned = 0
+        sessionsDir.listJsonFiles()
+            // A session that ended before the cutoff was last written no
+            // later than its end, unless a cleanup retry touched it since —
+            // and then it is not one we would delete anyway.
+            .filter { it.lastModified() < cutoff }
+            .forEach { file ->
+                val session = readSession(file) ?: return@forEach
+                if (session.isPrunable(cutoff) && file.delete()) pruned++
+            }
+        return pruned
+    }
+
+    private fun Session.isPrunable(cutoff: Long): Boolean {
+        val ended = endedAtMillis ?: return false
+        return ended < cutoff &&
+            state in FINISHED_STATES &&
+            obligations.all { it.released }
+    }
 
     override fun find(sessionId: String): Session? = readSession(File(sessionsDir, "$sessionId.json"))
 
@@ -325,4 +382,17 @@ class JsonFileStore(
 
     private fun File.listJsonFiles(): List<File> =
         (listFiles() ?: emptyArray()).filter { it.extension == "json" }
+
+    companion object {
+        /**
+         * How long a finished, fully released session is kept. Thirty days
+         * is the longest window Insights reads; nothing older is ever shown.
+         */
+        const val SESSION_RETENTION_MILLIS: Long = 30L * 86_400_000L
+
+        private const val MTIME_SLACK_MILLIS: Long = 2_000L
+
+        /** Terminal states that owe nothing by themselves. CLEANUP_PENDING is deliberately absent. */
+        private val FINISHED_STATES = setOf(SessionState.COMPLETED, SessionState.CANCELLED, SessionState.FAILED)
+    }
 }

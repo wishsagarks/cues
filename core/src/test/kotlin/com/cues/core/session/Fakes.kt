@@ -30,6 +30,8 @@ class InMemorySessionStore : SessionStore {
     override fun allUnfinished(): List<Session> = sessions.values.filter {
         it.state != SessionState.COMPLETED && it.state != SessionState.CANCELLED
     }
+    override fun recent(sinceMillis: Long): List<Session> =
+        sessions.values.filter { (it.endedAtMillis ?: Long.MAX_VALUE) >= sinceMillis }
 
     val all: List<Session> get() = sessions.values.toList()
 }

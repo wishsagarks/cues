@@ -35,6 +35,19 @@ interface SessionStore {
     fun find(sessionId: String): Session?
     fun activeFor(routineId: String): List<Session>
     fun allUnfinished(): List<Session>
+
+    /**
+     * Sessions that were still running at [sinceMillis] or began after it:
+     * everything whose `endedAtMillis` is null or not before [sinceMillis].
+     *
+     * Exists so a history screen can read a bounded window instead of every
+     * session ever recorded. An implementation may skip, without decoding,
+     * any record that has not been written since [sinceMillis] — which means
+     * an unfinished session untouched for that long can be absent here.
+     * Anything that must see every unfinished session, cleanup included,
+     * asks [allUnfinished] instead; this is a window, not an inventory.
+     */
+    fun recent(sinceMillis: Long): List<Session>
 }
 
 /** The result of asking the registry to perform one action. */
