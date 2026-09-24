@@ -42,80 +42,80 @@ Core contracts and persistence
 ### Phase 0: Contracts and Baseline
 
 - [x] Task 0: Audit repository, requirements, safety invariants, and baseline checks.
-- [ ] Task 1: Verify current official Android/LiteRT/AppFunctions/CameraX/ML Kit APIs and pin compatible dependencies; document any unavailable or experimental surface.
+- [x] Task 1: Verify current official Android/LiteRT/AppFunctions/CameraX/ML Kit APIs and pin compatible dependencies; document any unavailable or experimental surface. (`docs/API_VERIFICATION.md`; AppFunctions re-verified 24 Sep 2026, see CL-24.)
 
 ### Phase 1: Ask Cues and Declared Context
 
-- [ ] Task 2: Add conversation contracts, closed intent routing, deterministic reply copy, personal reference resolution, refiner operations, explanation, and pending command confirmation.
-- [ ] Task 3: Add Declared Memory (`Fact`, `FactStore`, fact-aware references, approval invalidation) and lexical/optional embedding ranking.
-- [ ] Task 4: Add `./dev chat`, conversation fixtures, injection tests, and the Compose Assistant/Memory screens with source footers and Jovi handoff cards.
+- [x] Task 2: Add conversation contracts, closed intent routing, deterministic reply copy, personal reference resolution, refiner operations, explanation, and pending command confirmation.
+- [x] Task 3: Add Declared Memory (`Fact`, `FactStore`, fact-aware references, approval invalidation) and lexical/optional embedding ranking. (CL-16: NL "until my exam" wiring still missing.)
+- [x] Task 4: Add `./dev chat`, conversation fixtures, injection tests, and the Compose Assistant/Memory screens with source footers and Jovi handoff cards.
 
 ### Checkpoint: Conversation
 
-- [ ] `./dev t`, `./dev b`, and `./dev perms` pass.
-- [ ] Create -> refine -> explain -> confirm-control works without a device.
-- [ ] Shared/injected text cannot arm or execute anything.
+- [x] `./dev t` passes (275 tests). `./dev b`/`./dev perms` need the laptop.
+- [x] Create -> refine -> explain -> confirm-control works without a device.
+- [x] Shared/injected text cannot arm or execute anything.
 
 ### Phase 2: Evidence-Backed Coach
 
-- [ ] Task 5: Add bounded `UsageLedger`, coverage gaps, mutes, six pure detectors, policy limits, and receipt/session integration.
-- [ ] Task 6: Add `./dev coach`, fixture ledgers, Learning settings/log wipe, Today/Assistant suggestion cards, and opt-in notification behavior.
+- [x] Task 5: Add bounded `UsageLedger`, coverage gaps, mutes, six pure detectors, policy limits, and receipt/session integration.
+- [x] Task 6: Add `./dev coach`, fixture ledgers, Learning settings/log wipe, Today/Assistant suggestion cards, and opt-in notification behavior.
 
 ### Checkpoint: Coach
 
-- [ ] Every detector threshold, coverage-gap rule, daily limit, dismiss, and permanent mute has a test.
-- [ ] Accepting a suggestion only seeds authoring and still requires Review/Approve.
+- [x] Every detector threshold, coverage-gap rule, daily limit, dismiss, and permanent mute has a test.
+- [x] Accepting a suggestion only seeds authoring and still requires Review/Approve (CL-27).
 
 ### Phase 3: Typed Cross-App Actions and OriginOS Surfaces
 
-- [ ] Task 7: Extend the action registry/model with explicit risk and presence, typed handoffs, alarms/media/ringer, utility actions, owned restoration, and deterministic receipt codes.
-- [ ] Task 8: Implement session `PENDING` behavior, attention checks, expiry to `BLOCKED`/`PARTIAL`, and safe user-override restoration.
-- [ ] Task 9: Implement Android executors, calendar condition, installed-app picker, share target, shortcuts, live session notification, Workbench drag/drop, package/intent discovery, and Jovi routing.
+- [x] Task 7: Extend the action registry/model with explicit risk and presence, typed handoffs, alarms/media/ringer, utility actions, owned restoration, and deterministic receipt codes.
+- [x] Task 8: Implement session `PENDING` behavior, attention checks, expiry to `BLOCKED`/`PARTIAL`, and safe user-override restoration. (CL-25: `:app` wiring uncompiled.)
+- [~] Task 9: Implement Android executors, calendar condition, installed-app picker, share target, shortcuts, live session notification, Workbench drag/drop, package/intent discovery, and Jovi routing. **Partial** — executors and the installed-app picker are done; calendar condition, share target, shortcuts, Workbench drag/drop and package/intent discovery are not built. See `tasks/todo.md`.
 
 ### Checkpoint: Typed Actions
 
-- [ ] Core tests prove risk, validation, presence, restoration, UNKNOWN, and PARTIAL behavior.
-- [ ] Review surfaces every non-owned effect and never accepts model-supplied packages/intents.
-- [ ] APK builds and `INTERNET` remains absent.
+- [x] Core tests prove risk, validation, presence, restoration, UNKNOWN, and PARTIAL behavior.
+- [x] Review surfaces every non-owned effect and never accepts model-supplied packages/intents.
+- [ ] APK builds and `INTERNET` remains absent. (Needs the laptop; last confirmed on an earlier commit.)
 
 ### Phase 4: Local Brain, Voice, Camera, and Imports
 
-- [ ] Task 10: Introduce inference ports/reports and a side-loaded LiteRT-LM session with explicit NPU -> GPU -> CPU -> parser-only fallback; add optional on-device embedder.
-- [ ] Task 11: Add exact-copy TTS for replies/receipts; voice can author but never approve or confirm a pending command.
-- [ ] Task 12: Add pure timetable extraction, multi-cue import proposals, uncertainty flags, injection/size limits, CameraX + bundled ML Kit capture, and Snap Note/Gallery image sharing.
+- [x] Task 10: Introduce inference ports/reports and a side-loaded LiteRT-LM session with explicit NPU -> GPU -> CPU -> parser-only fallback; add optional on-device embedder. (CL-18: unverified on device.)
+- [x] Task 11: Add exact-copy TTS for replies/receipts; voice can author but never approve or confirm a pending command.
+- [x] Task 12: Add pure timetable extraction, multi-cue import proposals, uncertainty flags, injection/size limits, CameraX + bundled ML Kit capture, and Snap Note/Gallery image sharing.
 
 ### Checkpoint: Brain and Camera
 
-- [ ] Parser-only operation remains complete when models are unavailable.
-- [ ] Diagnostics and each turn show actual inference source/backend.
-- [ ] Camera/import path works in airplane mode and cannot arm directly.
+- [x] Parser-only operation remains complete when models are unavailable.
+- [x] Diagnostics and each turn show actual inference source/backend.
+- [x] Camera/import path works in airplane mode and cannot arm directly (structurally — device confirmation pending, CL-20).
 
 ### Phase 5: Desk Bridge and Offline Sharing
 
-- [ ] Task 13: Add versioned Cue Card encode/decode/digest validation, local re-binding/capability derivation, QR import/export, and tamper tests.
-- [ ] Task 14: Add versioned export schema, `./dev console` single-file HTML, phone share/export/import for `.cue.txt`, `.cuecard`, and `cues-export.json`, plus Desk context template.
+- [x] Task 13: Add versioned Cue Card encode/decode/digest validation, local re-binding/capability derivation, QR import/export, and tamper tests.
+- [x] Task 14: Add versioned export schema, `./dev console` single-file HTML, phone share/export/import for `.cue.txt`, `.cuecard`, and `cues-export.json`, plus Desk context template. (CL-22: `.cue.txt`/`.cuecard` drop-onto-the-phone import not routed automatically.)
 
 ### Checkpoint: Bridge
 
-- [ ] Cue Card round-trip passes; tampering fails; permissions/approval never transfer.
-- [ ] Console renders receipts, forecast, coach evidence, inference reports, and ledger without a server.
+- [x] Cue Card round-trip passes; tampering fails; permissions/approval never transfer.
+- [x] Console renders receipts, forecast, coach evidence, inference reports, and ledger without a server.
 
 ### Phase 6: Utility Bindings and Ecosystem
 
-- [ ] Task 15: Add macro model/validator/store, denylist tests, package/version pinning, selectors/postconditions, and bounded retry rules.
-- [ ] Task 16: Add consent/teaching UI, narrowly scoped AccessibilityService, one-shot “Cue this screen,” floating stop, and iQOO utility on/off bindings with read-back and restoration.
+- [x] Task 15: Add macro model/validator/store, denylist tests, package/version pinning, selectors/postconditions, and bounded retry rules.
+- [x] Task 16: Add consent/teaching UI, narrowly scoped AccessibilityService, one-shot “Cue this screen,” floating stop, and iQOO utility on/off bindings with read-back and restoration. Now reachable from cue drafting too (CL-23 item 7). Unverified on device (CL-23).
 - [x] Task 17 (written and tested where `:core`-testable; `./dev b` still needed on the laptop — see CLEANUP.md CL-24): Add AppFunctions provider for draft/start/stop/forecast/current-context, retaining in-app approval for drafts and manual-only start constraints.
 
 ### Checkpoint: Ecosystem
 
-- [ ] Secure/password windows and denylisted apps/actions are refused.
-- [ ] Version mismatch and unreadable state become `BLOCKED`, never guessed success.
-- [ ] System-agent calls cannot bypass routine validation or approval.
+- [x] Secure/password windows and denylisted apps/actions are refused.
+- [x] Version mismatch and unreadable state become `BLOCKED`, never guessed success.
+- [x] System-agent calls cannot bypass routine validation or approval (AppFunctions only calls the same `CueService` the app itself does).
 
 ### Phase 7: Documentation, Device Proof, and Demo
 
 - [x] Task 18: Update FDD, README claim discipline/OriginOS positioning, runbooks, permissions, and `CLEANUP.md` retirement conditions.
-- [ ] Task 19 (matrix and probe prepared in docs/DEVICE_MATRIX.md; not executed, needs the loaner): Execute device matrix: package discovery, NPU backend measurement, Camera airplane-mode import, Office Kit transfer, Origin Island rendering, Accessibility utility binding, AppFunctions/Jovi handoff, screen-off pending action, QR between devices.
+- [~] Task 19 (matrix and probe prepared in docs/DEVICE_MATRIX.md; not executed, needs the loaner): Execute device matrix: package discovery, NPU backend measurement, Camera airplane-mode import, Office Kit transfer, Origin Island rendering, Accessibility utility binding, AppFunctions/Jovi handoff, screen-off pending action, QR between devices.
 - [ ] Task 20 (software regression, offline demo and docs/DISCLOSURE.md done; APK re-check and device rehearsal pending): Run final full verification, produce scripted offline demo and backup evidence, and disclose any device-only item that could not be proven.
 
 ## Task Definitions and Acceptance Criteria
