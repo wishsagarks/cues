@@ -23,12 +23,31 @@ object ReviewCopy {
 
     fun whenText(routine: Routine): String = SignalRegistry.reviewText(routine.trigger)
 
-    fun ifText(routine: Routine): String {
-        if (routine.conditions.isEmpty()) return "always"
-        return routine.conditions.joinToString(", ") { SignalRegistry.reviewText(it) }
+    fun ifText(routine: Routine): String = conditionLines(routine).joinToString(", ")
+
+    fun doText(routine: Routine): String = actionLines(routine).joinToString(", ")
+
+    fun untilText(routine: Routine): String = endLines(routine).joinToString(", ")
+
+    // One line per item. The joined *Text functions above are these lines
+    // joined, never a second rendering, so a card that shows rows and a
+    // sentence that shows the same cue cannot word it two different ways.
+
+    /** One line per condition; a single "always" when there are none, so the IF row is never blank. */
+    fun conditionLines(routine: Routine): List<String> =
+        if (routine.conditions.isEmpty()) listOf("always")
+        else routine.conditions.map { SignalRegistry.reviewText(it) }
+
+    /** One line per action, in the routine's (normalized) order. */
+    fun actionLines(routine: Routine): List<String> = routine.actions.map { actionLine(it) }
+
+    /** One line per end condition; the trigger-reversed ending names the trigger it reverses. */
+    fun endLines(routine: Routine): List<String> = routine.endConditions.map { end ->
+        if (end == EndCondition.TriggerReversed) "${triggerNounFor(routine)} ${SignalRegistry.reviewText(end)}"
+        else SignalRegistry.reviewText(end)
     }
 
-    fun doText(routine: Routine): String = routine.actions.joinToString(", ") { spec ->
+    private fun actionLine(spec: ActionSpec): String =
         when (val args = spec.args) {
             is ActionArgs.FocusTimer -> "start a ${args.durationMinutes}-minute focus timer"
             is ActionArgs.Dnd -> "request our quiet-notifications rule"
@@ -44,12 +63,6 @@ object ReviewCopy {
             is ActionArgs.UseUtility -> "turn ${args.utilityId.name.lowercase().replace('_', ' ')} ${args.state.name.lowercase()}"
             ActionArgs.None -> spec.actionId.friendly().lowercase()
         }
-    }
-
-    fun untilText(routine: Routine): String = routine.endConditions.joinToString(", ") { end ->
-        if (end == EndCondition.TriggerReversed) "${triggerNounFor(routine)} ${SignalRegistry.reviewText(end)}"
-        else SignalRegistry.reviewText(end)
-    }
 
     fun restoreText(routine: Routine): String {
         val owned = routine.actions.mapNotNull { spec ->
@@ -167,5 +180,66 @@ object ReviewCopy {
         ActionRisk.HANDOFF -> "Handoff — you finish this"
         ActionRisk.EXTERNAL_UNOWNED -> "Cues cannot undo this"
         ActionRisk.UI_AUTOMATION -> "Automates another app's screen"
+    }
+
+    // ---------------------------------------------------------------- labels
+    //
+    // The word a screen shows for each state enum. Kept here, next to every
+    // other piece of review copy, so no raw enum name (EXIT_PENDING,
+    // COMPENSATION_FAILED) ever has to reach a person, and a chip on Now and a
+    // row in Receipts cannot call the same state two different things.
+    // Every `when` is exhaustive, so a new enum member will not compile until
+    // someone decides what it is called.
+
+    fun RoutineStatus.friendlyName(): String = when (this) {
+        RoutineStatus.DRAFT -> "Draft"
+        RoutineStatus.INVALID -> "Needs changes"
+        RoutineStatus.REVIEWABLE -> "Ready to review"
+        RoutineStatus.ARMED -> "Armed"
+        RoutineStatus.PAUSED -> "Paused"
+        RoutineStatus.DISABLED -> "Off"
+    }
+
+    fun SessionState.friendlyName(): String = when (this) {
+        SessionState.STARTING -> "Starting"
+        SessionState.ACTIVE -> "Running"
+        // Still running in effect: the grace window has not run out.
+        SessionState.EXIT_PENDING -> "Ending unless it reconnects"
+        SessionState.ENDING -> "Ending"
+        SessionState.COMPLETED -> "Finished"
+        SessionState.CANCELLED -> "Cancelled"
+        // Never "Running": not everything this session was meant to do happened.
+        SessionState.PARTIAL -> "Running, not everything started"
+        SessionState.CLEANUP_PENDING -> "Cleanup outstanding"
+        SessionState.FAILED -> "Failed"
+    }
+
+    fun ActionState.friendlyName(): String = when (this) {
+        ActionState.NOT_STARTED -> "Not started"
+        ActionState.IN_PROGRESS -> "In progress"
+        ActionState.SUCCEEDED -> "Done"
+        ActionState.BLOCKED -> "Blocked"
+        ActionState.FAILED -> "Failed"
+        ActionState.COMPENSATED -> "Undone"
+        ActionState.COMPENSATION_FAILED -> "Couldn't undo"
+        ActionState.PENDING -> "Waiting for you"
+    }
+
+    fun EndReason.friendlyName(): String = when (this) {
+        EndReason.DEADLINE_REACHED -> "Timer finished"
+        EndReason.TRIGGER_REVERSED -> "Trigger went away"
+        EndReason.MANUAL_STOP -> "You stopped it"
+        EndReason.ROUTINE_PAUSED -> "Cue paused"
+        EndReason.RECONCILED_EXPIRED -> "Finished while Cues wasn't running"
+        EndReason.START_FAILED -> "Couldn't start"
+        // Not "disconnected": no disconnect was ever observed.
+        EndReason.COVERAGE_GAP -> "Coverage gap"
+    }
+
+    fun Verification.friendlyName(): String = when (this) {
+        Verification.READ_BACK -> "Checked"
+        // The amber "assumed" state: steps landed, the setting was never read.
+        Verification.STEPS_CONFIRMED -> "Assumed"
+        Verification.NONE -> "Not checked"
     }
 }
