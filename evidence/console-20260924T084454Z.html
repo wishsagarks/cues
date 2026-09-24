@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cues Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0e1118; --bg2: #161b25; --bg3: #202735;
+    --ink: #f5f7ff; --ink2: #b7c0d3; --accent: #6ea8fe; --warn: #f2a541; --bad: #e5626b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f7fb; --bg2: #ffffff; --bg3: #eaf0fa; --ink: #172033; --ink2: #5e6b80; }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--ink2); font-size: 13px; margin-bottom: 24px; }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink2); margin: 0 0 10px; }
+  .card { background: var(--bg2); border: 1px solid var(--bg3); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .muted { color: var(--ink2); font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--bg3); color: var(--ink2); }
+  .pill.will-arm, .pill.armed { background: rgba(110,168,254,0.18); color: var(--accent); }
+  .pill.cannot-tell { background: rgba(242,165,65,0.18); color: var(--warn); }
+  .pill.not-today, .pill.skipped-by-patch { background: var(--bg3); color: var(--ink2); }
+  pre { white-space: pre-wrap; font-family: inherit; font-size: 13px; margin: 4px 0 0; }
+  .empty { color: var(--ink2); font-size: 13px; font-style: italic; }
+  ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink2); }
+  code { background: var(--bg3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div role="note" style="background:#fde68a;color:#1f2937;padding:10px 16px;font:600 14px system-ui,sans-serif">Sample data from ./dev console. Not a phone export: every cue, receipt and model figure below is a fixture.</div>
+  <h1>Cues Console</h1>
+  <div class="sub" id="generated"></div>
+  <div class="sub">A read-only mirror of one phone's cues, receipts, forecast, coach evidence and inference reports — nothing on this page can change what the phone does. Opened as a plain file, no server involved.</div>
+
+  <section><h2>Cues</h2><div id="routines"></div></section>
+  <section><h2>Forecast</h2><div id="forecast"></div></section>
+  <section><h2>Coach evidence</h2><div id="coach"></div></section>
+  <section><h2>Receipts</h2><div id="receipts"></div></section>
+  <section><h2>On-device model</h2><div id="diagnostics"></div></section>
+  <section><h2>Learning ledger</h2><div id="ledger"></div></section>
+
+<script>
+const CUES_EXPORT = /*__CUES_EXPORT__*/{
+    "exportSchemaVersion": 1,
+    "generatedAtMillis": 1790239507723,
+    "routines": [
+        {
+            "id": "routine-1a7de100-cbf7-4d6d-a990-82a964115edd",
+            "title": "Focus when TWS Air Pro connected",
+            "status": "ARMED",
+            "draftedBy": "GRAMMAR_PARSER",
+            "when": "TWS Air Pro connects",
+            "if": "Monday to Friday, at or after 18:00 local time",
+            "do": "start a 45-minute focus timer, request our quiet-notifications rule",
+            "until": "45 minutes have passed, you stop it, TWS Air Pro goes away",
+            "restore": "end our timer, release our quiet rule — and nothing else. Another quiet mode stays as it is."
+        }
+    ],
+    "receipts": [
+        {
+            "sessionId": "session-1",
+            "atMillis": 1790232307723,
+            "text": "Started\n  Earbuds connected.\n  Focus timer: done.\n  Quiet notifications: done."
+        },
+        {
+            "sessionId": "session-1",
+            "atMillis": 1790235907723,
+            "text": "Ended\n  You stopped it.\n  Released our focus timer.\n  Released our quiet rule."
+        }
+    ],
+    "forecast": [
+        {
+            "routineId": "routine-1a7de100-cbf7-4d6d-a990-82a964115edd",
+            "window": "if TWS Air Pro connects today",
+            "status": "WILL_ARM",
+            "reasons": [
+                "It can run if that event happens and these observed conditions still hold."
+            ]
+        }
+    ],
+    "coach": [
+        {
+            "patternKey": "early-stop:routine-1a7de100-cbf7-4d6d-a990-82a964115edd",
+            "kind": "SHORTER_DURATION",
+            "proposal": "make routine-1a7de100-cbf7-4d6d-a990-82a964115edd 22 minutes",
+            "evidence": [
+                "Stopped early 3 of the last 5 times."
+            ]
+        }
+    ],
+    "ledger": [
+        {
+            "type": "sessionEnded",
+            "routineId": "routine-1a7de100-cbf7-4d6d-a990-82a964115edd",
+            "plannedMinutes": 45,
+            "actualMinutes": 22,
+            "endReason": "MANUAL_STOP",
+            "atMillis": 1790153107723
+        },
+        {
+            "type": "manualStart",
+            "minuteOfDay": 540,
+            "weekday": "MON",
+            "atMillis": 1790153107723
+        }
+    ],
+    "diagnostics": {
+        "primaryDrafter": "GRAMMAR_PARSER",
+        "lastFallbackReason": null,
+        "inferenceBackend": "CPU",
+        "loadMs": 812,
+        "generationMs": 340,
+        "tokensPerSecond": 14.2
+    }
+}/*__END_CUES_EXPORT__*/;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function empty(container, message) { container.appendChild(el('div', 'empty', message)); }
+function fmtTime(ms) { return ms ? new Date(ms).toLocaleString() : ''; }
+function statusClass(s) { return String(s || '').toLowerCase().replace(/_/g, '-'); }
+
+function renderRoutines(data) {
+  const c = document.getElementById('routines');
+  if (!data.routines || !data.routines.length) return empty(c, 'No cues on this phone.');
+  data.routines.forEach(r => {
+    const card = el('div', 'card');
+    const row = el('div', 'row');
+    row.appendChild(el('strong', null, r.title));
+    row.appendChild(el('span', 'pill ' + statusClass(r.status), r.status));
+    card.appendChild(row);
+    card.appendChild(el('div', 'muted', 'drafted by ' + (r.draftedBy || 'unknown').toLowerCase().replace(/_/g, ' ')));
+    const pre = el('pre');
+    pre.textContent = 'WHEN  ' + r.when + '\nIF    ' + r['if'] + '\nDO    ' + r['do'] + '\nUNTIL ' + r.until + '\nRESTORE ' + r.restore;
+    card.appendChild(pre);
+    c.appendChild(card);
+  });
+}
+
+function renderForecast(data) {
+  const c = document.getElementById('forecast');
+  if (!data.forecast || !data.forecast.length) return empty(c, 'No armed cues to forecast.');
+  data.forecast.forEach(f => {
+    const card = el('div', 'card');
+    const row = el('div', 'row');
+    row.appendChild(el('span', null, f.window));
+    row.appendChild(el('span', 'pill ' + statusClass(f.status), f.status.replace(/_/g, ' ')));
+    card.appendChild(row);
+    if (f.reasons && f.reasons.length) {
+      const ul = el('ul');
+      f.reasons.forEach(reason => ul.appendChild(el('li', null, reason)));
+      card.appendChild(ul);
+    }
+    c.appendChild(card);
+  });
+}
+
+function renderCoach(data) {
+  const c = document.getElementById('coach');
+  if (!data.coach || !data.coach.length) return empty(c, 'No suggestion is currently surfaced.');
+  data.coach.forEach(s => {
+    const card = el('div', 'card');
+    card.appendChild(el('div', null, s.proposal));
+    const ul = el('ul');
+    (s.evidence || []).forEach(line => ul.appendChild(el('li', null, line)));
+    card.appendChild(ul);
+    c.appendChild(card);
+  });
+}
+
+function renderReceipts(data) {
+  const c = document.getElementById('receipts');
+  if (!data.receipts || !data.receipts.length) return empty(c, 'Nothing has happened yet.');
+  data.receipts.slice().sort((a, b) => b.atMillis - a.atMillis).forEach(r => {
+    const card = el('div', 'card');
+    card.appendChild(el('div', 'muted', fmtTime(r.atMillis)));
+    card.appendChild(el('pre', null, r.text));
+    c.appendChild(card);
+  });
+}
+
+function renderDiagnostics(data) {
+  const c = document.getElementById('diagnostics');
+  const d = data.diagnostics || {};
+  const card = el('div', 'card');
+  card.appendChild(el('div', null, 'Primary drafter: ' + (d.primaryDrafter || 'unknown')));
+  if (d.inferenceBackend) {
+    card.appendChild(el('div', 'muted',
+      'Last ran on ' + d.inferenceBackend + ' — ' + d.loadMs + 'ms load, ' +
+      Number(d.tokensPerSecond).toFixed(1) + ' tok/s'));
+  } else {
+    card.appendChild(el('div', 'muted', 'No model-backed draft has run — parser only.'));
+  }
+  if (d.lastFallbackReason) card.appendChild(el('div', 'muted', 'Last fallback: ' + d.lastFallbackReason));
+  c.appendChild(card);
+}
+
+function renderLedger(data) {
+  const c = document.getElementById('ledger');
+  if (!data.ledger || !data.ledger.length) return empty(c, 'Learning is off, or nothing has been observed yet.');
+  data.ledger.slice().sort((a, b) => b.atMillis - a.atMillis).slice(0, 50).forEach(e => {
+    const card = el('div', 'card');
+    card.appendChild(el('div', 'muted', fmtTime(e.atMillis)));
+    card.appendChild(el('code', null, JSON.stringify(e)));
+    c.appendChild(card);
+  });
+}
+
+document.getElementById('generated').textContent =
+  'Generated ' + fmtTime(CUES_EXPORT.generatedAtMillis) + ' · export schema ' + CUES_EXPORT.exportSchemaVersion;
+renderRoutines(CUES_EXPORT);
+renderForecast(CUES_EXPORT);
+renderCoach(CUES_EXPORT);
+renderReceipts(CUES_EXPORT);
+renderDiagnostics(CUES_EXPORT);
+renderLedger(CUES_EXPORT);
+</script>
+</body>
+</html>
