@@ -715,6 +715,34 @@ class CueService(
         return gaps
     }
 
+    // -------------------------------------------------------------- insights
+
+    /**
+     * The Insights report for [window], computed from this phone's own records.
+     *
+     * Reads are bounded: sessions through [SessionStore.recent] over two
+     * windows (the second only feeds the time-in-cues delta), structured
+     * receipts over one, and the ledger's own 14-day retention. Unfinished
+     * sessions are added from [SessionStore.allUnfinished] whatever their
+     * age, because an outstanding cleanup must never fall out of view just
+     * because nothing has touched its record lately. Blocking I/O — call it
+     * off the main thread.
+     */
+    fun insights(window: com.cues.core.insights.InsightsWindow): com.cues.core.insights.InsightsReport {
+        val now = clock.nowMillis()
+        val windowed = sessions.recent(now - 2 * window.millis)
+        val unfinished = sessions.allUnfinished()
+        return com.cues.core.insights.Insights.compute(
+            sessions = (windowed + unfinished).distinctBy { it.id },
+            receiptRecords = receiptLog?.receiptRecords(now - window.millis).orEmpty(),
+            ledger = usageLedger?.let { com.cues.core.insights.LedgerView(it.signalOptIn, it.ledgerEvents()) },
+            routines = routines.all(),
+            window = window,
+            clock = clock,
+            zone = zoneId(),
+        )
+    }
+
     // ---------------------------------------------------------- diagnostics
 
     data class Diagnostics(
