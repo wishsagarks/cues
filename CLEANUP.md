@@ -1001,3 +1001,40 @@ is one option — and `event.couldStart(routine)` for `Trigger.Manual` checks
 it. Add a test proving two armed manual cues don't both start from one
 targeted event, then Task 17's `startCue` (or any future "run now" UI) can
 use it.
+
+---
+
+## CL-29 — Share target: a new intent-filter, unverified on a device
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 9 listed "share target" among the not-done Android surfaces. Added: a
+second `<intent-filter>` on `MainActivity` for `ACTION_SEND` / `text/plain`,
+and `MainActivity.sharedOrCapturedText` — the same function now also used
+for `EXTRA_SCREEN_CAPTURE` — reads `EXTRA_TEXT` and feeds it into
+`incomingScreenText`. It reaches the app through the exact path CL-23 item 2
+just closed: `CuesApp` navigates to Home and `HomeScreen` lands the text in
+the draft field as plain, editable data. This applies the FDD's "Shared
+timetable" rule (shared text is data, never executed, never auto-armed) to
+any share-sheet text, not only a photographed timetable.
+
+**What is not verified, because `:app` cannot be exercised in this
+environment (no Android SDK — see CLAUDE.md):**
+1. Whether the share sheet actually lists Cues for a `text/plain` share on
+   OriginOS 7 — the `<category android:name="android.intent.category.DEFAULT" />`
+   requirement for an implicit-intent target is textbook, but unconfirmed here.
+2. Whether `singleTop` launch mode correctly routes a share while Cues is
+   already open through `onNewIntent` rather than a fresh `onCreate`, and
+   whether a share while Cues is backgrounded behaves the same as a cold
+   launch — both are asserted from platform docs, not observed.
+3. No injection-style test exists for this specific path the way
+   `TimetableExtractorTest` has one for camera import — shared text reaching
+   the draft box untouched, with no way to auto-submit it, is currently
+   argued from reading the code, not demonstrated by a test that tries to
+   break it.
+
+**Remove when:** a real share from another app (Chrome, Messages, a notes
+app) has landed in Cues' draft box on the loaner, and either a test proves
+shared text cannot reach `onDraft`/arm anything without the user pressing
+submit and going through Review, or that guarantee is judged self-evident
+enough from `HomeScreen`'s existing `submitDraft` gate to skip.

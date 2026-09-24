@@ -131,6 +131,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+              Share target (Task 9 / FDD "Shared timetable", generalized to
+              any shared text): the received text lands in the draft box as
+              plain, editable data — MainActivity.sharedOrCapturedText and
+              HomeScreen's incomingText — never executed, never auto-armed.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!--

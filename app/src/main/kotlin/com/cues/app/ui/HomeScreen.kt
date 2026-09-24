@@ -108,10 +108,11 @@ fun HomeScreen(
     incomingText: String? = null,
 ) {
     var text by remember { mutableStateOf("") }
-    // "Cue this screen" (Task 16): a captured screen read lands here as
-    // plain draft text — data the user can edit or delete, never something
-    // that arms itself. LaunchedEffect keyed on the value so it only fires
-    // once per distinct capture, not on every recomposition.
+    // A "Cue this screen" capture (Task 16) or a shared text/plain (Task 9's
+    // share target) lands here as plain draft text — data the user can edit
+    // or delete, never something that arms itself. LaunchedEffect keyed on
+    // the value so it only fires once per distinct incoming text, not on
+    // every recomposition.
     androidx.compose.runtime.LaunchedEffect(incomingText) {
         if (!incomingText.isNullOrBlank()) text = incomingText
     }

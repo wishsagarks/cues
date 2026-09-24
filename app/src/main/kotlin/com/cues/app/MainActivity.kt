@@ -88,11 +88,24 @@ class MainActivity : ComponentActivity() {
     private lateinit var localSpeechInput: LocalSpeechInput
     private lateinit var replySpeaker: com.cues.app.voice.ReplySpeaker
 
-    // "Cue this screen" (Task 16): text captured by ScreenTile /
-    // CuesAccessibilityService, handed in via EXTRA_SCREEN_CAPTURE. Read
-    // here rather than inside the composable tree because it can arrive
-    // through onNewIntent, well after setContent already ran once.
+    // Two sources feed the same data-only draft box, never arming anything
+    // by themselves: a "Cue this screen" capture from ScreenTile /
+    // CuesAccessibilityService (EXTRA_SCREEN_CAPTURE), and inbound
+    // ACTION_SEND text/plain — the FDD's "Shared timetable" rule applied to
+    // any share sheet, not only the timetable-photo path. Read at the
+    // Activity level rather than inside the composable tree because either
+    // can arrive through onNewIntent, well after setContent already ran.
     private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    /** Untrusted text from outside Cues — a share sheet or a screen read. Never executed, only ever shown as an editable draft. */
+    private fun sharedOrCapturedText(intent: android.content.Intent?): String? {
+        intent ?: return null
+        intent.getStringExtra(com.cues.app.runtime.CuesAccessibilityService.EXTRA_SCREEN_CAPTURE)?.let { return it }
+        if (intent.action == android.content.Intent.ACTION_SEND && intent.type == "text/plain") {
+            return intent.getStringExtra(android.content.Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+        }
+        return null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // One system-owned splash handoff on every supported Android version.
@@ -103,7 +116,7 @@ class MainActivity : ComponentActivity() {
         val app = application as CuesApplication
         localSpeechInput = LocalSpeechInput(this)
         replySpeaker = com.cues.app.voice.ReplySpeaker(this)
-        incomingScreenText = intent?.getStringExtra(com.cues.app.runtime.CuesAccessibilityService.EXTRA_SCREEN_CAPTURE)
+        incomingScreenText = sharedOrCapturedText(intent)
 
         setContent {
             CuesTheme {
@@ -128,9 +141,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(com.cues.app.runtime.CuesAccessibilityService.EXTRA_SCREEN_CAPTURE)?.let {
-            incomingScreenText = it
-        }
+        sharedOrCapturedText(intent)?.let { incomingScreenText = it }
     }
 
     override fun onDestroy() {
