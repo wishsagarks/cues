@@ -1265,17 +1265,25 @@ environment:
   unaffected by it (no diff against `main`), still fail to compile in this
   environment: `camera/CueCardScanScreen.kt` and
   `camera/TimetableCaptureScreen.kt`, both on
-  `Cannot access class 'ListenableFuture'`. `androidx.appsearch:appsearch`
-  (pulled in by appfunctions) forces `com.google.guava:guava:32.0.1-android`
-  onto the classpath, which appears to be shadowing the
-  `com.google.guava:listenablefuture:1.0` artifact CameraX's
-  `ProcessCameraProvider.getInstance()` needs — `guava` and the real
-  `listenablefuture` jar are a well-known Maven conflict pair, and something
-  in this dependency graph is resolving to the "empty, avoid conflict"
-  stub instead of a working `ListenableFuture`. Not investigated further as
-  part of this redesign; the camera/OCR/QR features are unaffected in scope
-  (their Kotlin source is unchanged) but currently cannot be exercised even
-  at compile time in this environment.
+  `Cannot access class 'ListenableFuture'`. Root cause, confirmed rather than
+  guessed: `androidx.appsearch:appsearch` (pulled in by appfunctions) forces
+  dependency resolution to `com.google.guava:guava:32.0.1-android`, which
+  Gradle's Maven-conflict rule then substitutes in place of the real
+  `com.google.guava:listenablefuture:1.0` jar camera-core's
+  `ProcessCameraProvider.getInstance()` needs — but only guava's **`.pom`**
+  is present in this machine's Gradle cache, never its `.jar`
+  (`~/.gradle/caches/modules-2/files-2.1/com.google.guava/guava/32.0.1-android/`
+  has no jar file), so the substitution resolves to an empty stub with no
+  usable `ListenableFuture` class at all. `./gradlew --refresh-dependencies`
+  was tried and still fails the same way after ~90s of real network
+  activity, even though a plain `curl` to `repo1.maven.org` for that exact
+  jar path returns 200 — so *some* path to Maven Central works from this
+  machine, but Gradle's own resolution for this specific artifact doesn't,
+  for a reason this pass didn't chase further (a proxy/allowlist specific to
+  the Gradle daemon's HTTP client is the leading guess). Not investigated
+  past that as part of this redesign; the camera/OCR/QR features are
+  unaffected in scope (their Kotlin source is unchanged) but currently
+  cannot be exercised even at compile time in this environment.
 - Only the Now, Ask, Insights and Workbench tabs, plus Review/Detail/Checks,
   were rebuilt or rewired this pass. Receipts is the old screen restyled by
   inheriting the new theme only (no structured `ReceiptRecord` cards yet —
