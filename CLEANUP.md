@@ -701,13 +701,16 @@ environment (no Android SDK here — see CLAUDE.md):**
    `AccessibilityWindowInfo.root` genuinely comes back null for a
    `FLAG_SECURE` window on OriginOS 7 are all unconfirmed.
 2. The one-shot "Cue this screen" read (`captureScreenText`) has never
-   captured a real window's text, and is not yet wired into the Assistant
-   conversation as a data-only turn. *Updated 24 Sep 2026 (Task 18 audit):*
-   `MainActivity.onCreate`/`onNewIntent` now read `EXTRA_SCREEN_CAPTURE`
-   into `incomingScreenText` and pass it to `CuesApp`, but `CuesApp`
-   accepts that parameter and never reads it. A capture reaches the
-   composable and stops there. **Follow-up:** feed it into the Assistant's
-   draft box as data, the same way a share-target text would.
+   captured a real window's text. **Closed 24 Sep 2026:** the wiring gap the
+   Task 18 audit found — `CuesApp` accepted `incomingScreenText` but never
+   read it — is fixed. `CuesApp` now navigates to Home the moment a capture
+   arrives (`LaunchedEffect(incomingScreenText)`), and `HomeScreen` lands it
+   in the draft text field as plain, editable data (`LaunchedEffect(incomingText)`),
+   the same trust boundary a share-target text already gets — never
+   auto-submitted, never arming anything by itself. What remains unverified
+   is everything upstream of that: whether a real accessibility-service
+   capture ever reaches `EXTRA_SCREEN_CAPTURE` with real screen text in the
+   first place (see item 1 and item 3).
 3. `ScreenTile.kt`'s ordering — capture the screen, *then* collapse the QS
    panel and navigate — assumes the accessibility tree still reports the app
    *behind* Quick Settings as active at tap time. This is a real device

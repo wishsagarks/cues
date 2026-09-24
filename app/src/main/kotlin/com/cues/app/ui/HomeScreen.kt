@@ -105,8 +105,16 @@ fun HomeScreen(
     coachSuggestion: Suggestion? = null,
     onAcceptSuggestion: (Suggestion) -> Unit = { _ -> },
     onDismissSuggestion: (Suggestion, Boolean) -> Unit = { _, _ -> },
+    incomingText: String? = null,
 ) {
     var text by remember { mutableStateOf("") }
+    // "Cue this screen" (Task 16): a captured screen read lands here as
+    // plain draft text — data the user can edit or delete, never something
+    // that arms itself. LaunchedEffect keyed on the value so it only fires
+    // once per distinct capture, not on every recomposition.
+    androidx.compose.runtime.LaunchedEffect(incomingText) {
+        if (!incomingText.isNullOrBlank()) text = incomingText
+    }
     var isListening by remember { mutableStateOf(false) }
     var speechMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current

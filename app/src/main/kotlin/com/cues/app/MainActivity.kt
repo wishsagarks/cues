@@ -201,6 +201,12 @@ private fun CuesApp(
     incomingScreenText: String? = null,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    // "Cue this screen" (Task 16): a fresh capture always brings the user
+    // back to Home, where it lands in the draft box as data — never arming
+    // anything by itself.
+    androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
+        if (incomingScreenText != null) screen = Screen.Home
+    }
     var routines by remember { mutableStateOf(cueService.list()) }
     var isDrafting by remember { mutableStateOf(false) }
     var missingCapabilities by remember { mutableStateOf<Set<Capability>>(emptySet()) }
@@ -329,6 +335,7 @@ private fun CuesApp(
                     adapterStatuses = adapterStatuses,
                     isDrafting = isDrafting,
                     onDraft = ::draft,
+                    incomingText = incomingScreenText,
                     onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },
                     onOpenReceipts = { screen = Screen.Receipts },
                     onOpenDiagnostics = { screen = Screen.Diagnostics },
