@@ -4,6 +4,7 @@ import android.os.Bundle
 import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -126,6 +127,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // API 35+ enforces edge-to-edge regardless; calling this explicitly
+        // (rather than leaving it implicit) is what lets Theme.Cues's
+        // windowLightStatusBar/windowLightNavigationBar actually control
+        // system-bar icon contrast, and keeps behaviour consistent on 29-34
+        // too. Scaffold's default window-insets handling below is what
+        // keeps content off the status/nav bars once this is on.
+        enableEdgeToEdge()
         val app = application as CuesApplication
         localSpeechInput = LocalSpeechInput(this)
         replySpeaker = com.cues.app.voice.ReplySpeaker(this)
