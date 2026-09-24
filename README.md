@@ -16,28 +16,36 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 As of 24 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md)):
 
-- **`:core`** is pure Kotlin/JVM and passes 267 tests. It covers the routine model, the
+- **`:core`** is pure Kotlin/JVM and passes 281 tests. It covers the routine model, the
   three-valued evaluator, compiler and approval digest, the closed action
-  and signal registries, grammar drafting with clause accounting, the
+  and signal registries (including a calendar condition kit — `Condition.CalendarBusy`/
+  `CalendarNotBusy`), grammar drafting with clause accounting, the
   session engine and receipts, plus Ask Cues, declared memory, the coach,
-  Cue Cards, the Console export and the macro validator. `./dev t` runs the
-  suite on any machine with a JDK.
+  Cue Cards, the Console export, the macro validator and the utility
+  catalog. `./dev t` runs the suite on any machine with a JDK.
 - **`:app`** has compiled against the real Android APIs and been launched on
-  an Android emulator, where drafting and arming a cue worked. This
-  revision's small `:app` edits have not been compiled yet, so `./dev b` is
-  due on the laptop. It includes a
+  an Android emulator, where drafting and arming a cue worked. Everything
+  since (Tasks 15–20, plus the calendar condition kit, app shortcuts,
+  Workbench drag/drop, and a share target for shared text) is written
+  against real, mostly well-documented APIs but has not been compiled in
+  this environment — no Android SDK is available here, so `./dev b` is due
+  on the laptop before any of it can be called verified. It includes a
   LiteRT-LM integration with no model side-loaded yet. With no model the app
   falls back to the grammar parser, and it says so on every draft.
 - **Nothing has run on an iQOO.** Background delivery, the owned quiet rule,
-  timing, camera, QR, Office Kit, accessibility and model backends are all
-  listed in [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md), and every row is
-  "Not run".
+  timing, camera, QR, Office Kit, accessibility, the utility-bindings
+  macro replay and model backends are all listed in
+  [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md), and every row is "Not run".
 - **Known software gaps**, each with its retirement condition in
-  [CLEANUP.md](CLEANUP.md): actions that need the user do not wait yet
-  (CL-25), and three permissions have no in-app grant path (CL-26). Coach
-  suggestions cannot be accepted into a draft (CL-27). No AppFunctions
-  provider exists, and the "Jovi" handoff opens whatever the system
-  assistant is (CL-24).
+  [CLEANUP.md](CLEANUP.md) (32 entries as of this pass): the AppFunctions
+  provider exists (`draftCue`/`startCue`/`stopCue`/`forecastToday`/
+  `currentContext`) but is uncompiled, and the "Jovi" handoff still opens
+  whatever the system assistant is rather than routing through it (CL-24).
+  Actions that need the user, three capabilities' in-app grant buttons, and
+  accepting a coach suggestion into a draft are all fixed in code (CL-25,
+  CL-26, CL-27) but, like the rest of `:app`, uncompiled here. A promoted
+  Live Update notification was deliberately not attempted — recorded as a
+  decision, not a gap, in CL-15.
 
 **There are no measured performance results.** Every latency, delivery and
 reliability figure in the design documents is a target until it is recorded
