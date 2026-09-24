@@ -43,8 +43,8 @@ import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.MemoryScreen
 import com.cues.app.ui.LearningSettings
 import com.cues.app.ui.ReceiptScreen
-import com.cues.app.ui.ReviewScreen
 import com.cues.app.ui.RoutineDetailScreen
+import com.cues.app.ui.review.ReviewScreenV2
 import com.cues.app.ui.ask.AskScreen
 import com.cues.app.ui.components.CuesBottomNav
 import com.cues.app.ui.components.CuesTopBar
@@ -772,7 +772,7 @@ private fun ReviewFlow(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    ReviewScreen(
+    ReviewScreenV2(
         routine = review.normalized,
         review = review,
         rehearsal = rehearsal,

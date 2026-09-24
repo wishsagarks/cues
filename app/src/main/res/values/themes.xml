@@ -8,9 +8,12 @@
     </style>
 
     <!-- A proper system splash, not a branding Activity. The compat library
-         makes this same intentional handoff available below Android 12. -->
+         makes this same intentional handoff available below Android 12.
+         Kinetic Obsidian: the same void the launcher icon's background
+         layer uses, so home-screen icon -> splash -> app reads as one
+         continuous surface rather than a light-to-dark flash. -->
     <style name="Theme.Cues.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#F5F7FB</item>
+        <item name="windowSplashScreenBackground">#0C0E14</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_cues_splash</item>
         <item name="windowSplashScreenAnimationDuration">250</item>
         <item name="postSplashScreenTheme">@style/Theme.Cues</item>

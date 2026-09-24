@@ -3,10 +3,10 @@
     android:height="108dp"
     android:viewportWidth="120"
     android:viewportHeight="120">
-    <!-- Kinetic Obsidian mark: same glyph as the adaptive launcher icon's
-         foreground (ic_launcher_foreground.xml) — kept in its own file since
-         the splash-screen API asks for a single self-contained drawable,
-         not the two-layer background/foreground split adaptive icons use. -->
+    <!-- Cues' mark: two chevrons (WHEN/DO in miniature) and a teal cue dot —
+         from docs/design/stitch/screens/cues_app_logo.html, split from its
+         background so the platform can mask/animate it independently
+         (adaptive icon foreground layer; minSdk 29 needs no legacy PNG). -->
     <path
         android:strokeColor="#FFE600"
         android:strokeWidth="8"
