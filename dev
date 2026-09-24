@@ -137,7 +137,7 @@ case "$cmd" in
       step "4d. Ask Cues: out-of-scope request is handed off" chat "book me a cab home"
       step "5. Cue Card: export, rebind on a second phone, tamper refused" card
       step "6. Today forecast (fixture)" today
-      step "7. Coach evidence only; Accept does not yet draft (CL-27)" coach
+      step "7. Coach evidence, plus the structured edit Accept would apply (CL-27)" coach
       step "8. Cue Console, single offline HTML file" console "$PWD/evidence/console-$stamp.html"
       step "9. Corpus score on this machine's JVM (not a phone measurement)" bo
     } | tee "$out"
