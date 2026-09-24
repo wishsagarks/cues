@@ -7,7 +7,7 @@
 - [x] Task 4 — Chat CLI and Assistant/Memory UI (`./dev chat`, `AssistantHistory`, `MemoryScreen`, wired into `HomeScreen`/`MainActivity`)
 - [x] Checkpoint — Conversation green (196 core tests incl. injection-safety test; `./dev b`/`./dev perms` clean)
 - [x] Task 5 — Usage ledger and coach detectors (`UsageLedger`/`CoachStateStore` on `JsonFileStore`, 6 detectors, `CoachPolicy` mute/daily-limit, wired into `CueService.recordReceipt`/`skipToday`/`pauseUntil`/`onDeviceEvent`)
-- [x] Task 6 — Coach CLI and UI (`./dev coach`, `LearningSettings`, Home suggestion card wired to accept→draft / dismiss→mute)
+- [x] Task 6 — Coach CLI and UI (`./dev coach`, `LearningSettings`, Home suggestion card wired to accept→refine (via `CueService.acceptSuggestion`/`Refiner`, fixed and tested in `:core` — see CL-27; `:app` wiring uncompiled) / dismiss→mute)
 - [x] Checkpoint — Coach green (detector/policy tests pass; accepting only seeds `draft()`, never arms)
 - [x] Task 7 — Typed action and utility registry (`ActionRisk.HANDOFF`/`EXTERNAL_UNOWNED`, `Presence`, 7 new `ActionId`s + validators; `ActionRegistryTest`)
 - [x] Task 8 — Presence and pending session semantics (`DeviceAttention` port, `ActionState.PENDING`, `SessionEngine.retryPendingActions`, expiry → `BLOCKED` with `EXPIRED_WHILE_PENDING_DETAIL`, disclosed in the Ended receipt). `CueService.retryPendingActions()` and its `attention` wiring closed the gap in `:core` (tested); the `:app` half (`AndroidDeviceAttention`, the `ACTION_USER_PRESENT` receiver) is written but uncompiled — see CL-25.

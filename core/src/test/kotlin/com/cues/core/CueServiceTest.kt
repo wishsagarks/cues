@@ -169,6 +169,48 @@ class CueServiceTest {
     }
 
     @Test
+    fun `acceptSuggestion applies the structured operation and leaves the routine unapproved`() = runTest {
+        val drafted = assertIs<DraftResult.Drafted>(service.draft(HERO)).routine
+        val armed = assertIs<ArmResult.Ok<Routine>>(service.approveAndArm(drafted)).routine
+
+        val suggestion = com.cues.core.coach.Suggestion(
+            "early-stop:${armed.id}", com.cues.core.coach.SuggestionKind.SHORTER_DURATION,
+            listOf(com.cues.core.coach.EvidenceLine("Stopped early 3 of 5 times.", 3)),
+            "make ${armed.id} 20 minutes",
+            routineId = armed.id,
+            operation = com.cues.core.assistant.RefineOperation.SetDuration(20),
+        )
+
+        val refined = service.acceptSuggestion(suggestion)
+
+        assertNotNull(refined)
+        assertEquals(20, (refined.actions.single { it.actionId == ActionId.START_FOCUS_TIMER }.args as ActionArgs.FocusTimer).durationMinutes)
+        assertEquals(RoutineStatus.REVIEWABLE, refined.status, "an accepted edit needs review again, exactly like any other refinement")
+        assertNull(refined.approvedDigest, "accepting must clear approval, the same as Refiner.apply always does")
+        // Nothing is persisted or armed on the caller's behalf — same contract as draft().
+        assertEquals(RoutineStatus.ARMED, service.list().single { it.id == armed.id }.status)
+    }
+
+    @Test
+    fun `acceptSuggestion refuses rather than guessing when there is nothing to act on`() = runTest {
+        val drafted = assertIs<DraftResult.Drafted>(service.draft(HERO)).routine
+        val armed = assertIs<ArmResult.Ok<Routine>>(service.approveAndArm(drafted)).routine
+
+        val noOperation = com.cues.core.coach.Suggestion(
+            "unknown:BLUETOOTH_CONNECT", com.cues.core.coach.SuggestionKind.FIX_PERMISSION,
+            listOf(com.cues.core.coach.EvidenceLine("unreadable 2 times", 2)), "check access",
+        )
+        assertNull(service.acceptSuggestion(noOperation), "FIX_PERMISSION names no routine to edit")
+
+        val deletedRoutine = com.cues.core.coach.Suggestion(
+            "early-stop:gone", com.cues.core.coach.SuggestionKind.SHORTER_DURATION,
+            listOf(com.cues.core.coach.EvidenceLine("x", 1)), "make gone 20 minutes",
+            routineId = "gone", operation = com.cues.core.assistant.RefineOperation.SetDuration(20),
+        )
+        assertNull(service.acceptSuggestion(deletedRoutine), "a routine id that no longer exists must not be guessed at")
+    }
+
+    @Test
     fun `arming without a required capability is refused and names it`() = runTest {
         val drafted = assertIs<DraftResult.Drafted>(service.draft(HERO)).routine
         val limited = CueService(

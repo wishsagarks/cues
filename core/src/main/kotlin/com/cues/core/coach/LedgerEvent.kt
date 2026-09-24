@@ -25,14 +25,19 @@ sealed interface LedgerEvent {
         override val atMillis: Long,
     ) : LedgerEvent
 
+    /**
+     * [routineId] defaults to `null` so a ledger file written before this
+     * field existed still decodes; a `null` entry simply can't back a coach
+     * suggestion that needs a specific cue to edit (CL-27).
+     */
     @Serializable @SerialName("actionBlocked")
-    data class ActionBlocked(val actionId: String, override val atMillis: Long) : LedgerEvent
+    data class ActionBlocked(val actionId: String, override val atMillis: Long, val routineId: String? = null) : LedgerEvent
 
     @Serializable @SerialName("patchCreated")
-    data class PatchCreated(val kind: String, val weekday: Day, override val atMillis: Long) : LedgerEvent
+    data class PatchCreated(val kind: String, val weekday: Day, override val atMillis: Long, val routineId: String? = null) : LedgerEvent
 
     @Serializable @SerialName("manualStart")
-    data class ManualStart(val minuteOfDay: Int, val weekday: Day, override val atMillis: Long) : LedgerEvent
+    data class ManualStart(val minuteOfDay: Int, val weekday: Day, override val atMillis: Long, val routineId: String? = null) : LedgerEvent
 
     @Serializable @SerialName("signalObserved")
     data class SignalObserved(

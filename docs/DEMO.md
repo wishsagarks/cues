@@ -61,7 +61,7 @@ Don't retry on stage more than once.
 
 | Feature | Why it's cut | Tracked |
 |---|---|---|
-| Accepting a coach suggestion | Accept never produces a draft. Show the evidence card only | CL-27 |
+| Accepting a coach suggestion | Fixed and tested in `:core`; the `:app` wiring is written but uncompiled, so confirm one Accept end to end on the loaner before relying on it live — show the evidence card only until then | CL-27 |
 | Actions that wait until you're at the phone | The attention port is not wired, so they don't wait | CL-25, M8 |
 | A utility binding inside a cue | Reachable only from the binding screen's test buttons | CL-23 item 7 |
 | AppFunctions / "Jovi can call Cues" | Not built | CL-24 |

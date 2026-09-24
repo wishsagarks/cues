@@ -15,15 +15,19 @@ object CoachMain {
             LedgerEvent.SessionEnded("study", 45, 20, "MANUAL_STOP", now - 3 * day),
             LedgerEvent.SessionEnded("study", 45, 44, "DEADLINE_REACHED", now - 4 * day),
             LedgerEvent.SessionEnded("study", 45, 45, "DEADLINE_REACHED", now - 5 * day),
-            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - day),
-            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - 8 * day),
-            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - 13 * day),
+            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - day, routineId = "study"),
+            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - 8 * day, routineId = "study"),
+            LedgerEvent.PatchCreated("skip-today", Day.FRI, now - 13 * day, routineId = "study"),
         )
         val suggestions = Detectors.all(fixture, now)
         if (suggestions.isEmpty()) println("No suggestion: not enough repeated evidence.")
         suggestions.forEach { suggestion ->
             println("${suggestion.kind.name.lowercase().replace('_', ' ')}: ${suggestion.proposal}")
             suggestion.evidence.forEach { println("  ${it.text}") }
+            // CL-27: Accept never re-drafts this text; it applies `operation`
+            // straight to `routineId` via Refiner. Shown here so the fixture
+            // actually demonstrates the fix, not just the detection.
+            if (suggestion.operation != null) println("  accept would apply: ${suggestion.operation} to ${suggestion.routineId}")
         }
     }
 }

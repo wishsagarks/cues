@@ -248,13 +248,27 @@ fun HomeScreen(
         }
         AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
         coachSuggestion?.let { suggestion ->
+            // CL-27: named by the cue's own title, never the raw routine id
+            // suggestion.proposal used to embed ("make routine-<uuid> 22
+            // minutes"). routines is this screen's own live list — the same
+            // one Home already renders cue cards from — so this is a lookup,
+            // never a second source of truth for what a cue is called.
+            val targetTitle = suggestion.routineId?.let { id -> routines.firstOrNull { it.id == id }?.title }
             Surface(color = cuesColors.bg300, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Text("Cues noticed a pattern", style = MaterialTheme.typography.titleMedium)
                     suggestion.evidence.forEach { Text(it.text, style = MaterialTheme.typography.bodySmall, color = cuesColors.ink200) }
-                    Text(suggestion.proposal, modifier = Modifier.padding(top = 6.dp))
+                    Text(
+                        if (targetTitle != null) "For “$targetTitle”: ${suggestion.proposal}" else suggestion.proposal,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                     Row {
-                        TextButton(onClick = { onAcceptSuggestion(suggestion) }) { Text("Review idea") }
+                        // Only offer to act when there's a real, resolvable
+                        // edit behind it (CL-27) — otherwise this card is
+                        // evidence only, same as before this fix.
+                        if (suggestion.operation != null) {
+                            TextButton(onClick = { onAcceptSuggestion(suggestion) }) { Text("Review idea") }
+                        }
                         TextButton(onClick = { onDismissSuggestion(suggestion, false) }) { Text("Not now") }
                         TextButton(onClick = { onDismissSuggestion(suggestion, true) }) { Text("Never") }
                     }

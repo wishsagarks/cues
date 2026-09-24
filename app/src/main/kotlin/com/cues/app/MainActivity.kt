@@ -399,7 +399,21 @@ private fun CuesApp(
                     coachSuggestion = coachSuggestion,
                     onAcceptSuggestion = { suggestion ->
                         coachSuggestion = null
-                        draft(suggestion.proposal)
+                        // CL-27: never re-drafts suggestion.proposal as a
+                        // sentence — no drafter could ever parse it, because
+                        // it describes an edit, not a cue. acceptSuggestion
+                        // applies the structured operation straight to its
+                        // routine through Refiner, the same as any other
+                        // refinement, and returns null (never guessing) when
+                        // the suggestion names no routine or that routine is
+                        // gone.
+                        val refined = cueService.acceptSuggestion(suggestion)
+                        if (refined != null) {
+                            missingCapabilities = emptySet()
+                            screen = Screen.Review(refined)
+                        } else {
+                            notify("This suggestion can no longer be applied — its cue may have changed.")
+                        }
                     },
                     onDismissSuggestion = { suggestion, permanent ->
                         coachPolicy.dismiss(suggestion.patternKey, System.currentTimeMillis(), permanent)

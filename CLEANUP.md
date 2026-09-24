@@ -879,29 +879,56 @@ resume re-check.
 
 ## CL-27 — Accepting a coach suggestion never produces a draft
 
-**Status:** open · **Raised:** 24 Sep 2026
+**Status:** open (fixed in `:core`, tested; `:app` wiring written, uncompiled) · **Raised:** 24 Sep 2026 · **Updated:** 24 Sep 2026
 
 The six detectors, the policy limits and the ledger are tested, and
-`./dev coach` shows correct evidence. The hand-off after detection is broken.
-`Suggestion.proposal` is built as `"make ${routineId} N minutes"` /
-`"remove fri from this cue"`, and Home's Accept passes it straight to
-`draft()` (`MainActivity.kt`, `onAcceptSuggestion`). On a phone,
-`routineId` is `routine-<uuid>`, so the card reads "make
-routine-2e87f6e1-… 22 minutes". None of the proposal shapes is a sentence
-`GrammarParser` can draft. Checked with `./dev d` on 24 Sep 2026: both
-"make routine-2e87f6e1-… 22 minutes" and the fixture's friendlier "make
-study 22 minutes" return "What should start this cue?". The `./dev coach`
-fixture uses the id `study`, which hides the raw-id half of this.
+`./dev coach` shows correct evidence. The hand-off after detection was
+broken: `Suggestion.proposal` was a sentence like `"make ${routineId} N
+minutes"`, and Home's Accept passed it straight to `draft()`. No drafter
+could ever parse that — it describes an edit, not a cue — so Accept always
+returned a clarifying question instead of a reviewable draft.
 
-It fails safe, because nothing is armed and the user sees a clarifying
-question. But the plan's acceptance line "accepting a suggestion seeds
-authoring" is not met in practice: what Accept seeds cannot be drafted.
+**Fixed, this update:**
 
-**For the event:** show coach *evidence* (the Home card, `./dev coach`),
-not Accept. docs/DEMO.md says so.
+- `Suggestion` (`core/.../coach/Detectors.kt`) gained `routineId: String?`
+  and `operation: RefineOperation?` — a structured edit, not prose. `null`
+  for `FIX_PERMISSION` (no routine in the ledger to point at) and
+  `ADD_SIGNAL_CUE` (proposes a *new* cue, not an edit).
+- `earlyStop`, `recurringSkip`, `manualRoutine` and `blockedAction` populate
+  both, but only when every event behind the suggestion agrees on one
+  routine — `distinct().singleOrNull()`, never a guess. This also fixed a
+  latent bug the four detectors already had: each grouped its evidence
+  globally across every cue (e.g. "the last five sessions" regardless of
+  which cue they belonged to), so a suggestion could already have been
+  silently misattributed on a phone with more than one cue. `unknownBlocker`
+  is unaffected: `LedgerEvent.Skipped.capability` is never populated anywhere
+  in the app, a separate, pre-existing dead path this pass found but did not
+  fix (worth its own entry if this file gets a CL-28).
+- `LedgerEvent.PatchCreated`/`ActionBlocked`/`ManualStart` gained a
+  `routineId: String? = null` field (default `null`, so a ledger file
+  written before this change still decodes), filled in at their one call
+  site each in `CueService`, which already had the routine in scope.
+- New `CueService.acceptSuggestion(suggestion)`: looks up `routineId`,
+  applies `operation` through the existing `Refiner` — the same path chat's
+  "make it 30 minutes" already uses — and returns the refined, unapproved
+  routine, or `null` if there's nothing to act on or the routine is gone.
+  Nothing is persisted or armed; the caller takes the result to Review, same
+  as `draft()`.
+- Tests: `DetectorsTest` proves each of the four detectors both populates
+  and correctly withholds `routineId`/`operation`; `CueServiceTest` proves
+  `acceptSuggestion` applies the edit, clears approval, and refuses (rather
+  than guessing) for `FIX_PERMISSION` and a deleted routine. 272 core tests
+  green.
+- `./dev coach`'s fixture now prints "accept would apply: …" so the fix is
+  demonstrated, not just tested.
 
-**Remove when:** a suggestion refers to its cue by title in the card copy,
-and Accept applies the change as a refinement of that routine. That could
-go through the same `Refiner` path chat uses for "make it 30 minutes", with
-Review and reapproval still required. Add a test that accepting each
-suggestion kind yields a reviewable draft.
+**Written, not compiled here (no Android SDK in this environment):**
+`MainActivity.onAcceptSuggestion` calls `cueService.acceptSuggestion` and
+opens Review on the result, instead of re-drafting `suggestion.proposal`.
+`HomeScreen`'s suggestion card names the target cue by its own title
+(looked up from the same `routines` list Home already renders from) and
+only shows "Review idea" when `suggestion.operation` is non-null.
+
+**Remove when:** `./dev b` compiles this, and a run on the loaner confirms
+Accept opens Review on the edited routine with the right field changed, for
+at least one of `earlyStop`/`recurringSkip`/`manualRoutine`/`blockedAction`.

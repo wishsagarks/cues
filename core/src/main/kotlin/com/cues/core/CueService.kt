@@ -55,6 +55,7 @@ import com.cues.core.eval.ReasonCode
 import com.cues.core.eval.Truth
 import java.time.ZoneId
 import com.cues.core.coach.LedgerEvent
+import com.cues.core.coach.Suggestion
 import com.cues.core.coach.UsageLedger
 
 /**
@@ -125,6 +126,30 @@ class CueService(
         // A model never gets to assert that it understood a clause.
         is DraftResult.Drafted -> ClauseAccounting.stamp(text, result)
         is DraftResult.NeedsClarification, is DraftResult.Failed -> result
+    }
+
+    /**
+     * Applies a coach [Suggestion] straight to its named routine through
+     * [Refiner] — never by handing [Suggestion.proposal] back to a drafter
+     * as a sentence (CL-27: no drafter has ever been able to parse "make
+     * routine-<uuid> 22 minutes" as a request, because it was never one).
+     *
+     * Returns `null`, refusing rather than guessing, when the suggestion
+     * names no routine to edit ([Suggestion.routineId]/[Suggestion.operation]
+     * are `null` for [com.cues.core.coach.SuggestionKind.FIX_PERMISSION] and
+     * [com.cues.core.coach.SuggestionKind.ADD_SIGNAL_CUE], and for any
+     * suggestion whose evidence turned out to span more than one cue) or
+     * when that routine has since been deleted.
+     *
+     * Like [draft], this does not persist anything — the caller takes the
+     * returned draft to Review, the same as any other proposal, and nothing
+     * is saved or reapproved until the user acts there.
+     */
+    fun acceptSuggestion(suggestion: Suggestion): Routine? {
+        val routineId = suggestion.routineId ?: return null
+        val operation = suggestion.operation ?: return null
+        val routine = routines.findRoutine(routineId) ?: return null
+        return Refiner.apply(routine, operation).routine
     }
 
     /**
@@ -452,7 +477,7 @@ class CueService(
         val date = java.time.Instant.ofEpochMilli(clock.nowMillis()).atZone(zoneId()).toLocalDate().toString()
         return Patch(routineId, routine.version, PatchKind.SkipOccurrence(date), clock.nowMillis()).also {
             patches?.savePatch(it)
-            usageLedger?.appendLedger(LedgerEvent.PatchCreated("skip-today", localDay(clock.nowMillis()), clock.nowMillis()))
+            usageLedger?.appendLedger(LedgerEvent.PatchCreated("skip-today", localDay(clock.nowMillis()), clock.nowMillis(), routineId))
         }
     }
 
@@ -461,7 +486,7 @@ class CueService(
         require(millis > clock.nowMillis()) { "Pause expiry must be in the future." }
         return Patch(routineId, routine.version, PatchKind.SkipUntil(millis), clock.nowMillis()).also {
             patches?.savePatch(it)
-            usageLedger?.appendLedger(LedgerEvent.PatchCreated("pause-until", localDay(clock.nowMillis()), clock.nowMillis()))
+            usageLedger?.appendLedger(LedgerEvent.PatchCreated("pause-until", localDay(clock.nowMillis()), clock.nowMillis(), routineId))
         }
     }
 
@@ -716,11 +741,11 @@ class CueService(
         when (result) {
             is EngineResult.Started -> {
                 result.session.actions.filter { it.state == com.cues.core.model.ActionState.BLOCKED }.forEach {
-                    usageLedger?.appendLedger(LedgerEvent.ActionBlocked(it.actionId.name, clock.nowMillis()))
+                    usageLedger?.appendLedger(LedgerEvent.ActionBlocked(it.actionId.name, clock.nowMillis(), routine.id))
                 }
                 if (routine.trigger is com.cues.core.model.Trigger.Manual) {
                     val time = java.time.Instant.ofEpochMilli(clock.nowMillis()).atZone(zoneId())
-                    usageLedger?.appendLedger(LedgerEvent.ManualStart(time.hour * 60 + time.minute, localDay(clock.nowMillis()), clock.nowMillis()))
+                    usageLedger?.appendLedger(LedgerEvent.ManualStart(time.hour * 60 + time.minute, localDay(clock.nowMillis()), clock.nowMillis(), routine.id))
                 }
             }
             is EngineResult.Ended -> {
