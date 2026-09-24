@@ -34,7 +34,14 @@
     uses. Deliberately all-dynamic, not static, to dodge the debug
     `applicationIdSuffix` package mismatch a static `res/xml` shortcut would
     hit — see CL-31. Unverified on a device.
-  - **Not done:** Origin Island live notification (pre-existing CL-15); Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
+  - **Revisited, not built:** Origin Island live notification. Considered
+    building a `ProgressStyle` promoted notification (`compileSdk`/`targetSdk`
+    36 make it reachable) and decided against it — writing against an
+    API-36-era API with thin public documentation, with no compiler in this
+    environment to check the builder shape, is a different and worse risk
+    than this repo's usual "unverified behavior" disclosure. Recorded as a
+    deliberate kept-current-notification decision in CL-15, pending R11.
+  - **Not done:** Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
 - [ ] Checkpoint — Typed actions green (core-side criteria met — see below; Android-side device criteria still open)
 - [x] Task 10 — LiteRT-LM inference reports and embeddings.
   - `core/.../inference/Inference.kt` (`InferenceBackend`, `InferenceReport`), `DraftResult.inferenceReport` on all 3 variants, `CueService.diagnostics().lastInferenceReport` and each turn's `args["backend"]`.

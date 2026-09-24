@@ -352,9 +352,9 @@ recorded here.
 
 ---
 
-## CL-15 — No promoted Live Update; the session notification is the old style
+## CL-15 — No promoted Live Update; the session notification is the old style (recorded decision: keep it, for now)
 
-**Status:** open · **Raised:** 24 Sep 2026
+**Status:** open · **Raised:** 24 Sep 2026 · **Revisited:** 24 Sep 2026
 
 The original Sprint 6 plan called for a promoted `ProgressStyle` Live Update
 for the running session, matching iOS Live Activities' visibility. That was
@@ -364,9 +364,33 @@ OriginOS 7 lock screen or Origin Island) was never run, and building the
 richer notification before knowing the answer risked shipping a claim this
 repo could not measure.
 
-**Remove when:** either R11 is answered and a `ProgressStyle` notification is
-built and confirmed on the loaner, or this entry is replaced with a recorded
-decision to keep the current notification and why.
+**Revisited while continuing Task 9's unfinished pieces:** `compileSdk`/
+`targetSdk` are both 36, so `Notification.ProgressStyle` is technically
+reachable, and it would have been possible to write speculative code against
+it the way `CuesAccessibilityService` and the other unverified `:app` code
+in this repo already does. Decided not to. The difference is verifiability
+of the *shape*, not just the *behavior*: every other "written against real
+APIs, verified on nothing" class here (`AndroidActionExecutor`,
+`CuesAccessibilityService`, `CalendarReadings`, ...) is built against APIs
+with years of public documentation, sample code and Stack Overflow history
+to check the call shapes against, even without a compiler. `ProgressStyle`
+is an API-36-era addition with thin public documentation as of this pass —
+writing against it blind risks a *wrong* builder shape, not just an
+*unverified* one, which is a different and worse failure mode than the rest
+of this file discloses. R11 not having been run is exactly the condition
+that already argued against attempting this; nothing has changed that.
+
+**Decision:** keep the current `NotificationCompat.Builder`-based
+notification (`SessionService.buildNotification`) until R11 is actually run
+on the loaner. It is correct, already covered by the existing manual
+verification the rest of `SessionService` has, and does not claim visibility
+it cannot back up.
+
+**Remove when:** R11 is run on the loaner and either confirms the current
+notification is what OriginOS 7 shows (closing this with no further code
+needed), or shows a gap a `ProgressStyle` upgrade should close — at which
+point it can be built with a real device to check the builder shape against,
+not blind.
 
 ---
 
