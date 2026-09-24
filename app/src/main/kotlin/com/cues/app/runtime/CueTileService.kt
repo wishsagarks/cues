@@ -23,12 +23,20 @@ class CueTileService : TileService() {
         }
     }
 
+    /**
+     * Redesign plan §5.3: STATE_ACTIVE means "the thing this tile controls
+     * is currently on" — that's a live session, not the tile's own
+     * availability, which was the pre-redesign behaviour (always ACTIVE).
+     * The subtitle names the actual cue rather than a generic "cue running".
+     */
     private fun refresh() {
-        val session = (application as CuesApplication).store.allUnfinished().firstOrNull { it.state.isLive() }
+        val app = application as CuesApplication
+        val session = app.store.allUnfinished().firstOrNull { it.state.isLive() }
+        val routineTitle = session?.let { s -> app.store.findRoutine(s.routineId)?.title }
         qsTile?.apply {
-            state = Tile.STATE_ACTIVE
-            label = if (session == null) "No cue running" else "Stop cue"
-            subtitle = if (session == null) "Open Cues" else "Tap to stop"
+            state = if (session == null) Tile.STATE_INACTIVE else Tile.STATE_ACTIVE
+            label = if (session == null) "Cues" else "Stop \"${routineTitle ?: "cue"}\""
+            subtitle = if (session == null) "No cue running" else "Tap to stop"
             updateTile()
         }
     }
