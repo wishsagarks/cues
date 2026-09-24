@@ -5,13 +5,8 @@ import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -26,32 +21,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.cues.app.data.ObservableStore
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.GraceScheduler
 import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.runtime.LiveSnapshot
 import com.cues.app.ui.AvailableSignal
 import com.cues.app.ui.ContextsScreen
-import com.cues.app.ui.CuesTheme
-import com.cues.app.ui.cuesColors
 import com.cues.app.ui.DiagnosticsScreen
-import com.cues.app.ui.HomeScreen
+import com.cues.app.ui.MemoryScreen
+import com.cues.app.ui.LearningSettings
 import com.cues.app.ui.ReceiptScreen
 import com.cues.app.ui.ReviewScreen
 import com.cues.app.ui.RoutineDetailScreen
-import com.cues.app.ui.TodayScreen
-import com.cues.app.ui.MemoryScreen
-import com.cues.app.ui.LearningSettings
+import com.cues.app.ui.ask.AskScreen
+import com.cues.app.ui.components.CuesBottomNav
+import com.cues.app.ui.components.CuesTopBar
+import com.cues.app.ui.insights.InsightsScreen
+import com.cues.app.ui.nav.CuesRoutes
+import com.cues.app.ui.nav.tabTitle
+import com.cues.app.ui.now.NowScreen
+import com.cues.app.ui.now.SignalGate
+import com.cues.app.ui.theme.CuesTheme
+import com.cues.app.ui.theme.cuesTokens
+import com.cues.app.ui.workbench.WorkbenchScreen
 import com.cues.core.coach.CoachPolicy
 import com.cues.core.coach.Detectors
 import com.cues.core.coach.Suggestion
 import com.cues.core.CueService
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.DeleteResult
-import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.PairedDevice
+import com.cues.core.model.DraftSourceId
 import com.cues.core.model.AudioKind
 import com.cues.core.model.Capability
 import com.cues.core.model.Condition
@@ -60,11 +72,11 @@ import com.cues.core.model.NamedContext
 import com.cues.core.model.Place
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
+import com.cues.core.model.Session
 import com.cues.core.model.WifiNetwork
 import com.cues.core.rehearsal.Rehearsal
 import com.cues.core.review.forecastToday
 import com.cues.core.session.isLive
-import com.cues.core.store.JsonFileStore
 import com.cues.core.assistant.Conversation
 import com.cues.core.assistant.ReplyCode
 import com.cues.core.assistant.Turn
@@ -76,32 +88,18 @@ import java.time.ZoneId
 import java.util.UUID
 
 /**
- * Single-activity host for the four surfaces the PRS describes.
- *
- * No navigation library: a sealed [Screen] plus one `when` is the whole
- * router, which is enough for four screens and keeps this dependency-free.
- * [CueService] is the only thing any screen calls into for a decision or a
- * side effect — the composables below are rendering and event wiring only.
+ * Single-activity host for the 5-tab shell (redesign plan §2). navigation-
+ * compose owns the back stack; the sealed-`Screen`-plus-`when` router this
+ * replaced is gone. [CueService] is still the only thing any screen calls
+ * into for a decision or a side effect — everything below is rendering,
+ * navigation and event wiring only.
  */
 class MainActivity : ComponentActivity() {
 
     private lateinit var localSpeechInput: LocalSpeechInput
     private lateinit var replySpeaker: com.cues.app.voice.ReplySpeaker
 
-    // Two sources feed the same data-only draft box, never arming anything
-    // by themselves: a "Cue this screen" capture from ScreenTile /
-    // CuesAccessibilityService (EXTRA_SCREEN_CAPTURE), and inbound
-    // ACTION_SEND text/plain — the FDD's "Shared timetable" rule applied to
-    // any share sheet, not only the timetable-photo path. Read at the
-    // Activity level rather than inside the composable tree because either
-    // can arrive through onNewIntent, well after setContent already ran.
     private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
-
-    // App shortcuts (Task 9): "New cue" and a per-cue "Start ‹cue›" both
-    // launch MainActivity with one of these extras. A counter, not a raw
-    // Boolean/String, is what actually reaches CuesApp for "New cue" —
-    // tapping the shortcut twice in a row must re-trigger navigating Home
-    // even though the value "true" never itself changes.
     private var newCueShortcutTick by androidx.compose.runtime.mutableStateOf(0)
     private var startRoutineShortcutId by androidx.compose.runtime.mutableStateOf<String?>(null)
 
@@ -126,9 +124,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // One system-owned splash handoff on every supported Android version.
-        // This must happen before Activity setup so Android 12+ does not show a
-        // second, default splash between launch and Compose.
         installSplashScreen()
         super.onCreate(savedInstanceState)
         val app = application as CuesApplication
@@ -142,6 +137,7 @@ class MainActivity : ComponentActivity() {
                 CuesApp(
                     cueService = app.cueService,
                     store = app.store,
+                    storeGeneration = app.storeGeneration,
                     deviceDiagnostics = app.deviceDiagnostics,
                     monitoring = app.monitoring,
                     adapterHealth = { app.adapterSupervisor.health() },
@@ -174,28 +170,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private sealed interface Screen {
-    data object Home : Screen
-    data class Review(val routine: Routine) : Screen
-    data class Detail(val routineId: String) : Screen
-    data object Receipts : Screen
-    data object Diagnostics : Screen
-    data object Today : Screen
-    data object Contexts : Screen
-    data object Memory : Screen
-    data object Learning : Screen
-    data object TimetableCapture : Screen
-    data class ImportReview(val result: com.cues.core.imports.TimetableExtractionResult) : Screen
-    data class CueCardShare(val routine: Routine) : Screen
-    data object CueCardScan : Screen
-    data object UtilityBindings : Screen
-}
-
 /**
  * What a named context can be built from: signals actually readable right
- * now, never a signal Cues merely hopes is true. [ContextValue.Unknown] is
- * simply not offered — the FDD's "capture selected current signals only
- * after permission" line, applied literally.
+ * now, never a signal Cues merely hopes is true.
  */
 private fun availableSignalsNow(context: android.content.Context): List<AvailableSignal> {
     val snapshot = LiveSnapshot.current(context)
@@ -219,10 +196,32 @@ private fun availableSignalsNow(context: android.content.Context): List<Availabl
     }
 }
 
+/** Maps a live [com.cues.core.model.ContextSnapshot] into the Now cockpit's signal-gate tiles — honest UNKNOWNs included. */
+private fun signalGatesFrom(snapshot: com.cues.core.model.ContextSnapshot): List<SignalGate> = listOf(
+    SignalGate("Bluetooth", snapshot.connectedDeviceIds.mapKnown { ids -> if (ids.isEmpty()) "none connected" else "${ids.size} connected" }),
+    SignalGate("Clock", snapshot.localTime.mapKnown { it.toString() }),
+    SignalGate("Calendar", snapshot.calendarBusy.mapKnown { if (it) "busy" else "free" }),
+    SignalGate("Charging", snapshot.charging.mapKnown { if (it) "plugged in" else "unplugged" }),
+    SignalGate("Wi-Fi", snapshot.wifi.mapKnown { if (it.connected) "connected" else "disconnected" }),
+    SignalGate("Battery", snapshot.batteryPercent.mapKnown { "$it%" }),
+)
+
+private fun <T> ContextValue<T>.mapKnown(format: (T) -> String): ContextValue<String> = when (this) {
+    is ContextValue.Known -> ContextValue.Known(format(value), source, observedAtMillis)
+    is ContextValue.Unknown -> this
+}
+
+private fun DraftSourceId.friendlyLabel(): String = when (this) {
+    DraftSourceId.GRAMMAR_PARSER -> "GRAMMAR PARSER"
+    DraftSourceId.ON_DEVICE_LLM -> "ON-DEVICE MODEL"
+    DraftSourceId.IMPORTED_CARD -> "IMPORTED CARD"
+}
+
 @Composable
 private fun CuesApp(
     cueService: CueService,
-    store: JsonFileStore,
+    store: ObservableStore,
+    storeGeneration: com.cues.app.data.StoreGeneration,
     deviceDiagnostics: DeviceDiagnosticsRepository,
     monitoring: MonitoringRepository,
     adapterHealth: () -> List<com.cues.core.ports.ListenerHealth>,
@@ -237,19 +236,10 @@ private fun CuesApp(
     startRoutineShortcutId: String? = null,
     onStartRoutineShortcutConsumed: () -> Unit = {},
 ) {
-    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
-    // "Cue this screen" (Task 16): a fresh capture always brings the user
-    // back to Home, where it lands in the draft box as data — never arming
-    // anything by itself.
-    androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
-        if (incomingScreenText != null) screen = Screen.Home
-    }
-    // The "New cue" shortcut (Task 9): same navigation as a fresh capture,
-    // keyed on a counter so tapping it twice in a row still re-fires.
-    androidx.compose.runtime.LaunchedEffect(newCueShortcutTick) {
-        if (newCueShortcutTick > 0) screen = Screen.Home
-    }
+    val navController = rememberNavController()
+
     var routines by remember { mutableStateOf(cueService.list()) }
+    var liveSessions by remember { mutableStateOf(store.allUnfinished().filter { it.state.isLive() }) }
     var isDrafting by remember { mutableStateOf(false) }
     var missingCapabilities by remember { mutableStateOf<Set<Capability>>(emptySet()) }
     var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
@@ -264,78 +254,77 @@ private fun CuesApp(
     var adapterStatuses by remember { mutableStateOf(monitoring.statuses(adapterHealth())) }
     val conversation = remember { Conversation() }
     var assistantTurns by remember { mutableStateOf<List<Turn>>(emptyList()) }
-    // Session-only, off by default: a convenience for reading Cues' own
-    // exact reply text aloud, never a paraphrase and never voice acting on
-    // anything by itself — see ReplySpeaker's own doc comment.
     var speakReplies by remember { mutableStateOf(false) }
     var utilityTestResult by remember { mutableStateOf<String?>(null) }
     val coachPolicy = remember { CoachPolicy(store) }
     var coachSuggestion by remember {
         mutableStateOf<Suggestion?>(coachPolicy.next(Detectors.all(store.ledgerEvents(), System.currentTimeMillis()), System.currentTimeMillis()))
     }
+    // Non-string payloads that don't fit a nav route argument cleanly — held
+    // here and read once by the pushed destination, exactly as the redesign
+    // plan's route comments describe.
+    var reviewDraft by remember { mutableStateOf<Routine?>(null) }
+    var importResult by remember { mutableStateOf<com.cues.core.imports.TimetableExtractionResult?>(null) }
+    var cueCardShareRoutine by remember { mutableStateOf<Routine?>(null) }
 
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 4.6/4.7: re-checks coverage and refreshes what Home shows every time
-    // the app comes back to the foreground, not only at process start — the
-    // moment a user actually looks at the screen is the moment "was anything
-    // missed while I was away" matters.
+    fun refresh() {
+        routines = cueService.list()
+        liveSessions = store.allUnfinished().filter { it.state.isLive() }
+        syncAdapters()
+        adapterStatuses = monitoring.statuses(adapterHealth())
+    }
+
+    // §10.1: disk is the truth. Every re-entry to the foreground re-reads
+    // from the store rather than trusting anything cached across a stop —
+    // this is what makes a background session start (seen only by
+    // SessionService, possibly in a process the UI wasn't in) show up
+    // correctly the next time the user actually looks at the screen.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 cueService.checkBluetoothCoverage(BluetoothCoverage.currentlyConnectedDeviceIds(context))
-                // CL-25: the app coming forward is also a presence signal,
-                // independent of the ACTION_USER_PRESENT receiver in
-                // CuesApplication — this covers reopening from recents on an
-                // already-unlocked phone, which never fires that broadcast.
                 cueService.retryPendingActions()
-                syncAdapters()
-                adapterStatuses = monitoring.statuses(adapterHealth())
-                routines = cueService.list()
-                // Task 9: keeps "Start ‹cue›" in step with which manual cues
-                // are actually armed right now, not whatever was true the
-                // last time the app happened to be foregrounded.
+                refresh()
                 com.cues.app.runtime.AppShortcuts.refresh(context, routines)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-
-    fun refresh() {
-        routines = cueService.list()
-        syncAdapters()
-        adapterStatuses = monitoring.statuses(adapterHealth())
-    }
+    // A store write anywhere (this UI, or a background receiver/service in
+    // this same process) bumps the generation; re-read on the next one. A
+    // StateFlow, not a one-shot event — see StoreGeneration's doc comment
+    // for why that's what survives a process death between a background
+    // write and the next time this composition starts.
+    val generation by storeGeneration.value.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(generation) { if (generation > 0) refresh() }
 
     fun notify(message: String) {
         scope.launch { snackbarHost.showSnackbar(message) }
     }
 
-    // "Start ‹cue›" shortcut (Task 9): the exact same event
-    // CuesAppFunctionService.startCue already fires — EventKind.MANUAL_RUN
-    // scoped to this one routine id (CL-28), never an unscoped run that
-    // could start every armed manual cue at once.
+    androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
+        if (incomingScreenText != null) navController.navigateToTab(CuesRoutes.ASK)
+    }
+    androidx.compose.runtime.LaunchedEffect(newCueShortcutTick) {
+        if (newCueShortcutTick > 0) navController.navigateToTab(CuesRoutes.ASK)
+    }
     androidx.compose.runtime.LaunchedEffect(startRoutineShortcutId) {
         val routineId = startRoutineShortcutId ?: return@LaunchedEffect
         onStartRoutineShortcutConsumed()
         val routine = cueService.list().firstOrNull { it.id == routineId }
         when {
             routine == null -> notify("That cue no longer exists.")
-            routine.trigger !is com.cues.core.model.Trigger.Manual ->
-                notify("\"${routine.title}\" doesn't run by hand.")
-            routine.status != com.cues.core.model.RoutineStatus.ARMED ->
-                notify("\"${routine.title}\" is ${routine.status.name.lowercase()}, not armed.")
+            routine.trigger !is com.cues.core.model.Trigger.Manual -> notify("\"${routine.title}\" doesn't run by hand.")
+            routine.status != RoutineStatus.ARMED -> notify("\"${routine.title}\" is ${routine.status.name.lowercase()}, not armed.")
             else -> {
                 val results = cueService.onDeviceEvent(
-                    com.cues.core.model.TriggerEvent(
-                        com.cues.core.model.EventKind.MANUAL_RUN,
-                        System.currentTimeMillis(),
-                        routineId = routine.id,
-                    ),
+                    com.cues.core.model.TriggerEvent(com.cues.core.model.EventKind.MANUAL_RUN, System.currentTimeMillis(), routineId = routine.id),
                 )
                 val started = results.filterIsInstance<com.cues.core.session.EngineResult.Started>().any()
                 notify(if (started) "Started \"${routine.title}\"." else "\"${routine.title}\" did not start — its conditions weren't met.")
@@ -362,18 +351,14 @@ private fun CuesApp(
             when {
                 draftedRoutine != null -> {
                     missingCapabilities = emptySet()
-                    screen = Screen.Review(draftedRoutine)
+                    reviewDraft = draftedRoutine
+                    navController.navigate(CuesRoutes.REVIEW)
                 }
                 turn.reply.args["appQuery"] != null -> {
                     val query = turn.reply.args.getValue("appQuery")
                     appSourceText = text
                     appQuery = query
-                    // Queried fresh each time rather than cached: an app can be
-                    // installed or removed between one "open X" and the next,
-                    // and this list is cheap enough that staleness buys nothing.
-                    appCandidates = com.cues.app.runtime.rankInstalledApps(
-                        com.cues.app.runtime.installedApps(context), query,
-                    )
+                    appCandidates = com.cues.app.runtime.rankInstalledApps(com.cues.app.runtime.installedApps(context), query)
                 }
                 turn.reply.code == ReplyCode.NEEDS_CLARIFICATION -> {
                     val ids = turn.reply.chips.filterIsInstance<com.cues.core.assistant.ReplyChip.Choice>().map { it.id }.toSet()
@@ -391,149 +376,183 @@ private fun CuesApp(
         }
     }
 
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val isTopLevel = currentRoute in CuesRoutes.bottomTabs
+    val t = cuesTokens
+
     Scaffold(
-        containerColor = cuesColors.bg100,
-        contentColor = cuesColors.ink100,
+        containerColor = t.voidSurface,
+        contentColor = t.inkPrimary,
         snackbarHost = { SnackbarHost(snackbarHost) },
+        topBar = {
+            if (isTopLevel) {
+                CuesTopBar(title = tabTitle(currentRoute ?: CuesRoutes.NOW), onOpenChecks = { navController.navigate(CuesRoutes.CHECKS) })
+            }
+        },
+        bottomBar = {
+            if (isTopLevel) {
+                CuesBottomNav(currentRoute = currentRoute, onSelect = { navController.navigateToTab(it) })
+            }
+        },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            AnimatedContent(
-                targetState = screen,
-                transitionSpec = {
-                    (slideInHorizontally { it / 8 } + fadeIn()) togetherWith
-                        (slideOutHorizontally { -it / 10 } + fadeOut())
-                },
-                label = "screen transition",
-            ) { current -> when (current) {
-                Screen.Home -> HomeScreen(
-                    routines = routines,
-                    adapterStatuses = adapterStatuses,
-                    isDrafting = isDrafting,
-                    onDraft = ::draft,
-                    incomingText = incomingScreenText,
-                    onOpenRoutine = { routine -> screen = Screen.Detail(routine.id) },
-                    onOpenReceipts = { screen = Screen.Receipts },
-                    onOpenDiagnostics = { screen = Screen.Diagnostics },
-                    onOpenToday = { screen = Screen.Today },
-                    onOpenContexts = { screen = Screen.Contexts },
-                    onOpenMemory = { screen = Screen.Memory },
-                    onOpenLearning = { screen = Screen.Learning },
-                    onOpenTimetableCapture = { screen = Screen.TimetableCapture },
-                    onOpenCueCardScan = { screen = Screen.CueCardScan },
-                    onOpenUtilityBindings = { screen = Screen.UtilityBindings },
-                    onExportConsole = {
-                        // A snapshot of what's true right now, shared through
-                        // whatever the sheet offers (Office Kit included) —
-                        // never a live link back into this phone.
-                        val html = com.cues.app.bridge.ExportImport.buildConsoleHtml(context, cueService, store)
-                        val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
-                        context.startActivity(com.cues.app.bridge.ExportImport.shareIntent(context, uri))
-                    },
-                    speakReplies = speakReplies,
-                    onToggleSpeakReplies = {
-                        speakReplies = !speakReplies
-                        if (!speakReplies) replySpeaker.stop()
-                    },
-                    onStartVoice = { onTranscript, onUnavailable ->
-                        localSpeechInput.start(onTranscript, onUnavailable)
-                    },
-                    deviceCandidates = deviceCandidates,
-                    onSelectDevice = { device ->
-                        val source = deviceSourceText
-                        deviceCandidates = null
-                        deviceSourceText = null
-                        if (source != null) draft("$source (selected paired device: ${device.label})")
-                    },
-                    onDismissDevicePicker = {
-                        deviceCandidates = null
-                        deviceSourceText = null
-                    },
-                    appQuery = appQuery,
-                    appCandidates = appCandidates,
-                    onSelectApp = { app ->
-                        val source = appSourceText
-                        appCandidates = null
-                        appQuery = null
-                        appSourceText = null
-                        // A machine-written marker only this call site ever
-                        // produces — GrammarParser trusts it because nothing
-                        // else can generate it, never because it looks
-                        // plausible. See GrammarParser.ResolvedApp.
-                        if (source != null) draft("$source (selected app: ${app.packageName}|${app.label})")
-                    },
-                    onDismissAppPicker = {
-                        appCandidates = null
-                        appQuery = null
-                        appSourceText = null
-                    },
-                    assistantTurns = assistantTurns,
-                    onConfirmCommand = { command ->
-                        if (cueService.confirm(command)) {
+            NavHost(navController = navController, startDestination = CuesRoutes.NOW) {
+                composable(CuesRoutes.NOW) {
+                    val snapshot = remember(liveSessions, routines) { LiveSnapshot.current(context) }
+                    val forecast = remember(routines) {
+                        forecastToday(routines, store.allPatches(), snapshot, ZoneId.systemDefault(), store)
+                    }
+                    NowScreen(
+                        routines = routines,
+                        liveSessions = liveSessions,
+                        signalGates = remember(snapshot) { signalGatesFrom(snapshot) },
+                        forecast = forecast,
+                        titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
+                        drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
+                        onOpenRoutine = { routine -> navController.navigate(CuesRoutes.cueDetail(routine.id)) },
+                        onArmPause = { routine ->
+                            val result = if (routine.status == RoutineStatus.PAUSED) cueService.resume(routine.id)
+                            else cueService.pause(routine.id)?.let { ArmResult.Ok(it) }
+                            when (result) {
+                                is ArmResult.Ok -> refresh()
+                                is ArmResult.MissingCapabilities -> {
+                                    missingCapabilities = result.missing
+                                    notify("Resumed as reviewable — a permission is still missing.")
+                                    refresh()
+                                }
+                                else -> notify("Could not change this cue's status.")
+                            }
+                        },
+                        onManualStop = { session ->
+                            cueService.onManualStop(session.id)
+                            GraceScheduler.cancel(context, session.id)
                             refresh()
-                            notify("Done. The confirmed command was applied.")
-                        } else notify("That command no longer has a valid target.")
-                    },
-                    onHandoffToJovi = {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_ASSIST)
-                        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
-                        else notify("No system assistant is available on this phone.")
-                    },
-                    coachSuggestion = coachSuggestion,
-                    onAcceptSuggestion = { suggestion ->
-                        coachSuggestion = null
-                        // CL-27: never re-drafts suggestion.proposal as a
-                        // sentence — no drafter could ever parse it, because
-                        // it describes an edit, not a cue. acceptSuggestion
-                        // applies the structured operation straight to its
-                        // routine through Refiner, the same as any other
-                        // refinement, and returns null (never guessing) when
-                        // the suggestion names no routine or that routine is
-                        // gone.
-                        val refined = cueService.acceptSuggestion(suggestion)
-                        if (refined != null) {
-                            missingCapabilities = emptySet()
-                            screen = Screen.Review(refined)
-                        } else {
-                            notify("This suggestion can no longer be applied — its cue may have changed.")
-                        }
-                    },
-                    onDismissSuggestion = { suggestion, permanent ->
-                        coachPolicy.dismiss(suggestion.patternKey, System.currentTimeMillis(), permanent)
-                        coachSuggestion = null
-                    },
-                )
+                        },
+                        onGrantCapability = { navController.navigate(CuesRoutes.CHECKS) },
+                        adapterStatuses = adapterStatuses,
+                    )
+                }
 
-                is Screen.Review -> ReviewFlow(
-                    routine = current.routine,
-                    cueService = cueService,
-                    missingCapabilities = missingCapabilities,
-                    onApproved = {
-                        refresh()
-                        missingCapabilities = emptySet()
-                        screen = Screen.Home
-                    },
-                    onMissingCapabilities = { missingCapabilities = it },
-                    onNotify = ::notify,
-                    onBack = { screen = Screen.Home },
-                )
+                composable(CuesRoutes.INSIGHTS) {
+                    val forecast = remember(routines) {
+                        forecastToday(routines, store.allPatches(), LiveSnapshot.current(context), ZoneId.systemDefault(), store)
+                    }
+                    val diag = cueService.diagnostics()
+                    InsightsScreen(
+                        forecast = forecast,
+                        titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
+                        ledgerEnabled = store.signalOptIn,
+                        onToggleLedger = { store.setSignalOptIn(it) },
+                        ledgerEvents = store.ledgerEvents(),
+                        drafterLabel = diag.primaryDrafter.friendlyLabel(),
+                        lastFallbackReason = diag.lastFallbackReason,
+                        onExportConsole = {
+                            val html = com.cues.app.bridge.ExportImport.buildConsoleHtml(context, cueService, store)
+                            val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
+                            context.startActivity(com.cues.app.bridge.ExportImport.shareIntent(context, uri))
+                        },
+                    )
+                }
 
-                is Screen.Detail -> {
-                    val routine = routines.firstOrNull { it.id == current.routineId }
+                composable(CuesRoutes.ASK) {
+                    AskScreen(
+                        isDrafting = isDrafting,
+                        onDraft = ::draft,
+                        drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
+                        onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
+                        deviceCandidates = deviceCandidates,
+                        onSelectDevice = { device ->
+                            val source = deviceSourceText
+                            deviceCandidates = null
+                            deviceSourceText = null
+                            if (source != null) draft("$source (selected paired device: ${device.label})")
+                        },
+                        onDismissDevicePicker = { deviceCandidates = null; deviceSourceText = null },
+                        appQuery = appQuery,
+                        appCandidates = appCandidates,
+                        onSelectApp = { app ->
+                            val source = appSourceText
+                            appCandidates = null
+                            appQuery = null
+                            appSourceText = null
+                            if (source != null) draft("$source (selected app: ${app.packageName}|${app.label})")
+                        },
+                        onDismissAppPicker = { appCandidates = null; appQuery = null; appSourceText = null },
+                        assistantTurns = assistantTurns,
+                        onConfirmCommand = { command ->
+                            if (cueService.confirm(command)) {
+                                refresh()
+                                notify("Done. The confirmed command was applied.")
+                            } else notify("That command no longer has a valid target.")
+                        },
+                        onHandoffToJovi = {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_ASSIST)
+                            if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+                            else notify("No system assistant is available on this phone.")
+                        },
+                        incomingText = incomingScreenText,
+                    )
+                }
+
+                composable(CuesRoutes.RECEIPTS) {
+                    ReceiptScreen(
+                        loadReceipts = { store.raw.receipts() },
+                        onBack = {},
+                        onSpeak = replySpeaker::speak,
+                    )
+                }
+
+                composable(CuesRoutes.WORKBENCH) {
+                    WorkbenchScreen(
+                        onOpenContexts = { navController.navigate(CuesRoutes.WORKBENCH_CONTEXTS) },
+                        onOpenMemory = { navController.navigate(CuesRoutes.WORKBENCH_MEMORY) },
+                        onOpenUtilityBindings = { navController.navigate(CuesRoutes.WORKBENCH_MACROS) },
+                        onOpenTimetableCapture = { navController.navigate(CuesRoutes.INGEST_TIMETABLE) },
+                        onOpenCueCardScan = { navController.navigate(CuesRoutes.INGEST_SCAN) },
+                    )
+                }
+
+                composable(CuesRoutes.REVIEW) {
+                    val routine = reviewDraft
                     if (routine == null) {
-                        screen = Screen.Home
+                        navController.popBackStack()
                     } else {
-                        val activeSessionId = remember(routine.id, routines) {
-                            store.activeFor(routine.id).firstOrNull { it.state.isLive() }?.id
+                        ReviewFlow(
+                            routine = routine,
+                            cueService = cueService,
+                            missingCapabilities = missingCapabilities,
+                            onApproved = {
+                                refresh()
+                                missingCapabilities = emptySet()
+                                reviewDraft = null
+                                navController.popBackStack()
+                            },
+                            onMissingCapabilities = { missingCapabilities = it },
+                            onNotify = ::notify,
+                            onBack = { reviewDraft = null; navController.popBackStack() },
+                        )
+                    }
+                }
+
+                composable(
+                    CuesRoutes.CUE_DETAIL,
+                    arguments = listOf(navArgument("routineId") { type = NavType.StringType }),
+                ) { backStackEntry2 ->
+                    val routineId = backStackEntry2.arguments?.getString("routineId")
+                    val routine = routines.firstOrNull { it.id == routineId }
+                    if (routine == null) {
+                        navController.popBackStack()
+                    } else {
+                        val activeSessionId = remember(routine.id, liveSessions) {
+                            liveSessions.firstOrNull { it.routineId == routine.id }?.id
                         }
                         RoutineDetailScreen(
                             routine = routine,
-                            onBack = { screen = Screen.Home },
+                            onBack = { navController.popBackStack() },
                             onPauseResume = {
-                                val result = if (routine.status == RoutineStatus.PAUSED) {
-                                    cueService.resume(routine.id)
-                                } else {
-                                    cueService.pause(routine.id)?.let { ArmResult.Ok(it) }
-                                }
+                                val result = if (routine.status == RoutineStatus.PAUSED) cueService.resume(routine.id)
+                                else cueService.pause(routine.id)?.let { ArmResult.Ok(it) }
                                 when (result) {
                                     is ArmResult.Ok -> refresh()
                                     is ArmResult.MissingCapabilities -> {
@@ -541,19 +560,13 @@ private fun CuesApp(
                                         notify("Resumed as reviewable — a permission is still missing.")
                                         refresh()
                                     }
-
                                     else -> notify("Could not change this cue's status.")
                                 }
                             },
                             onDelete = {
                                 when (val result = cueService.delete(routine.id)) {
-                                    DeleteResult.Ok -> {
-                                        refresh()
-                                        screen = Screen.Home
-                                    }
-
-                                    is DeleteResult.Blocked ->
-                                        notify("Still cleaning up ${result.sessionsWithObligations.size} session(s) — try again shortly.")
+                                    DeleteResult.Ok -> { refresh(); navController.popBackStack() }
+                                    is DeleteResult.Blocked -> notify("Still cleaning up ${result.sessionsWithObligations.size} session(s) — try again shortly.")
                                 }
                             },
                             onManualStop = activeSessionId?.let { sessionId ->
@@ -569,73 +582,36 @@ private fun CuesApp(
                             },
                             deleteBlockedReason = null,
                             activePatch = cueService.currentPatch(routine.id),
-                            onSkipToday = {
-                                cueService.skipToday(routine.id)
-                                refresh()
-                            },
-                            onPauseUntil = { epochMillis ->
-                                cueService.pauseUntil(routine.id, epochMillis)
-                                refresh()
-                            },
-                            onClearPatch = {
-                                cueService.clearPatch(routine.id)
-                                refresh()
-                            },
-                            onShareAsCard = { screen = Screen.CueCardShare(routine) },
-                            onReview = { screen = Screen.Review(routine) }.takeIf {
+                            onSkipToday = { cueService.skipToday(routine.id); refresh() },
+                            onPauseUntil = { epochMillis -> cueService.pauseUntil(routine.id, epochMillis); refresh() },
+                            onClearPatch = { cueService.clearPatch(routine.id); refresh() },
+                            onShareAsCard = { cueCardShareRoutine = routine; navController.navigate(CuesRoutes.CUE_CARD_SHARE) },
+                            onReview = { reviewDraft = routine; navController.navigate(CuesRoutes.REVIEW) }.takeIf {
                                 routine.status != RoutineStatus.ARMED && routine.status != RoutineStatus.PAUSED
                             },
                         )
                     }
                 }
 
-                Screen.Receipts -> ReceiptScreen(
-                    loadReceipts = { store.receipts() },
-                    onBack = { screen = Screen.Home },
-                    onSpeak = replySpeaker::speak,
-                )
-
-                Screen.Diagnostics -> DiagnosticsScreen(
-                    diagnostics = diagnostics,
-                    isRefreshing = isDiagnosticsRefreshing,
-                    onRefresh = {
-                        isDiagnosticsRefreshing = true
-                        deviceDiagnostics.refresh {
-                            diagnostics = it
-                            isDiagnosticsRefreshing = false
-                        }
-                    },
-                    onRecordJoviMicOrAssist = { observation ->
-                        diagnostics = deviceDiagnostics.recordJoviMicOrAssist(observation)
-                    },
-                    onRecordPermissionMonitor = { observation ->
-                        diagnostics = deviceDiagnostics.recordPermissionMonitor(observation)
-                    },
-                    onBack = { screen = Screen.Home },
-                    isBakingOff = isBakingOff,
-                    bakeOffReport = bakeOffReport,
-                    onRunBakeOff = ::runBakeOffNow,
-                    cueDiagnostics = cueService.diagnostics(),
-                )
-
-                Screen.Today -> {
-                    val forecast = remember(routines) {
-                        forecastToday(
-                            routines = routines,
-                            patches = store.allPatches(),
-                            snapshot = LiveSnapshot.current(context),
-                            zone = ZoneId.systemDefault(),
-                            contexts = store,
-                        )
-                    }
-                    TodayScreen(
-                        items = forecast,
-                        titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
-                        onBack = { screen = Screen.Home },
+                composable(CuesRoutes.CHECKS) {
+                    DiagnosticsScreen(
+                        diagnostics = diagnostics,
+                        isRefreshing = isDiagnosticsRefreshing,
+                        onRefresh = {
+                            isDiagnosticsRefreshing = true
+                            deviceDiagnostics.refresh { diagnostics = it; isDiagnosticsRefreshing = false }
+                        },
+                        onRecordJoviMicOrAssist = { observation -> diagnostics = deviceDiagnostics.recordJoviMicOrAssist(observation) },
+                        onRecordPermissionMonitor = { observation -> diagnostics = deviceDiagnostics.recordPermissionMonitor(observation) },
+                        onBack = { navController.popBackStack() },
+                        isBakingOff = isBakingOff,
+                        bakeOffReport = bakeOffReport,
+                        onRunBakeOff = ::runBakeOffNow,
+                        cueDiagnostics = cueService.diagnostics(),
                     )
                 }
 
-                Screen.Contexts -> {
+                composable(CuesRoutes.WORKBENCH_CONTEXTS) {
                     var contexts by remember { mutableStateOf(store.allContexts()) }
                     var places by remember { mutableStateOf(store.allPlaces()) }
                     ContextsScreen(
@@ -643,106 +619,28 @@ private fun CuesApp(
                         places = places,
                         availableSignals = remember { availableSignalsNow(context) },
                         onSaveContext = { label, predicates ->
-                            store.saveContext(
-                                NamedContext(id = "context-" + UUID.randomUUID(), label = label, version = 1, predicates = predicates),
-                            )
+                            store.saveContext(NamedContext(id = "context-" + UUID.randomUUID(), label = label, version = 1, predicates = predicates))
                             contexts = store.allContexts()
                         },
-                        onDeleteContext = { id ->
-                            store.deleteContext(id)
-                            contexts = store.allContexts()
-                        },
+                        onDeleteContext = { id -> store.deleteContext(id); contexts = store.allContexts() },
                         onSavePlace = { label, lat, lng, radius ->
                             store.savePlace(Place(id = "place-" + UUID.randomUUID(), label = label, version = 1, latitude = lat, longitude = lng, radiusMeters = radius))
                             places = store.allPlaces()
                         },
-                        onDeletePlace = { id ->
-                            store.deletePlace(id)
-                            places = store.allPlaces()
-                        },
-                        onBack = { screen = Screen.Home },
+                        onDeletePlace = { id -> store.deletePlace(id); places = store.allPlaces() },
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
-                Screen.Memory -> MemoryScreen(
-                    facts = cueService.listFacts(),
-                    onDelete = { fact ->
-                        cueService.deleteFact(fact.id)
-                        refresh()
-                    },
-                    onBack = { screen = Screen.Home },
-                )
+                composable(CuesRoutes.WORKBENCH_MEMORY) {
+                    MemoryScreen(
+                        facts = cueService.listFacts(),
+                        onDelete = { fact -> cueService.deleteFact(fact.id); refresh() },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
 
-                Screen.Learning -> LearningSettings(
-                    enabled = store.signalOptIn,
-                    events = store.ledgerEvents(),
-                    onEnabledChange = store::setSignalOptIn,
-                    onWipe = {
-                        store.wipeLedger()
-                        coachSuggestion = null
-                    },
-                    onBack = { screen = Screen.Home },
-                )
-
-                Screen.TimetableCapture -> com.cues.app.camera.TimetableCaptureScreen(
-                    onRecognized = { text ->
-                        // The recognized text is untrusted data from here on,
-                        // exactly like shared or typed text — the extractor
-                        // decides what, if anything, it proposes.
-                        screen = Screen.ImportReview(com.cues.core.imports.TimetableExtractor.extract(text))
-                    },
-                    onBack = { screen = Screen.Home },
-                )
-
-                is Screen.ImportReview -> com.cues.app.ui.ImportReviewScreen(
-                    result = current.result,
-                    onReviewEntry = { entry ->
-                        entry.proposedSentence()?.let { sentence ->
-                            // The same drafter, Review and Approve path any
-                            // typed or spoken cue goes through — an import
-                            // proposal earns no shortcut around it.
-                            draft(sentence)
-                        }
-                    },
-                    onBack = { screen = Screen.Home },
-                )
-
-                is Screen.CueCardShare -> com.cues.app.ui.CueCardShareScreen(
-                    routine = current.routine,
-                    onShareAsText = { text ->
-                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_TEXT, text)
-                        }
-                        context.startActivity(android.content.Intent.createChooser(intent, "Share Cue Card"))
-                    },
-                    onBack = { screen = Screen.Home },
-                )
-
-                Screen.CueCardScan -> com.cues.app.camera.CueCardScanScreen(
-                    onScanned = { payload ->
-                        // Untrusted text until CueCards.decode checks its
-                        // digest — nothing here trusts a package/permission
-                        // claim, and every device/place/context reference is
-                        // re-resolved against this phone's own stores.
-                        when (val result = com.cues.core.share.CueCards.reimport(
-                            payload, pairedDevices(), store.allContexts(), store.allPlaces(),
-                        )) {
-                            is com.cues.core.share.ReimportResult.Ready -> screen = Screen.Review(result.routine)
-                            is com.cues.core.share.ReimportResult.MissingEntity ->
-                                notify("You don't have a ${result.kind} named \"${result.label}\" yet. Add it, then scan again.")
-                            com.cues.core.share.ReimportResult.Tampered ->
-                                notify("This card could not be verified — it may be corrupted or edited.")
-                            is com.cues.core.share.ReimportResult.Malformed ->
-                                notify("This does not look like a Cue Card. ${result.reason}")
-                            is com.cues.core.share.ReimportResult.UnsupportedSchema ->
-                                notify("This card was made by a newer version of Cues.")
-                        }
-                    },
-                    onBack = { screen = Screen.Home },
-                )
-
-                Screen.UtilityBindings -> {
+                composable(CuesRoutes.WORKBENCH_MACROS) {
                     var bindingsRefresh by remember { mutableStateOf(0) }
                     val bindingsById = remember(bindingsRefresh) { store.allBindings().associateBy { it.utilityId } }
                     com.cues.app.ui.UtilityBindingScreen(
@@ -753,22 +651,14 @@ private fun CuesApp(
                                 validation.errors.map { it.message }
                             } else {
                                 store.saveMacro(macro)
-                                val existing = bindingsById[utilityId]
-                                    ?: com.cues.core.model.UtilityBinding(utilityId, onMacroId = "", offMacroId = "")
-                                val updated = if (state == com.cues.core.model.UtilityState.ON) {
-                                    existing.copy(onMacroId = macro.id)
-                                } else {
-                                    existing.copy(offMacroId = macro.id)
-                                }
+                                val existing = bindingsById[utilityId] ?: com.cues.core.model.UtilityBinding(utilityId, onMacroId = "", offMacroId = "")
+                                val updated = if (state == com.cues.core.model.UtilityState.ON) existing.copy(onMacroId = macro.id) else existing.copy(offMacroId = macro.id)
                                 store.saveBinding(updated)
                                 bindingsRefresh++
                                 emptyList()
                             }
                         },
-                        onDeleteBinding = { utilityId ->
-                            store.deleteBinding(utilityId)
-                            bindingsRefresh++
-                        },
+                        onDeleteBinding = { utilityId -> store.deleteBinding(utilityId); bindingsRefresh++ },
                         onTest = { utilityId, state ->
                             scope.launch {
                                 val outcome = withContext(Dispatchers.IO) { testUtilityAction(utilityId, state) }
@@ -776,11 +666,80 @@ private fun CuesApp(
                             }
                         },
                         lastTestResult = utilityTestResult,
-                        onBack = { screen = Screen.Home },
+                        onBack = { navController.popBackStack() },
                     )
                 }
-            } }
+
+                composable(CuesRoutes.INGEST_TIMETABLE) {
+                    com.cues.app.camera.TimetableCaptureScreen(
+                        onRecognized = { text ->
+                            importResult = com.cues.core.imports.TimetableExtractor.extract(text)
+                            navController.navigate(CuesRoutes.INGEST_IMPORT)
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+
+                composable(CuesRoutes.INGEST_IMPORT) {
+                    val result = importResult
+                    if (result == null) {
+                        navController.popBackStack()
+                    } else {
+                        com.cues.app.ui.ImportReviewScreen(
+                            result = result,
+                            onReviewEntry = { entry -> entry.proposedSentence()?.let { sentence -> draft(sentence) } },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
+
+                composable(CuesRoutes.CUE_CARD_SHARE) {
+                    val routine = cueCardShareRoutine
+                    if (routine == null) {
+                        navController.popBackStack()
+                    } else {
+                        com.cues.app.ui.CueCardShareScreen(
+                            routine = routine,
+                            onShareAsText = { text ->
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(intent, "Share Cue Card"))
+                            },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
+
+                composable(CuesRoutes.INGEST_SCAN) {
+                    com.cues.app.camera.CueCardScanScreen(
+                        onScanned = { payload ->
+                            when (val result = com.cues.core.share.CueCards.reimport(payload, pairedDevices(), store.allContexts(), store.allPlaces())) {
+                                is com.cues.core.share.ReimportResult.Ready -> {
+                                    reviewDraft = result.routine
+                                    navController.navigate(CuesRoutes.REVIEW)
+                                }
+                                is com.cues.core.share.ReimportResult.MissingEntity ->
+                                    notify("You don't have a ${result.kind} named \"${result.label}\" yet. Add it, then scan again.")
+                                com.cues.core.share.ReimportResult.Tampered -> notify("This card could not be verified — it may be corrupted or edited.")
+                                is com.cues.core.share.ReimportResult.Malformed -> notify("This does not look like a Cue Card. ${result.reason}")
+                                is com.cues.core.share.ReimportResult.UnsupportedSchema -> notify("This card was made by a newer version of Cues.")
+                            }
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
         }
+    }
+}
+
+private fun NavHostController.navigateToTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
@@ -802,13 +761,6 @@ private fun ReviewFlow(
     val review = remember(routine) { cueService.review(routine) }
     val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
 
-    // 4.7 / AC-03: the case CL-02 flagged — a user leaves the app to grant a
-    // permission (say, notification-policy access) and comes back — was
-    // never re-checked before. approveAndArm already re-reads capabilities
-    // at arm time, so this can't approve on stale consent, but the review
-    // screen itself sat there showing the permission as still missing until
-    // the user tried anyway. Re-reading on every resume fixes that without
-    // touching arming's own gate.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, review) {
         val observer = LifecycleEventObserver { _, event ->
@@ -832,7 +784,6 @@ private fun ReviewFlow(
                     onMissingCapabilities(result.missing)
                     onNotify("Approved. Grant the missing access, then try arming again.")
                 }
-
                 is ArmResult.Invalid -> onNotify("This cue isn't valid yet — see the checks above.")
                 ArmResult.NotApproved -> onNotify("Approval did not take. Try again.")
                 ArmResult.NotPaused -> Unit

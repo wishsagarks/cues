@@ -9,7 +9,7 @@ import com.cues.core.coach.Detectors
 import com.cues.core.cli.ConsoleHtml
 import com.cues.core.export.CuesExporter
 import com.cues.core.review.forecastToday
-import com.cues.core.store.JsonFileStore
+import com.cues.app.data.ObservableStore
 import java.io.File
 import java.time.ZoneId
 
@@ -30,7 +30,7 @@ object ExportImport {
      * [CuesExporter] and `console/template.html` the CLI's `./dev console`
      * demo uses, fed real data instead of a fixture.
      */
-    fun buildConsoleHtml(context: Context, cueService: CueService, store: JsonFileStore): String {
+    fun buildConsoleHtml(context: Context, cueService: CueService, store: ObservableStore): String {
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
         val routines = store.all()
@@ -46,7 +46,7 @@ object ExportImport {
         return ConsoleHtml.render(
             CuesExporter.exportText(
                 routines = routines,
-                receipts = store.receipts(),
+                receipts = store.raw.receipts(),
                 forecast = forecast,
                 coachSuggestions = Detectors.all(store.ledgerEvents(), now),
                 ledgerEvents = store.ledgerEvents(),

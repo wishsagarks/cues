@@ -23,6 +23,11 @@ splashscreen = "1.0.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
 datastore = "1.1.1"
+# Redesign (Sprint 8): navigation-compose for the 5-tab shell + pushed flows,
+# and material-icons-extended for the icon set every screen now uses. Neither
+# was resolvable without dl.google.com when pinned — unverified until the
+# first laptop build, tracked under the existing CL-04 entry in CLEANUP.md.
+navigationCompose = "2.8.5"
 
 # Verified on 24 Sep 2026: com.google.ai.edge.litertlm:litertlm-android
 # genuinely resolves on Google's Maven, with real published releases up to
@@ -85,9 +90,11 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 litertlm-android = { module = "com.google.ai.edge.litertlm:litertlm-android", version.ref = "litertlm" }
 androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "cameraX" }
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }

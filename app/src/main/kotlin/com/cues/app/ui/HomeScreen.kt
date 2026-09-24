@@ -441,7 +441,7 @@ private val MONITORING_TIME_FORMAT = SimpleDateFormat("EEE d MMM, HH:mm", Locale
  * A template is a suggestion for what to type, never a shortcut around them.
  */
 @Composable
-private fun TemplateGallery(onPick: (Template) -> Unit) {
+internal fun TemplateGallery(onPick: (Template) -> Unit) {
     val templates = remember { Templates.load() }
     if (templates.isEmpty()) return
     val haptics = LocalHapticFeedback.current
@@ -474,7 +474,7 @@ private fun TemplateGallery(onPick: (Template) -> Unit) {
 }
 
 @Composable
-private fun DevicePickerDialog(
+internal fun DevicePickerDialog(
     candidates: List<PairedDevice>,
     onSelectDevice: (PairedDevice) -> Unit,
     onDismiss: () -> Unit,
@@ -514,7 +514,7 @@ private fun DevicePickerDialog(
  * `action.app` clarification.
  */
 @Composable
-private fun AppPickerDialog(
+internal fun AppPickerDialog(
     query: String,
     candidates: List<com.cues.app.runtime.InstalledApp>,
     onSelectApp: (com.cues.app.runtime.InstalledApp) -> Unit,
@@ -550,7 +550,7 @@ private fun AppPickerDialog(
     )
 }
 
-private fun textMentionsDevice(text: String): Boolean = Regex(
+internal fun textMentionsDevice(text: String): Boolean = Regex(
     "\\b(earbuds|ear buds|buds|headphones|headset|airpods|speaker|watch|car)\\b",
     RegexOption.IGNORE_CASE,
 ).containsMatchIn(text)

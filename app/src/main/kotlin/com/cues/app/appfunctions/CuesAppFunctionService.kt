@@ -18,6 +18,7 @@ import com.cues.core.model.TriggerEvent
 import com.cues.core.review.ForecastStatus
 import com.cues.core.review.ReviewCopy
 import com.cues.core.review.forecastToday
+import com.cues.core.session.isLive
 import java.time.ZoneId
 
 /**

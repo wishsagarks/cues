@@ -2,6 +2,8 @@ package com.cues.app
 
 import android.app.Application
 import android.util.Log
+import com.cues.app.data.ObservableStore
+import com.cues.app.data.StoreGeneration
 import com.cues.app.drafting.LiteRtLmSession
 import com.cues.app.drafting.OnDeviceLlmDrafter
 import com.cues.app.runtime.AndroidActionExecutor
@@ -105,7 +107,17 @@ class CuesApplication : Application() {
      */
     private val storeRoot: File by lazy { File(filesDir, "cues-store") }
 
-    val store: JsonFileStore by lazy { JsonFileStore(storeRoot) }
+    /**
+     * Redesign (§5.1/§10.1): every screen's ViewModel reads through [store]
+     * and watches [storeGeneration] to know when to re-read. The generation
+     * is a hint for *when* to re-read, never a cache of *what* changed — see
+     * ObservableStore.kt for why a StateFlow, not a one-shot event, is what
+     * survives a process death between a background write and the next time
+     * the UI opens.
+     */
+    val storeGeneration: StoreGeneration by lazy { StoreGeneration() }
+
+    val store: ObservableStore by lazy { ObservableStore(JsonFileStore(storeRoot), storeGeneration) }
 
     /** Sprint 3.0's target-phone results, kept outside the rule store. */
     val deviceDiagnostics: DeviceDiagnosticsRepository by lazy { DeviceDiagnosticsRepository(this) }
