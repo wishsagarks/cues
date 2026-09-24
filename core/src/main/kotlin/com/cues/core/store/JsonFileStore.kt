@@ -11,7 +11,9 @@ import com.cues.core.model.Fact
 import com.cues.core.model.UiMacro
 import com.cues.core.model.UtilityBinding
 import com.cues.core.model.UtilityId
+import com.cues.core.ports.ReceiptLog
 import com.cues.core.ports.ReceiptSink
+import com.cues.core.receipt.ReceiptRecord
 import com.cues.core.ports.RoutineStore
 import com.cues.core.ports.SessionStore
 import com.cues.core.ports.NamedContextStore
@@ -58,13 +60,14 @@ class JsonFileStore(
     private val maxReceiptFiles: Int = 200,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     initialSignalOptIn: Boolean = false,
-) : RoutineStore, SessionStore, ReceiptSink, NamedContextStore, PatchStore, PlaceStore, FactStore,
+) : RoutineStore, SessionStore, ReceiptSink, ReceiptLog, NamedContextStore, PatchStore, PlaceStore, FactStore,
     UsageLedger, CoachStateStore, MacroStore, UtilityBindingStore {
 
     private val routinesDir = File(root, "routines").apply { mkdirs() }
     private val sessionsDir = File(root, "sessions").apply { mkdirs() }
     private val quarantineDir = File(root, "quarantine").apply { mkdirs() }
     private val receiptsDir = File(root, "receipts").apply { mkdirs() }
+    private val receiptRecordsDir = File(root, "receipts-v2").apply { mkdirs() }
     private val contextsDir = File(root, "contexts").apply { mkdirs() }
     private val patchesDir = File(root, "patches").apply { mkdirs() }
     private val placesDir = File(root, "places").apply { mkdirs() }
@@ -211,6 +214,50 @@ class JsonFileStore(
         files.take(files.size - maxReceiptFiles).forEach { it.delete() }
     }
 
+    // --------------------------------------------------------- ReceiptLog
+
+    /**
+     * Continues numbering from whatever is already on disk, so a restart
+     * never reuses a sequence number a surviving file still carries.
+     */
+    private val receiptRecordSeq = java.util.concurrent.atomic.AtomicLong(
+        receiptRecordFiles().mapNotNull { it.name.split('-').getOrNull(1)?.toLongOrNull() }.maxOrNull()?.plus(1) ?: 0L,
+    )
+
+    /**
+     * One file per record, named `<padded atMillis>-<padded sequence>-<kind>.json`.
+     *
+     * The padded stamp makes name order time order, so pruning and
+     * [receiptRecords]'s window both work from the directory listing alone,
+     * without decoding a file they are about to skip. The sequence breaks
+     * ties in append order and keeps two receipts from the same instant —
+     * a start and the skip it caused for another cue, say — from ever
+     * sharing a name.
+     */
+    override fun append(record: ReceiptRecord) {
+        val name = "%015d-%012d-%s.json".format(record.atMillis, receiptRecordSeq.getAndIncrement(), record.kind.name)
+        writeAtomic(File(receiptRecordsDir, name), record)
+        pruneReceiptRecords()
+    }
+
+    override fun receiptRecords(sinceMillis: Long): List<ReceiptRecord> =
+        receiptRecordFiles()
+            .filter { (it.stampPrefix() ?: Long.MAX_VALUE) >= sinceMillis }
+            .mapNotNull { readReceiptRecord(it) }
+            .filter { it.atMillis >= sinceMillis }
+            .sortedBy { it.atMillis } // stable: equal stamps keep file (append) order
+
+    private fun receiptRecordFiles(): List<File> = receiptRecordsDir.listJsonFiles().sortedBy { it.name }
+
+    /** Same cap, same oldest-first rule, as the text receipts these mirror. */
+    private fun pruneReceiptRecords() {
+        val files = receiptRecordFiles()
+        if (files.size <= maxReceiptFiles) return
+        files.take(files.size - maxReceiptFiles).forEach { it.delete() }
+    }
+
+    private fun File.stampPrefix(): Long? = name.substringBefore('-').toLongOrNull()
+
     // ------------------------------------------------------------ helpers
 
     /**
@@ -250,6 +297,7 @@ class JsonFileStore(
     private fun readBinding(file: File): UtilityBinding? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readLedgerEvent(file: File): LedgerEvent? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readCoachState(file: File): CoachState? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readReceiptRecord(file: File): ReceiptRecord? = readOrQuarantine(file) { json.decodeFromString(it) }
 
     private inline fun <T> readOrQuarantine(file: File, decode: (String) -> T): T? {
         if (!file.isFile) return null

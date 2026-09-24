@@ -67,6 +67,21 @@ interface ReceiptSink {
 }
 
 /**
+ * Persistence for structured receipts, alongside the text ones.
+ *
+ * Optional, the same way the usage ledger is: a caller that supplies none
+ * still gets every text receipt, and nothing that decides behaviour ever
+ * reads from here. It exists so Insights and the receipt screens can count
+ * and filter by reason code instead of parsing prose.
+ */
+interface ReceiptLog {
+    fun append(record: com.cues.core.receipt.ReceiptRecord)
+
+    /** Records at or after [sinceMillis], oldest first. */
+    fun receiptRecords(sinceMillis: Long = 0L): List<com.cues.core.receipt.ReceiptRecord>
+}
+
+/**
  * Persistence for routines.
  *
  * Separate from [SessionStore] because the two have different failure modes: a
