@@ -730,18 +730,24 @@ environment (no Android SDK here — see CLAUDE.md):**
 6. Whether "Cues: iQOO utility bindings" actually appears and can be enabled
    in OriginOS 7's Accessibility settings, and what its consent screen looks
    like there, is unconfirmed.
-7. A `USE_UTILITY` action is reachable today only through the Utility
-   Bindings screen's own "Test on"/"Test off" buttons (a bare
-   `executor.execute` call outside any routine) — it is not yet reachable
-   from cue drafting (no `GrammarParser` phrase, no chat/`IntentRouter`
-   support). Teaching and testing a binding works end to end; attaching it to
-   an approved, scheduled cue does not yet.
+7. **Closed 24 Sep 2026.** `GrammarParser` now has a phrase for `USE_UTILITY`:
+   "turn on/off" or "enable/disable" plus one of the catalog's own labels
+   ("eye protection", "ultra saver", "game mode") — a closed vocabulary over
+   a closed action, the same discipline every other action keeps. Verified
+   with `./dev d "when charging turn on eye protection"` (not assumed):
+   drafts, reviews and rehearses a `USE_UTILITY` action end to end. New test
+   `GrammarParserTest` ("utility phrasing drafts USE_UTILITY..."), 275 core
+   tests green. Chat/`IntentRouter` support is still separate — "turn on eye
+   protection" as a chat request routes through `CUE_PATTERNS`
+   (`IntentRouter.kt`) only if it happens to also mention a trigger word;
+   there is no dedicated intent for a bare utility toggle request. Teaching
+   and testing a binding from the Utility Bindings screen was already
+   end-to-end; now attaching one to a cue is too, in `:core`.
 
 **Remove when:** a taught Eye protection on/off pair has actually run on the
 loaner — teach, test on, test off, and a real cue session that arms, fires
 `USE_UTILITY`, and releases it — with results recorded here or in
-`docs/MEASUREMENTS.md`, and item 7's grammar/chat reachability gap is closed
-or explicitly re-scoped.
+`docs/MEASUREMENTS.md`.
 
 ---
 
@@ -757,18 +763,46 @@ intent is hard-coded, which is correct, but the button's name makes a claim
 the code does not check. `./dev probe` records what `ACTION_ASSIST` resolves
 to on the device under test (docs/DEVICE_MATRIX.md, M7).
 
-Task 17, the AppFunctions provider for draft, start, stop, forecast and
-current context, is **not built**. There is no `androidx.appfunctions`
-dependency, no `BIND_APP_FUNCTION_SERVICE` service and no generated
-metadata. Every AppFunctions sentence in `docs/API_VERIFICATION.md` is a
-reading of the official docs, not an integration. Neither the deck nor the
-demo can say that a system agent can call Cues.
+**Task 17 (AppFunctions), updated 24 Sep 2026: written, not compiled.**
+`app/.../appfunctions/CuesAppFunctionService.kt` implements `draftCue`,
+`forecastToday`, `currentContext` and `stopCue` against
+`androidx.appfunctions:appfunctions:1.0.0-alpha12` — every annotation,
+exception type and manifest shape checked against the live reference pages
+on developer.android.com on 24 Sep 2026 (not the stale "alpha11" guess
+`docs/API_VERIFICATION.md` previously recorded), not merely copied from an
+old note. `gradle/libs.versions.toml` and `app/build.gradle.kts` gained the
+dependency, the KSP compiler and the `com.google.devtools.ksp` plugin
+(version `2.2.21-2.0.5`, confirmed against Maven Central's own metadata —
+reachable even where `dl.google.com` is blocked). The manifest declares the
+`<service>` and the app-level `app_metadata` property the KSP processor is
+supposed to generate.
+
+None of this has run. This environment has no Android SDK, so KSP has never
+executed once — meaning the exact generated service class name, the
+`app_functions_schema.xsd` asset, the `cues_app_function_service.xml` asset
+and the `@xml/app_metadata` resource this manifest entry references have
+never actually been produced and confirmed to match. The manifest entry is
+built by careful analogy to the official guide's own example, substituting
+this project's names, not by reading real generated output.
+
+**Deliberately not exposed: a "start this cue now" function.** Building it
+surfaced a real, separate, pre-existing gap: `EventKind.MANUAL_RUN` (what
+`Trigger.Manual` matches) carries no routine identifier, so
+`CueService.onDeviceEvent(TriggerEvent(EventKind.MANUAL_RUN, ...))` would
+start *every* armed manual-triggered routine at once, not just the one an
+agent named. Nothing in `:app` calls this path today either — there is no
+"run this cue now" button anywhere yet — so the gap was latent, not
+introduced here. Tracked separately as CL-28 rather than fixed in this
+pass, since fixing it means deciding how a manual trigger identifies its
+target routine, a design question bigger than this file.
 
 **Remove when:** M7 records what the handoff resolves to on the loaner, and
 the card's label matches that result ("Jovi" only if the probe resolves to
 Jovi, otherwise "system assistant"). The AppFunctions half retires
-separately: either Task 17 is built and M7's AppFunctions half passes on the
-loaner, or Task 17 is cut and the plan says so.
+separately: `./dev b`/`./dev perms` compile this on the laptop, `adb shell
+cmd app_function list-app-functions` on the loaner shows all four
+functions, and `adb shell cmd app_function execute-app-function` actually
+runs `draftCue` and produces a real reviewable draft in the app.
 
 ---
 
@@ -932,3 +966,35 @@ only shows "Review idea" when `suggestion.operation` is non-null.
 **Remove when:** `./dev b` compiles this, and a run on the loaner confirms
 Accept opens Review on the edited routine with the right field changed, for
 at least one of `earlyStop`/`recurringSkip`/`manualRoutine`/`blockedAction`.
+
+---
+
+## CL-28 — A manual trigger has no way to name which cue it starts
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+`Trigger.Manual`/`ManualKit` match any `TriggerEvent(EventKind.MANUAL_RUN,
+...)` unconditionally — `ManualKit.match` returns `MATCH` for that event
+kind with no reference to which routine asked for it, because
+`TriggerEvent` itself carries no routine identifier (its disambiguating
+fields — `deviceId`, `connectionSessionId`, `networkLabel` — are all
+signal-specific, and manual runs have none of their own). `CueService.
+onDeviceEvent` evaluates one event against every armed routine
+(`routines.armed().flatMap { ... event.couldStart(routine) ... }`), so a
+single `MANUAL_RUN` event would start *every* armed `Trigger.Manual`
+routine whose other conditions also hold, not just the one a caller meant.
+
+Nothing in `:app` has ever hit this: there is no "run this cue now" UI
+anywhere in the app, and `EventKind.MANUAL_RUN` is otherwise only used from
+`:core` tests, the CLI's `./dev sim`/`./dev d`-style rehearsal path, and
+`ManualKit.rehearsalEvents` (rehearsal never calls `onDeviceEvent` for
+real). Found while building Task 17's AppFunctions provider, which needed a
+per-cue "start" action and couldn't safely use this path — see CL-24.
+
+**Remove when:** `TriggerEvent` (or a new, Manual-specific companion) can
+name which routine a manual run targets — reusing `routineId`, the same
+field this pass already added to several `LedgerEvent` variants for CL-27,
+is one option — and `event.couldStart(routine)` for `Trigger.Manual` checks
+it. Add a test proving two armed manual cues don't both start from one
+targeted event, then Task 17's `startCue` (or any future "run now" UI) can
+use it.

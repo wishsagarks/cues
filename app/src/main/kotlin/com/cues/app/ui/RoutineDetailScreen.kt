@@ -54,6 +54,14 @@ fun RoutineDetailScreen(
     onPauseUntil: ((epochMillis: Long) -> Unit)? = null,
     onClearPatch: (() -> Unit)? = null,
     onShareAsCard: (() -> Unit)? = null,
+    /**
+     * Opens Review for a routine that never got there through the ordinary
+     * draft flow — a coach-suggested edit or an AppFunctions-drafted request
+     * (Task 17), both of which persist a DRAFT/REVIEWABLE routine with no
+     * in-memory screen already pointed at it. Non-null only when the caller
+     * considers [routine] not yet approved; Detail itself doesn't guess.
+     */
+    onReview: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
@@ -80,6 +88,16 @@ fun RoutineDetailScreen(
         DetailRow("Repeat", ReviewCopy.repeatText(routine))
 
         Spacer(Modifier.height(24.dp))
+
+        if (onReview != null) {
+            Button(onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onReview()
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("Review & approve")
+            }
+            Spacer(Modifier.height(10.dp))
+        }
 
         OutlinedButton(onClick = {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)

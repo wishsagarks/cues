@@ -61,9 +61,9 @@ screen implies. Each has a CLEANUP entry with its retirement condition.
 | The attention port was never wired | Fixed in `:core` and tested (268 tests); `:app` wiring written, uncompiled | CL-25 |
 | No in-app grant for notifications, DND access or exact alarms | Fixed in `:app`, uncompiled — Review's rows now have grant buttons. The demo keeps the adb fallback until this runs on the loaner | CL-26 |
 | Coach Accept seeds text the parser cannot draft | Fixed in `:core`, tested (272 tests); `:app` wiring written, uncompiled | CL-27 |
-| "Hand off to Jovi" fires the generic `ACTION_ASSIST`. AppFunctions (Task 17) not built | The label promises Jovi, and no system agent can call Cues | CL-24 |
+| "Hand off to Jovi" fires the generic `ACTION_ASSIST`. AppFunctions (Task 17) written but uncompiled | The label promises Jovi; a system agent's call to Cues has never actually run | CL-24 |
 | A screen capture reaches `CuesApp` and is ignored | "Cue this screen" does nothing visible yet | CL-23 item 2 |
-| Utility bindings are reachable only from their test buttons | No cue can include one | CL-23 item 7 |
+| ~~Utility bindings reachable only from their test buttons~~ | Fixed 24 Sep 2026: `GrammarParser` now drafts `USE_UTILITY` from "turn on/off eye protection/ultra saver/game mode". Unverified on the loaner (the toggle itself, not the drafting) | CL-23 item 7 |
 | Declared-memory facts can't end a cue from speech | "until my exam" is unsupported | CL-16 |
 | Review has no field editor | PRS lists "editable fields". Today a change goes through Ask Cues refine or a new sentence | — |
 | Task 9 leftovers: calendar condition, share target, shortcuts, Workbench drag/drop | Not built | tasks/todo.md |

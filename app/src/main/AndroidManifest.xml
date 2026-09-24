@@ -265,5 +265,33 @@
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
         </service>
 
+        <!--
+          AppFunctions (Task 17): the class name here is the KSP-generated
+          concrete service (BaseCuesAppFunctionService's serviceName,
+          "CuesAppFunctionService", in the same package), never hand-written.
+          Neither it nor the app_metadata/schema resources below have ever
+          actually been generated in the environment that wrote this — no
+          Android SDK, so KSP has never run. Structure copied from the
+          official guide; see docs/API_VERIFICATION.md and CLEANUP.md CL-24.
+        -->
+        <service
+            android:name=".appfunctions.CuesAppFunctionService"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            android:exported="true"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="cues_app_function_service.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+        <property
+            android:name="android.app.appfunctions.app_metadata"
+            android:resource="@xml/app_metadata" />
+
     </application>
 </manifest>

@@ -104,7 +104,7 @@ Core contracts and persistence
 
 - [ ] Task 15: Add macro model/validator/store, denylist tests, package/version pinning, selectors/postconditions, and bounded retry rules.
 - [ ] Task 16: Add consent/teaching UI, narrowly scoped AccessibilityService, one-shot “Cue this screen,” floating stop, and iQOO utility on/off bindings with read-back and restoration.
-- [ ] Task 17: Add AppFunctions provider for draft/start/stop/forecast/current-context, retaining in-app approval for drafts and manual-only start constraints.
+- [x] Task 17 (written and tested where `:core`-testable; `./dev b` still needed on the laptop — see CLEANUP.md CL-24): Add AppFunctions provider for draft/start/stop/forecast/current-context, retaining in-app approval for drafts and manual-only start constraints.
 
 ### Checkpoint: Ecosystem
 

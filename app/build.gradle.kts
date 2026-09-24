@@ -12,6 +12,10 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // AppFunctions (Task 17): its annotation processor generates the service
+    // class and app_metadata/schema XML assets from @AppFunction-annotated
+    // methods. See docs/API_VERIFICATION.md and CLEANUP.md CL-24.
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -102,4 +106,11 @@ dependencies {
     // docs/API_VERIFICATION.md and CLEANUP.md CL-21.
     implementation(libs.zxing.core)
     implementation(libs.mlkit.barcode.scanning)
+
+    // AppFunctions (Task 17): lets the system's AI agent draft/inspect/stop
+    // cues through the same CueService rules as the app itself — see
+    // app/.../appfunctions/CuesAppFunctionService.kt, docs/API_VERIFICATION.md
+    // and CLEANUP.md CL-24. Requires compileSdk 36 (already set above).
+    implementation(libs.appfunctions)
+    ksp(libs.appfunctions.compiler)
 }

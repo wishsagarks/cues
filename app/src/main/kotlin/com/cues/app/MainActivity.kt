@@ -500,6 +500,9 @@ private fun CuesApp(
                                 refresh()
                             },
                             onShareAsCard = { screen = Screen.CueCardShare(routine) },
+                            onReview = { screen = Screen.Review(routine) }.takeIf {
+                                routine.status != RoutineStatus.ARMED && routine.status != RoutineStatus.PAUSED
+                            },
                         )
                     }
                 }

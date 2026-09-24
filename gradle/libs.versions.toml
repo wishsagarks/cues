@@ -48,6 +48,24 @@ mlkitTextRecognition = "16.0.1"
 mlkitBarcodeScanning = "17.3.0"
 zxingCore = "3.5.3"
 
+# Verified 24 Sep 2026 straight from developer.android.com — the AppFunctions
+# reference pages for AppFunctionService/AppFunction/AppFunctionSerializable/
+# AppFunctionServiceEntryPoint/AppFunctionElementNotFoundException/
+# AppFunctionInvalidArgumentException all say "Added in 1.0.0-alpha12", and
+# the release-notes page (jetpack/androidx/releases/appfunctions) lists
+# 1.0.0-alpha12 as the latest release, superseding this project's earlier
+# note that alpha11 was current. Still unresolved here: dl.google.com is
+# blocked in this environment, so this pin has never actually been fetched —
+# see CLEANUP.md CL-24.
+appfunctions = "1.0.0-alpha12"
+
+# KSP build matching this project's exact Kotlin version (2.2.21), confirmed
+# 24 Sep 2026 from Maven Central's own maven-metadata.xml for
+# com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin — reachable
+# even where dl.google.com is blocked, since KSP resolves from Central/the
+# Gradle Plugin Portal, not Google's Maven.
+ksp = "2.2.21-2.0.5"
+
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -78,6 +96,8 @@ androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
 mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcodeScanning" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
+appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
+appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -87,3 +107,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

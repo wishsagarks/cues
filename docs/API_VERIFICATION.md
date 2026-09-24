@@ -15,13 +15,19 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 
 ## AppFunctions
 
-**Not integrated.** Task 17 is not built: there is no dependency, service or metadata in `:app` (CLEANUP.md CL-24). What follows is the official-source reading only.
+**Written, not compiled.** Task 17 (`app/.../appfunctions/CuesAppFunctionService.kt`) implements `draftCue`, `forecastToday`, `currentContext`, `startCue` and `stopCue`, with the dependency, KSP plugin and manifest service declared. None of it has run — no Android SDK in the environment that wrote it, so KSP has never generated the service class or its XML assets. See CLEANUP.md CL-24.
 
-- Android platform App Functions are available from API 36 and remain a beta/experimental preview.
-- Current Jetpack release is `androidx.appfunctions:appfunctions:1.0.0-alpha11`, with `appfunctions-service` and the KSP `appfunctions-compiler` needed for a provider.
-- Generated service metadata must be declared with `BIND_APP_FUNCTION_SERVICE`. Keep this adapter isolated and retain ordinary in-app/Jovi-launch handoff when OriginOS does not discover it.
+- Re-verified 24 Sep 2026 (superseding this file's earlier alpha11 note, which had never been checked against an actual snippet): Android platform App Functions require API 36 and remain a preview. **Current Jetpack release is `1.0.0-alpha12`** — confirmed both from the release-notes page and from every relevant reference page (`AppFunctionService`, `AppFunction`, `AppFunctionSerializable`, `AppFunctionServiceEntryPoint`, `AppFunctionElementNotFoundException`, `AppFunctionInvalidArgumentException`) independently saying "Added in 1.0.0-alpha12".
+- The architecture changed since this file's first pass: alpha10 introduced `@AppFunctionServiceEntryPoint`, which now generates the concrete service class and consolidates what used to be a separate `appfunctions-service` artifact and an `AppFunctionConfiguration.Provider`. Only two dependencies are needed: `androidx.appfunctions:appfunctions` (`implementation`) and `androidx.appfunctions:appfunctions-compiler` (`ksp`) — there is no current `appfunctions-service` artifact to add separately.
+- Functions are annotated `@AppFunction(isDescribedByKDoc = true)` inside an `@AppFunctionServiceEntryPoint`-annotated `abstract class ... : AppFunctionService()`; parameter/return types are `@AppFunctionSerializable` data classes. `AppFunctionInvalidArgumentException`/`AppFunctionElementNotFoundException` are the predefined ways to fail a call.
+- The manifest declares the KSP-generated `<service>` (`BIND_APP_FUNCTION_SERVICE`, an `AppFunctionService` intent-filter, and `schema`/`v2` `<property>` entries naming KSP-generated XML assets) plus one app-wide `app_metadata` `<property>`, also KSP-generated — none of these four generated artifacts have actually been produced here to confirm the manifest's exact naming matches.
+- KSP itself is pinned to `2.2.21-2.0.5`, matching this project's exact Kotlin version, confirmed from Maven Central's own `maven-metadata.xml` — reachable even where `dl.google.com` is blocked, since KSP resolves from Central/the Gradle Plugin Portal rather than Google's Maven.
+- Kept from the original plan: retain ordinary in-app/Jovi-launch handoff (`IntentRouter`/`ACTION_ASSIST`) when OriginOS does not discover this provider.
 - Source: https://developer.android.com/jetpack/androidx/releases/appfunctions
 - Source: https://developer.android.com/ai/appfunctions/add-appfunctions
+- Source: https://developer.android.com/ai/appfunctions (overview, the `@AppFunctionSerializable` example)
+- Source: https://developer.android.com/reference/kotlin/androidx/appfunctions/AppFunctionService
+- Source: https://repo.maven.apache.org/maven2/com/google/devtools/ksp/com.google.devtools.ksp.gradle.plugin/maven-metadata.xml
 
 ## Camera and offline text recognition
 
