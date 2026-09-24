@@ -82,5 +82,6 @@ container, CI. `settings.gradle.kts` drops `:app` entirely when no Android SDK
 is present, so a machine without one still runs the full test suite and the
 demo CLI without a word of configuration.
 
-Whatever happens to the build route, the 92 tests covering evaluation, session
-admission, reconnect grace, cleanup and recovery keep running.
+Whatever happens to the build route, the core suite keeps running. As of 24 Sep 2026 it has
+267 tests covering evaluation, session admission, reconnect grace, cleanup,
+recovery, drafting and the Sprint 7 additions.

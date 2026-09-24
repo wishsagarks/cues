@@ -15,6 +15,8 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 
 ## AppFunctions
 
+**Not integrated.** Task 17 is not built: there is no dependency, service or metadata in `:app` (CLEANUP.md CL-24). What follows is the official-source reading only.
+
 - Android platform App Functions are available from API 36 and remain a beta/experimental preview.
 - Current Jetpack release is `androidx.appfunctions:appfunctions:1.0.0-alpha11`, with `appfunctions-service` and the KSP `appfunctions-compiler` needed for a provider.
 - Generated service metadata must be declared with `BIND_APP_FUNCTION_SERVICE`. Keep this adapter isolated and retain ordinary in-app/Jovi-launch handoff when OriginOS does not discover it.
@@ -50,11 +52,15 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 
 ## Live Updates
 
+**Not integrated.** The session notification is the standard foreground style (CLEANUP.md CL-15). What follows is the official-source reading only.
+
 - A promoted ongoing notification requires `android.permission.POST_PROMOTED_NOTIFICATIONS`, an ongoing standard/big-text/progress/metric style notification, a title, and an explicit promotion request.
 - OEMs can add eligibility rules, so Origin Island rendering remains a loaner-phone verification item.
 - Source: https://developer.android.com/develop/ui/views/notifications/live-update
 
 ## Text to speech and shortcuts
+
+TTS is integrated (`ReplySpeaker`, CL-19). Shortcuts are **not built** (Task 9 leftovers in `tasks/todo.md`).
 
 - Use `TextToSpeech.speak(CharSequence, Int, Bundle, String)` and always release with `shutdown()`. Cues passes the exact deterministic reply/receipt text.
 - Static and dynamic shortcuts launch app-owned intents; dynamic routine shortcuts remain bounded by the device launcher limit.

@@ -4,7 +4,7 @@
 
 **Cues: Context You Declare, Behaviour That Ends**
 
-Track: Open Innovation. Intended platform: an Android app on iQOO. Status: the offline decision core is implemented and unit-tested; the Android runtime is written against real device APIs but has not compiled or run anywhere, and there are no measured results. Verifying that runtime on real hardware is the work of the event.
+Track: Open Innovation. Intended platform: an Android app on iQOO. Status (24 September 2026): the offline decision core is implemented and unit-tested. The Android app has been built and launched on an emulator but has not run on an iQOO, and there are no measured results. Verifying it on real hardware is the work of the event; see [DISCLOSURE.md](DISCLOSURE.md).
 
 The unit of the product is a **cue**: a context the user names, and the behaviour that begins and ends with it. The app is Cues; the thing a person creates is a cue.
 

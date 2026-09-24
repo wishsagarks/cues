@@ -114,9 +114,9 @@ Core contracts and persistence
 
 ### Phase 7: Documentation, Device Proof, and Demo
 
-- [ ] Task 18: Update FDD, README claim discipline/OriginOS positioning, runbooks, permissions, and `CLEANUP.md` retirement conditions.
-- [ ] Task 19: Execute device matrix: package discovery, NPU backend measurement, Camera airplane-mode import, Office Kit transfer, Origin Island rendering, Accessibility utility binding, AppFunctions/Jovi handoff, screen-off pending action, QR between devices.
-- [ ] Task 20: Run final full verification, produce scripted offline demo and backup evidence, and disclose any device-only item that could not be proven.
+- [x] Task 18: Update FDD, README claim discipline/OriginOS positioning, runbooks, permissions, and `CLEANUP.md` retirement conditions.
+- [ ] Task 19 (matrix and probe prepared in docs/DEVICE_MATRIX.md; not executed, needs the loaner): Execute device matrix: package discovery, NPU backend measurement, Camera airplane-mode import, Office Kit transfer, Origin Island rendering, Accessibility utility binding, AppFunctions/Jovi handoff, screen-off pending action, QR between devices.
+- [ ] Task 20 (software regression, offline demo and docs/DISCLOSURE.md done; APK re-check and device rehearsal pending): Run final full verification, produce scripted offline demo and backup evidence, and disclose any device-only item that could not be proven.
 
 ## Task Definitions and Acceptance Criteria
 

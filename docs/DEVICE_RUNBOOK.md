@@ -1,5 +1,10 @@
 # Sprint 5 device runbook
 
+The Sprint 7 rows (package discovery, NPU, camera, Office Kit, Origin Island,
+accessibility, Jovi/AppFunctions, pending actions, QR) and the `./dev probe`
+evidence protocol are in [DEVICE_MATRIX.md](DEVICE_MATRIX.md). The live demo
+and its cuts are in [DEMO.md](DEMO.md).
+
 This is a protocol, not a measurement record. Do not create or populate
 `MEASUREMENTS.md` until the loaner device produces the observations below.
 

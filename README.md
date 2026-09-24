@@ -12,28 +12,36 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Offline generic signal core implemented and tested; Android runtime written but unverified; no measured results.**
+**Offline decision core implemented and tested. Android app built and run on an emulator, never on an iQOO. No measured results.**
 
-The decision core is built and tested: the routine model, the three-valued
-evaluator, the compiler and approval digest, the closed action registry, the
-grammar-based drafting path, the closed signal-kit registry, any-Wi-Fi and
-bounded at-time sessions, device-connected conditions, pinned notes, the session
-engine and the receipts. It is pure Kotlin/JVM with no Android dependency, so
-`./dev t` runs its suite on any machine with a JDK.
+As of 24 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md)):
 
-The Android runtime — the action executor, Bluetooth/power adapters, the
-signal-adapter port for Wi-Fi/time, the owned Do Not Disturb rule, the timer
-service and the Compose screens — is
-written against real Android APIs and wired end to end, but none of it has
-compiled or run anywhere: this environment has no Android SDK (see
-[CLEANUP.md](CLEANUP.md) CL-04). Proving each call against the actual OS, on
-the loaner hardware, is the event's first job. The on-device language model
-is not yet wired in.
+- **`:core`** is pure Kotlin/JVM and passes 267 tests. It covers the routine model, the
+  three-valued evaluator, compiler and approval digest, the closed action
+  and signal registries, grammar drafting with clause accounting, the
+  session engine and receipts, plus Ask Cues, declared memory, the coach,
+  Cue Cards, the Console export and the macro validator. `./dev t` runs the
+  suite on any machine with a JDK.
+- **`:app`** has compiled against the real Android APIs and been launched on
+  an Android emulator, where drafting and arming a cue worked. This
+  revision's small `:app` edits have not been compiled yet, so `./dev b` is
+  due on the laptop. It includes a
+  LiteRT-LM integration with no model side-loaded yet. With no model the app
+  falls back to the grammar parser, and it says so on every draft.
+- **Nothing has run on an iQOO.** Background delivery, the owned quiet rule,
+  timing, camera, QR, Office Kit, accessibility and model backends are all
+  listed in [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md), and every row is
+  "Not run".
+- **Known software gaps**, each with its retirement condition in
+  [CLEANUP.md](CLEANUP.md): actions that need the user do not wait yet
+  (CL-25), and three permissions have no in-app grant path (CL-26). Coach
+  suggestions cannot be accepted into a draft (CL-27). No AppFunctions
+  provider exists, and the "Jovi" handoff opens whatever the system
+  assistant is (CL-24).
 
-**There are no measured performance results.** Nothing in this repository has
-run on an iQOO. Every latency, delivery and reliability figure in the design
-documents remains a target. Assumptions awaiting verification are tracked in
-[CLEANUP.md](CLEANUP.md).
+**There are no measured performance results.** Every latency, delivery and
+reliability figure in the design documents is a target until it is recorded
+in `docs/MEASUREMENTS.md`, which does not exist yet.
 
 Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 
@@ -47,6 +55,12 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [SPRINT_3.md](docs/SPRINT_3.md) | Revised six-hour plan for offline authoring, review and approval |
 | [SPRINT_4_5.md](docs/SPRINT_4_5.md) | Hours 16–30: unattended device proof, R&D spikes, measured drafting choice and demo |
 | [SPRINT_6.md](docs/SPRINT_6.md) | Declared named contexts, temporary patches, forecast and contextual signal kits |
+| [tasks/plan.md](tasks/plan.md) | Sprint 7 ("Cues Brain") plan: Tasks 0–20; progress in [tasks/todo.md](tasks/todo.md) |
+| [API_VERIFICATION.md](docs/API_VERIFICATION.md) | Official-source API and dependency gate, with every pin explained |
+| [PERMISSIONS.md](docs/PERMISSIONS.md) | Every declared permission, what uses it and when it is requested |
+| [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md) | The iQOO verification matrix and `./dev probe` protocol |
+| [DEMO.md](docs/DEMO.md) | Demo script, its device gates, what is cut, and backup evidence |
+| [DISCLOSURE.md](docs/DISCLOSURE.md) | What was verified, where, and what may not be claimed yet |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
@@ -71,6 +85,14 @@ Natural-language automation, persistent routines and end-of-routine actions all 
 
 The proposed contribution is a focused combination — offline authoring, bounded sessions with approved endings, rehearsal before activation, and receipts explaining each run — demonstrated on real device events. Claims withdrawn during research are tracked in private working notes that are not published here.
 
+On OriginOS, Cues positions itself as the "when-and-until" layer next to Jovi,
+not a replacement for it. Requests that are not about a cue's lifetime are
+handed to the system assistant. There is no Office Kit SDK integration: Office
+Kit is used only as a file and clipboard transport. No OriginOS API is assumed.
+OEM packages, Origin Island rendering and utility toggles are discovered on
+the device and recorded before anything depends on them. The OriginOS 7
+visual pass borrows motion and material quality, not iQOO branding.
+
 ## Building
 
 `:core` needs only a JDK 21. `:app` is included in the build only when an
@@ -79,6 +101,8 @@ Android SDK is present, so the core suite runs anywhere.
 ```sh
 ./dev t                                  # core tests
 ./dev d "when my earbuds connect ..."    # compile a cue, print review + rehearsal
+./dev demo                               # scripted offline demo, transcript to evidence/
+./dev probe                              # read-only device facts for the matrix (adb)
 ./dev h                                  # everything else
 ```
 

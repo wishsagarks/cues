@@ -17,6 +17,7 @@ local.properties
 *.task
 *.gguf
 *.tflite
+*.litertlm
 
 # Deck build scratch (contains a node_modules symlink and intermediate renders)
 .origin-flow-build/

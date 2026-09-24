@@ -1,6 +1,6 @@
 # Functional Design Document
 
-Revision: 22 September 2026. Design only. This document is not application implementation.
+Revision: 24 September 2026. The design, written before implementation and revised as it landed. Where this document and the code disagree, the code and [CLEANUP.md](../CLEANUP.md) say what is actually true; what has been verified is in [DISCLOSURE.md](DISCLOSURE.md).
 
 ## Architecture
 
@@ -151,7 +151,7 @@ Core actions: start app focus timer, request owned DND contribution, record/show
 
 Each adapter declares its required access, argument validator, execution method, capability limits, outcome verifier where possible, idempotency behavior and supported compensation. No model-supplied shell commands, code, packages or arbitrary intents reach an executor.
 
-The registry builds any allowed intent itself from approved typed arguments. Broad app launching is deferred from the hero flow. If added, use a tap-to-open notification when Android requires interaction. A notification cannot be a universal fallback if notification permission is denied.
+The registry builds any allowed intent itself from approved typed arguments. Broad app launching stays out of the hero flow. Sprint 7 added a closed set of handoff and external actions (see *Cues Brain additions*): none takes a package, URL scheme or intent from a drafter. A notification cannot be a universal fallback if notification permission is denied.
 
 Background reference: [Android activity security](https://developer.android.com/guide/components/activities/secure-bal).
 
@@ -215,17 +215,37 @@ This supports “if not charging at 11 PM.” “If I have never charged today�
 
 An item has user-approved eligibility predicates, earliest execution time, expiry, confirmation requirements and attempt limits. Re-evaluate before action. Unknown conditions retain the pending state until expiry. Do not issue stale work after the deadline. Calendar-based availability is optional access, not an assumed capability.
 
-### Named context (roadmap)
+### Named context (implemented, Sprint 6)
 
 A name refers to an explicit predicate set. Capture selected current signals only after permission. Show sources and let the user remove them. Context revisions invalidate affected approval where behavior changes.
 
-### Temporary patch (roadmap)
+### Temporary patch (implemented, Sprint 6)
 
 Store base version, changed fields, approved start and expiry. At expiry remove the patch only if compatible with the current version. If a subsequent edit conflicts, present a resolution rather than overwriting it.
 
-### Shared timetable (roadmap)
+### Shared timetable (implemented as camera/text import, Sprint 7; unverified on device, CL-20)
 
 Receive explicitly shared content, extract proposed facts locally if feasible, review uncertain times and normalize dates. Treat document instructions as data. No imported artifact can activate rules or change permissions.
+
+## Cues Brain additions (Sprint 7)
+
+The plan is [tasks/plan.md](../tasks/plan.md). Every addition sits on one
+side of the trust boundary above, and none creates a path from a model or
+from imported text to an executor.
+
+| Component | Side of the boundary | What keeps it there |
+|---|---|---|
+| Ask Cues (`IntentRouter`, `Refiner`, `ReplyCopy`) | Authoring | Replies come from reply codes. A refinement produces a new draft and clears approval. Control commands (pause, stop, delete) are `PendingCommand`s and need a tap to confirm. Out-of-scope requests route to the system assistant |
+| Declared memory (`Fact`, `FactStore`) | Authoring | Facts are explicit, labelled with their source and deletable. Editing one invalidates the approval of every routine that depends on it. Not yet reachable from speech (CL-16) |
+| Coach (`UsageLedger`, six detectors, `CoachPolicy`) | Advisory | Recording is opt-in and holds 14 days. More than 30% coverage gaps suppresses conclusions. At most one suggestion a day. Accept only seeds authoring (broken today: CL-27) |
+| Typed cross-app actions (`OPEN_APP`, `COMPOSE_MESSAGE`, `ADD_CALENDAR_EVENT`, `SET_ALARM`, `OPEN_LINK`, `MEDIA_CONTROL`, `RINGER_MODE`) | Runtime, via the registry | `ActionRisk` says whether an effect is owned, a handoff or external and unowned. `Presence.NEEDS_USER` actions wait as `PENDING` and expire to `BLOCKED`, making the session `PARTIAL`. An app comes from a picker, links from a closed scheme list. Presence is not wired on the phone yet (CL-25) |
+| Inference (`InferenceReport`, LiteRT-LM) | Authoring | A backend is shown only as the runtime reported it. The fallback chain NPU → GPU → CPU → parser is labelled at every step (CL-18) |
+| Imports (timetable, Cue Cards) | Authoring | Imported text is data. A card carries normalized behaviour and a digest, never approval, status or capabilities. It rebinds to the receiver's own entities and arrives as a draft |
+| Cue Console export | Read-only | Renders the phone's own review, receipt and forecast text. It has no write path back |
+| Utility bindings (`UiMacro`, `CuesAccessibilityService`) | Runtime, last resort | At most eight steps, pinned to package and version. Password fields and denylisted apps or words are refused, each step needs a postcondition, and one retry is allowed. The user must be present (CL-23) |
+
+What `:app` cannot yet prove on the phone is listed row by row in
+[DEVICE_MATRIX.md](DEVICE_MATRIX.md).
 
 ## Security and privacy
 

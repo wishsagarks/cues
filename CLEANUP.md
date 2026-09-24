@@ -702,11 +702,12 @@ environment (no Android SDK here — see CLAUDE.md):**
    `FLAG_SECURE` window on OriginOS 7 are all unconfirmed.
 2. The one-shot "Cue this screen" read (`captureScreenText`) has never
    captured a real window's text, and is not yet wired into the Assistant
-   conversation as a data-only turn — today it only reaches
-   `MainActivity`'s `EXTRA_SCREEN_CAPTURE` intent extra via `ScreenTile`, and
-   nothing reads that extra back out yet. **Follow-up:** have
-   `MainActivity.onCreate`/`onNewIntent` read `EXTRA_SCREEN_CAPTURE` and feed
-   it into the Assistant's draft box, the same way a share-target text would.
+   conversation as a data-only turn. *Updated 24 Sep 2026 (Task 18 audit):*
+   `MainActivity.onCreate`/`onNewIntent` now read `EXTRA_SCREEN_CAPTURE`
+   into `incomingScreenText` and pass it to `CuesApp`, but `CuesApp`
+   accepts that parameter and never reads it. A capture reaches the
+   composable and stops there. **Follow-up:** feed it into the Assistant's
+   draft box as data, the same way a share-target text would.
 3. `ScreenTile.kt`'s ordering — capture the screen, *then* collapse the QS
    panel and navigate — assumes the accessibility tree still reports the app
    *behind* Quick Settings as active at tap time. This is a real device
@@ -741,3 +742,131 @@ loaner — teach, test on, test off, and a real cue session that arms, fires
 `USE_UTILITY`, and releases it — with results recorded here or in
 `docs/MEASUREMENTS.md`, and item 7's grammar/chat reachability gap is closed
 or explicitly re-scoped.
+
+---
+
+## CL-24 — "Hand off to Jovi" opens whatever the system assistant is, and there is no AppFunctions provider
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+The Assistant's handoff card (`MainActivity.kt`, `onHandoffToJovi`) fires
+`Intent.ACTION_ASSIST` and nothing more specific. On a phone where Jovi is the
+default assistant that opens Jovi. Anywhere else it opens whatever the user
+chose, and if nothing resolves the card says so. No OriginOS package or Jovi
+intent is hard-coded, which is correct, but the button's name makes a claim
+the code does not check. `./dev probe` records what `ACTION_ASSIST` resolves
+to on the device under test (docs/DEVICE_MATRIX.md, M7).
+
+Task 17, the AppFunctions provider for draft, start, stop, forecast and
+current context, is **not built**. There is no `androidx.appfunctions`
+dependency, no `BIND_APP_FUNCTION_SERVICE` service and no generated
+metadata. Every AppFunctions sentence in `docs/API_VERIFICATION.md` is a
+reading of the official docs, not an integration. Neither the deck nor the
+demo can say that a system agent can call Cues.
+
+**Remove when:** M7 records what the handoff resolves to on the loaner, and
+the card's label matches that result ("Jovi" only if the probe resolves to
+Jovi, otherwise "system assistant"). The AppFunctions half retires
+separately: either Task 17 is built and M7's AppFunctions half passes on the
+loaner, or Task 17 is cut and the plan says so.
+
+---
+
+## CL-25 — Actions that need the user never wait on a real phone
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 8's `PENDING` semantics are built and tested in `:core`:
+`SessionEngine` holds a `Presence.NEEDS_USER` action while
+`DeviceAttention.isUserPresent()` is false, `retryPendingActions` runs it
+later, and expiry makes it `BLOCKED` and the session `PARTIAL`. The running
+app never uses any of it:
+
+- `CueService` constructs `SessionEngine(sessions, executor, clock)` with no
+  attention argument, so the engine keeps its default
+  `DeviceAttention { true }`. Every session admitted on a phone treats the
+  user as present, including with the screen off.
+- Nothing outside the tests calls `retryPendingActions`, and `:app` has no
+  screen-on or unlock listener that could call it.
+
+The six `NEEDS_USER` actions (`OPEN_APP`, `COMPOSE_MESSAGE`,
+`ADD_CALENDAR_EVENT`, `SET_ALARM`, `OPEN_LINK`, `USE_UTILITY`) therefore
+execute immediately when a session starts. From the background, Android's
+activity-launch limits may block or silently drop them. What reaches the
+receipt then depends on the executor's read-back, not on the presence rule the
+Review screen describes. Nothing is claimed as done that was not, but the
+"waits until you're at the phone" behaviour is not delivered.
+
+Found during the Task 19 matrix preparation (M8). It is not fixed in that
+pass because the `:app` half cannot be compiled in the environment that
+found it.
+
+**Remove when:** `CueService` accepts a `DeviceAttention` and passes it to
+`SessionEngine`, and exposes a retry for active sessions with pending actions
+(both testable in `:core`). `:app` also needs to supply an implementation
+(`PowerManager.isInteractive` and not `KeyguardManager.isKeyguardLocked`)
+and call that retry from a context-registered `ACTION_USER_PRESENT`
+receiver. Then run M8 on the loaner and record the result.
+
+---
+
+## CL-26 — Three capabilities Review asks for have no way to grant them in-app
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Review lists every derived capability, marks the missing ones ("Missing:
+Do Not Disturb access, notifications, exact alarms") and re-reads them on
+resume (CL-02, task 4.7). Only Bluetooth and the microphone (Home), the
+camera (both capture screens) and Accessibility (Utility Bindings) have a
+button that leads to the grant. `POST_NOTIFICATIONS` is never requested at
+runtime. Notification-policy access and exact alarms have no deep link to
+their settings pages. A first-time user sees "Missing: …" under an Approve
+button that stays disabled, with no way forward from inside the app. The
+hero cue hits this for DND access and notifications. Exact alarms are
+probably covered on API 33+, where the declared `USE_EXACT_ALARM` is
+granted at install, but that is unverified on the loaner.
+
+Nothing is claimed as granted when it isn't, and arming correctly refuses.
+The gap is that the refusal has no way out.
+
+For the event, grant these before the demo with adb (docs/DEMO.md, "Before
+the demo"). That is a setup step, not a user path, and the demo must not
+present it as one.
+
+**Remove when:** Review's "Missing" line gets a per-capability action.
+Use a `RequestPermission` launcher for `POST_NOTIFICATIONS` (API 33+),
+`Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS` for DND access, and
+`Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM` for exact alarms (API 31+,
+where not already granted). Confirm on the loaner that the flow out and back
+re-enables Approve through the existing resume re-check.
+
+---
+
+## CL-27 — Accepting a coach suggestion never produces a draft
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+The six detectors, the policy limits and the ledger are tested, and
+`./dev coach` shows correct evidence. The hand-off after detection is broken.
+`Suggestion.proposal` is built as `"make ${routineId} N minutes"` /
+`"remove fri from this cue"`, and Home's Accept passes it straight to
+`draft()` (`MainActivity.kt`, `onAcceptSuggestion`). On a phone,
+`routineId` is `routine-<uuid>`, so the card reads "make
+routine-2e87f6e1-… 22 minutes". None of the proposal shapes is a sentence
+`GrammarParser` can draft. Checked with `./dev d` on 24 Sep 2026: both
+"make routine-2e87f6e1-… 22 minutes" and the fixture's friendlier "make
+study 22 minutes" return "What should start this cue?". The `./dev coach`
+fixture uses the id `study`, which hides the raw-id half of this.
+
+It fails safe, because nothing is armed and the user sees a clarifying
+question. But the plan's acceptance line "accepting a suggestion seeds
+authoring" is not met in practice: what Accept seeds cannot be drafted.
+
+**For the event:** show coach *evidence* (the Home card, `./dev coach`),
+not Accept. docs/DEMO.md says so.
+
+**Remove when:** a suggestion refers to its cue by title in the card copy,
+and Accept applies the change as a refinement of that routine. That could
+go through the same `Refiner` path chat uses for "make it 30 minutes", with
+Review and reapproval still required. Add a test that accepting each
+suggestion kind yields a reviewable draft.

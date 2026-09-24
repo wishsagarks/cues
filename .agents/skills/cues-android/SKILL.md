@@ -55,5 +55,6 @@ For parser or forecast work, also run `./dev d "<cue>"` and `./dev today`.
 ## Device truth
 
 An APK build proves type/API integration, not OEM delivery behavior. Record
-loaner-only behavior in `CLEANUP.md` and `docs/SPRINT_6.md` instead of claiming
-it was verified locally.
+loaner-only behavior in `CLEANUP.md` and the matching row of
+`docs/DEVICE_MATRIX.md` (evidence from `./dev probe`), instead of claiming it
+was verified locally. Debug builds install as `com.cues.android.debug`.

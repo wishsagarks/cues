@@ -10,7 +10,7 @@
 - [x] Task 6 — Coach CLI and UI (`./dev coach`, `LearningSettings`, Home suggestion card wired to accept→draft / dismiss→mute)
 - [x] Checkpoint — Coach green (detector/policy tests pass; accepting only seeds `draft()`, never arms)
 - [x] Task 7 — Typed action and utility registry (`ActionRisk.HANDOFF`/`EXTERNAL_UNOWNED`, `Presence`, 7 new `ActionId`s + validators; `ActionRegistryTest`)
-- [x] Task 8 — Presence and pending session semantics (`DeviceAttention` port, `ActionState.PENDING`, `SessionEngine.retryPendingActions`, expiry → `BLOCKED` with `EXPIRED_WHILE_PENDING_DETAIL`, disclosed in the Ended receipt)
+- [x] Task 8 — Presence and pending session semantics (`DeviceAttention` port, `ActionState.PENDING`, `SessionEngine.retryPendingActions`, expiry → `BLOCKED` with `EXPIRED_WHILE_PENDING_DETAIL`, disclosed in the Ended receipt) — **core only: `CueService`/`:app` never wire `DeviceAttention` or call the retry, see CL-25**
 - [~] Task 9 — Android cross-app/OriginOS surfaces — **partial, most of it now closed.**
   - Done: `AndroidActionExecutor` implements all 7 actions against official Android intents/APIs (unverified on device per this repo's usual disclosure).
   - Done: all 7 actions are reachable via `GrammarParser` phrasing. The 5 that name an external entity (`OPEN_APP`, `COMPOSE_MESSAGE`, `ADD_CALENDAR_EVENT`, `SET_ALARM`, `OPEN_LINK`) needed no picker except `OPEN_APP`.
@@ -58,9 +58,20 @@
 - [~] Task 16 — Accessibility utility bindings and one-shot screen read (in progress, peer session: `UtilityCatalog.kt`, `USE_UTILITY`, `CuesAccessibilityService.kt`)
 - [ ] Task 17 — AppFunctions provider
 - [ ] Checkpoint — Ecosystem green
-- [ ] Task 18 — Documentation and claim discipline
-- [ ] Task 19 — iQOO device verification matrix
-- [ ] Task 20 — Final regression, offline demo, disclosure report
+- [x] Task 18 — Documentation and claim discipline.
+  - README status rewritten from evidence, plus OriginOS positioning: when-and-until layer beside Jovi, Office Kit as transport only, no assumed OEM API. FDD revised with a "Cues Brain additions" trust-boundary table, and Sprint 6 roadmap items marked implemented. Stale "never compiled or run" lines corrected in FINAL_PROBLEM_STATEMENT, SUBMISSION and RED_LIGHT. API_VERIFICATION marks AppFunctions, Live Updates and shortcuts as not integrated.
+  - New `docs/PERMISSIONS.md`: every declared permission, its user and its request point.
+  - Audit findings added to CLEANUP with retirement conditions: CL-24 (handoff is generic `ACTION_ASSIST`, no AppFunctions), CL-25 (attention port unwired, so `PENDING` never happens on a phone), CL-26 (no in-app grant for notifications, DND or exact alarm), CL-27 (coach Accept seeds undraftable text), and a CL-23 item 2 update.
+  - Fixed: missing `SET_ALARM` permission and an uncaught `SecurityException`; `./dev r` launching the wrong package id; the model side-load comment.
+- [~] Task 19 — iQOO device verification matrix: **prepared, not executed.**
+  - `docs/DEVICE_MATRIX.md` has rows M1–M9 plus the carried R1/R2/R3/R6/R8/build gate, each with method, pass condition, fallback and the CL entry it retires.
+  - `./dev probe` captures read-only device evidence to `evidence/`.
+  - Every result cell is "Not run": this pass had no loaner, no Android SDK and no Google Maven.
+- [~] Task 20 — Final regression, offline demo, disclosure report: **software half done, device half pending.**
+  - `./dev t` passes 267 tests. Every CLI scenario was run.
+  - Fixed two demo-path honesty bugs: `./dev d` skipped clause accounting, and the fixture Console showed model figures without a sample label.
+  - `docs/DEMO.md` is the live script with device gates and a cut list. `./dev demo` produced the committed offline transcript and console in `evidence/`. `docs/DISCLOSURE.md` is the verification and disclosure report.
+  - Still pending: `./dev b` and `./dev perms` for this revision on the laptop, phone footage, and two rehearsals (live and recorded).
 
 ### Checkpoint — Typed actions, detail (24 Sep 2026)
 

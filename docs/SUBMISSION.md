@@ -4,6 +4,8 @@ Open Innovation. Hyderabad City Battle, September 26–27, as supplied in the ev
 
 Status: the offline decision core is implemented and unit-tested. No device integration, no on-device model and no performance results yet.
 
+> **Updated 24 September 2026.** This is the Phase 1 copy as submitted, kept for the record. Current status: the Android app has been built and launched on an emulator, but not on an iQOO. A LiteRT-LM integration exists with no model side-loaded, and there are still no measured results. Before reusing any sentence below, check it against [DISCLOSURE.md](DISCLOSURE.md).
+
 ## Idea title
 
 Cues: Context You Declare, Behaviour That Ends
@@ -42,7 +44,7 @@ The project treats automation as a complete lifecycle. It makes the end conditio
 
 - Deck: [Cues_Deck.pptx](Cues_Deck.pptx), eleven slides with speaker notes. Slide 8 positions the proposal against contextual assistants such as Siri AI in iOS 27.
 - Video URL: not recorded yet. Record the real start-and-stop demonstration after implementation.
-- Prototype URL: not available yet. The repository contains a tested offline core and an Android runtime written against real device APIs but never compiled or run. Do not represent either as a working prototype.
+- Prototype URL: not available yet. The repository contains a tested offline core and an Android app that has run on an emulator, not on an iQOO. Do not represent either as a working prototype on the target phone.
 - Android and LLM proficiency: select the actual proficiency level.
 - Prior builds and placements: provide only verifiable personal history.
 
