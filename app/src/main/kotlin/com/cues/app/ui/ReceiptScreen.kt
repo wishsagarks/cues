@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.cues.core.store.ReceiptEntry
 import java.text.SimpleDateFormat
@@ -98,11 +99,18 @@ private fun ReceiptCard(entry: ReceiptEntry, onSpeak: (String) -> Unit) {
     val lines = entry.text.lines().filter { it.isNotBlank() }
     val headline = lines.firstOrNull().orEmpty()
     val detail = lines.drop(1)
+    val view = LocalView.current
 
     Surface(
         color = cuesColors.bg300,
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).animateContentSize(),
+        // Workbench drag/drop (Task 9): long-press drags this receipt's own
+        // rendered text — exactly entry.text, never a summary — into
+        // whatever the OS drop target is (notes, chat, the other Workbench
+        // pane). See DragAndDrop.kt for why this uses the platform View API
+        // rather than Compose's own drag modifier.
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp).animateContentSize()
+            .dragAndDropTextSource(view, "Cues receipt") { entry.text },
     ) {
         Column(Modifier.padding(13.dp)) {
             androidx.compose.foundation.layout.Row(

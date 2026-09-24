@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.cues.core.model.Patch
 import com.cues.core.model.PatchKind
@@ -64,6 +65,7 @@ fun RoutineDetailScreen(
     onReview: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
+    val view = LocalView.current
     val dryRun = remember(routine.id) { mutableStateOf<com.cues.core.rehearsal.RehearsalRow?>(null) }
     BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize().padding(16.dp).animateContentSize()) {
@@ -111,7 +113,16 @@ fun RoutineDetailScreen(
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onShareAsCard()
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                // Workbench drag/drop (Task 9): long-press instead drags the
+                // exact same Cue Card payload CueCardShareScreen's own
+                // "Share as text" button sends — CueCards.encode's output,
+                // never a live link back into this phone. A tap still opens
+                // the ordinary QR share screen; this only adds a second way
+                // to reach the same, already-tested payload.
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    .dragAndDropTextSource(view, routine.title) {
+                        com.cues.core.share.CueCards.encode(com.cues.core.share.CueCards.from(routine))
+                    },
             ) {
                 // Never "share this app's behavior on you" — this cue's own
                 // WHEN/IF/DO/UNTIL, and nothing this phone approved.

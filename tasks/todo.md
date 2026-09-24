@@ -41,7 +41,12 @@
     environment to check the builder shape, is a different and worse risk
     than this repo's usual "unverified behavior" disclosure. Recorded as a
     deliberate kept-current-notification decision in CL-15, pending R11.
-  - **Not done:** Workbench drag/drop; OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
+  - **Closed 24 Sep 2026:** Workbench drag/drop. `android:resizeableActivity="true"`
+    plus `ui/DragAndDrop.kt` (`Modifier.dragAndDropTextSource`, using the
+    stable `View.startDragAndDrop` rather than Compose's version-sensitive
+    `dragAndDropSource`), wired onto a receipt card and the "Share as a Cue
+    Card" button. Unverified on a device — see CL-32.
+  - **Not done:** OriginOS package/intent discovery for Jovi/Office Kit; Jovi launch-intent handoff (chat-level routing already exists via `IntentRouter`/`HANDOFF_TO_SYSTEM_AGENT`, but no on-device verification of what it resolves to). Ringer-mode restore not surviving a process death is tracked separately in CL-17.
 - [ ] Checkpoint — Typed actions green (core-side criteria met — see below; Android-side device criteria still open)
 - [x] Task 10 — LiteRT-LM inference reports and embeddings.
   - `core/.../inference/Inference.kt` (`InferenceBackend`, `InferenceReport`), `DraftResult.inferenceReport` on all 3 variants, `CueService.diagnostics().lastInferenceReport` and each turn's `args["backend"]`.

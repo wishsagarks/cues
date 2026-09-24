@@ -1158,3 +1158,52 @@ environment (no Android SDK — see CLAUDE.md):**
 launcher, "Start ‹cue›" has started a real manual cue from a long-press
 menu, and item 3's routing has either a test or is judged thin enough to
 skip one.
+
+---
+
+## CL-32 — Workbench drag/drop: written against the stable View API, unverified on a device
+
+**Status:** open · **Raised:** 24 Sep 2026
+
+Task 9 listed Workbench drag/drop among the not-done items. Added
+`android:resizeableActivity="true"` on `MainActivity`, and
+`ui/DragAndDrop.kt`'s `Modifier.dragAndDropTextSource` — long-press starts a
+system drag carrying plain text, wired onto a receipt card (`ReceiptScreen`,
+drags `entry.text` — the exact rendered receipt, nothing summarized) and the
+"Share as a Cue Card" button (`RoutineDetailScreen`, drags `CueCards.encode`'s
+output — the identical payload `CueCardShareScreen`'s own "Share as text"
+button already sends).
+
+**A real, disclosed decision:** this uses `View.startDragAndDrop` (the
+platform API, stable and unchanged since API 24) rather than Compose's own
+`Modifier.dragAndDropSource`. That modifier's callback shape has changed
+across Compose Foundation releases, and this environment has no compiler to
+confirm which shape the pinned `composeBom` version (2024.12.01) expects —
+the same reasoning CL-15 used to decline building a `ProgressStyle`
+notification blind, applied here to a case where a well-documented,
+version-stable alternative actually exists, so the feature could still be
+attempted rather than deferred outright.
+
+**What is not verified, because `:app` cannot be exercised in this
+environment (no Android SDK — see CLAUDE.md):**
+1. None of this has run on a device: whether OriginOS 7's Atomic Workbench
+   (or stock Android split-screen) actually offers Cues as a drag source or
+   accepts a drop into it, and whether `resizeableActivity="true"` alone is
+   sufficient for the app to appear as a Workbench pane at all, are both
+   unconfirmed.
+2. Layering a `pointerInput` long-press detector on top of `OutlinedButton`'s
+   own internal `clickable` (on the "Share as a Cue Card" button) is a real,
+   disclosed interaction risk — Compose's gesture arbitration between two
+   independent detectors on the same node has not been exercised here, and
+   it's plausible a long-press could suppress the button's ordinary tap, or
+   the reverse.
+3. `View.DragShadowBuilder(view)` shadows the *entire* Compose host view,
+   not just the dragged card or button — visually wrong (a full-screen
+   shadow instead of a small card), though not functionally wrong. A
+   correctly-scoped shadow needs a custom `DragShadowBuilder` this pass
+   didn't build.
+
+**Remove when:** a real long-press-and-drop between Cues and another app (or
+Workbench pane) has been observed on the loaner, the button/long-press
+interaction in item 2 is confirmed not to break ordinary taps, and either
+item 3's shadow is fixed or judged acceptable to ship as-is.
