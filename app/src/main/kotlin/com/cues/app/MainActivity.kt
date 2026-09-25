@@ -512,11 +512,25 @@ private fun CuesApp(
 
                 composable(CuesRoutes.WORKBENCH) {
                     WorkbenchScreen(
+                        onOpenPatchBay = { navController.navigate(CuesRoutes.WORKBENCH_PATCH_BAY) },
                         onOpenContexts = { navController.navigate(CuesRoutes.WORKBENCH_CONTEXTS) },
                         onOpenMemory = { navController.navigate(CuesRoutes.WORKBENCH_MEMORY) },
                         onOpenUtilityBindings = { navController.navigate(CuesRoutes.WORKBENCH_MACROS) },
                         onOpenTimetableCapture = { navController.navigate(CuesRoutes.INGEST_TIMETABLE) },
                         onOpenCueCardScan = { navController.navigate(CuesRoutes.INGEST_SCAN) },
+                    )
+                }
+
+                composable(CuesRoutes.WORKBENCH_PATCH_BAY) {
+                    com.cues.app.ui.workbench.PatchBayScreen(
+                        devices = pairedDevices(),
+                        contexts = store.allContexts(),
+                        places = store.allPlaces(),
+                        installedApps = { com.cues.app.runtime.installedApps(context) },
+                        onCompile = { sentence ->
+                            navController.popBackStack()
+                            draft(sentence)
+                        },
                     )
                 }
 

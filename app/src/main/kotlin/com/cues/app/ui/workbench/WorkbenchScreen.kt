@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import com.cues.core.registry.ActionRisk
  */
 @Composable
 fun WorkbenchScreen(
+    onOpenPatchBay: () -> Unit,
     onOpenContexts: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenUtilityBindings: () -> Unit,
@@ -54,6 +56,10 @@ fun WorkbenchScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item { SectionHeader("BUILD", meta = "touch-to-patch, checked live against the grammar") }
+        item {
+            WorkbenchRow("Patch bay", "Compose a cue from WHEN/IF/DO/UNTIL controls instead of a sentence", Icons.Filled.Tune, onOpenPatchBay)
+        }
         item { SectionHeader("DECLARE", meta = "what Cues is allowed to know") }
         item {
             WorkbenchRow("Contexts & places", "Named signal groups and saved places", Icons.Filled.PinDrop, onOpenContexts)
@@ -62,7 +68,7 @@ fun WorkbenchScreen(
             WorkbenchRow("Memory", "Facts Cues can reference in a cue", Icons.Filled.Memory, onOpenMemory)
         }
 
-        item { SectionHeader("BUILD", meta = "high-risk, last resort") }
+        item { SectionHeader("TEACH", meta = "high-risk, last resort") }
         item {
             WorkbenchRow(
                 "Utility macros",

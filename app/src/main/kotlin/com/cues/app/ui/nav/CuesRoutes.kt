@@ -20,6 +20,7 @@ object CuesRoutes {
     const val CUE_DETAIL = "cue/{routineId}"
     fun cueDetail(routineId: String) = "cue/$routineId"
     const val CHECKS = "checks"
+    const val WORKBENCH_PATCH_BAY = "workbench/patch-bay"
     const val WORKBENCH_CONTEXTS = "workbench/contexts"
     const val WORKBENCH_MEMORY = "workbench/memory"
     const val WORKBENCH_MACROS = "workbench/macros"
