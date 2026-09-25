@@ -12,7 +12,7 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Offline decision core implemented and tested. `:app` now compiles clean in every environment this project has been touched from, including one with no prior Android SDK access. Never installed on an iQOO. No measured results.**
+**Offline decision core implemented and tested. `:app` builds and has run on an Android emulator — a full Kinetic Obsidian redesign, exercised end to end from a Workbench patch bay through Review. Never installed on an iQOO. No measured results.**
 
 As of 25 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md)):
 
@@ -34,16 +34,20 @@ As of 25 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md))
   library, disk-is-truth store reactivity (`ObservableStore`/
   `StoreGeneration`, so a session a background receiver started still
   shows up correctly after a process kill), rebuilt Now/Ask/Review/Insights
-  screens wired to the real `:core` API above, a restyled session
-  notification/widget/quick-settings tile, and a new adaptive launcher
-  icon and splash. On the machine this redesign was built on,
-  `:app:compileDebugKotlin` succeeded for the first time this repository
-  has recorded (see CLEANUP.md CL-33) — `assembleDebug`/install/an actual
-  run are still blocked there by a pre-existing AGP-vs-compileSdk mismatch,
-  confirmed unrelated to the redesign. Receipts and Workbench are
-  intentionally partial this pass (old screens, new theme only); the
-  Workbench patch-bay UI and structured receipt cards are not built yet,
-  though their `:core` support is. It includes a LiteRT-LM integration
+  screens wired to the real `:core` API above, a touch-to-patch Workbench
+  patch bay whose selections are checked live through `PatchSentence`
+  before compiling, a restyled session notification/widget/quick-settings
+  tile, and a new adaptive launcher icon and splash. On the machine this
+  redesign was built on, `./gradlew :app:assembleDebug` now succeeds and
+  the app has been installed and run on an Android emulator (see
+  CLEANUP.md CL-33) — the first time any part of `:app` has been observed
+  running in this repository's recorded history, though only on that
+  emulator, only in light theme, and only for the screens that pass
+  actually navigated to (Now, Ask, Workbench, the patch bay, Review). A
+  physical iQOO remains untouched. Receipts is still the old screen with
+  the new theme only — structured `ReceiptRecord` cards aren't built,
+  though the `:core` support and the live `ReceiptLog` wiring are. It
+  includes a LiteRT-LM integration
   with no model side-loaded yet. With no model the app falls back to the
   grammar parser, and it says so on every draft.
 - **Nothing has run on an iQOO.** Background delivery, the owned quiet rule,
