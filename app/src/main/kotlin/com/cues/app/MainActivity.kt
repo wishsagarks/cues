@@ -443,16 +443,14 @@ private fun CuesApp(
                 }
 
                 composable(CuesRoutes.INSIGHTS) {
-                    val forecast = remember(routines) {
-                        forecastToday(routines, store.allPatches(), LiveSnapshot.current(context), ZoneId.systemDefault(), store)
-                    }
+                    var insightsWindow by remember { mutableStateOf(com.cues.core.insights.InsightsWindow.LAST_7_DAYS) }
+                    val report = remember(insightsWindow, generation) { cueService.insights(insightsWindow) }
                     val diag = cueService.diagnostics()
                     InsightsScreen(
-                        forecast = forecast,
-                        titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
-                        ledgerEnabled = store.signalOptIn,
+                        report = report,
+                        window = insightsWindow,
+                        onWindowChange = { insightsWindow = it },
                         onToggleLedger = { store.setSignalOptIn(it) },
-                        ledgerEvents = store.ledgerEvents(),
                         drafterLabel = diag.primaryDrafter.friendlyLabel(),
                         lastFallbackReason = diag.lastFallbackReason,
                         onExportConsole = {
@@ -460,6 +458,7 @@ private fun CuesApp(
                             val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
                             context.startActivity(com.cues.app.bridge.ExportImport.shareIntent(context, uri))
                         },
+                        onFixCapability = { navController.navigate(CuesRoutes.CHECKS) },
                     )
                 }
 
