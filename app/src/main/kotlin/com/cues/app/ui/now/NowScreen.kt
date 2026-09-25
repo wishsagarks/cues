@@ -2,7 +2,6 @@ package com.cues.app.ui.now
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +11,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,7 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.AdapterStatus
 import com.cues.app.ui.components.ClauseBlock
@@ -47,7 +49,6 @@ import com.cues.app.ui.components.TrustChip
 import com.cues.app.ui.components.formatCountdown
 import com.cues.app.ui.components.label
 import com.cues.app.ui.components.tone
-import com.cues.app.ui.theme.CuesShape
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.model.ContextValue
@@ -113,39 +114,11 @@ fun NowScreen(
         }
 
         item {
-            // A horizontally scrolling strip, not a plain Row: three chips
-            // routinely overflow a phone-width screen, and a Row's children
-            // (with no `weight`) are still measured with the *item's* loose
-            // maxWidth as their own upper bound — on a narrow device that
-            // starved the label text of room and wrapped it into a tall
-            // column of single characters, ballooning the whole row's
-            // height. A scrollable Row gives every chip its natural,
-            // unconstrained width instead.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
-            ) {
-                TrustChip("NO MODEL AT RUNTIME")
-                // CL-35: was "NO INTERNET PERMISSION" — no longer true once the
-                // opt-in cloud assist feature declares INTERNET. The invariant
-                // that's still true, and still the one this chip is actually
-                // about, is that nothing downstream of approval ever touches
-                // the network — see ReviewScreen's "After approval: no model,
-                // no network." and docs/FDD.md's "Optional cloud assist" section.
-                TrustChip("NO NETWORK AT RUNTIME")
-                TrustChip("DRAFTING: $drafterLabel")
-            }
+            RuntimeContractPanel(drafterLabel)
         }
 
         if (signalGates.isNotEmpty()) {
-            item {
-                SectionHeader("SIGNAL GATES", meta = "${signalGates.count { it.isKnown }}/${signalGates.size} known")
-            }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(signalGates, key = { it.label }) { gate -> SignalGateTile(gate, onFix = onGrantCapability) }
-                }
-            }
+            item { SignalGateAnalytics(signalGates, onFix = onGrantCapability) }
         }
 
         if (forecast.isNotEmpty()) {
@@ -179,6 +152,112 @@ fun NowScreen(
         }
 
         item { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+@Composable
+private fun RuntimeContractPanel(drafterLabel: String) {
+    val t = cuesTokens
+    SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+        Text("RUNTIME CONTRACT", style = CuesType.label, color = t.inkSlate)
+        Text(
+            "What Cues is allowed to use after approval",
+            style = CuesType.body,
+            color = t.inkSecondary,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+        TrustChip("NO MODEL AT RUNTIME", modifier = Modifier.fillMaxWidth())
+        TrustChip("NO NETWORK AT RUNTIME", modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        TrustChip("DRAFTING: $drafterLabel", modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun SignalGateAnalytics(gates: List<SignalGate>, onFix: () -> Unit) {
+    val t = cuesTokens
+    val known = gates.count { it.isKnown }
+    val attention = gates.size - known
+    val stateColor = if (attention == 0) t.go else t.warn
+
+    SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column {
+                Text("SIGNAL GATES", style = CuesType.title, color = t.inkPrimary)
+                Text(
+                    "$known of ${gates.size} known",
+                    style = CuesType.labelSmall,
+                    color = stateColor,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Text(
+                if (attention == 0) "ALL CLEAR" else "$attention NEED ATTENTION",
+                style = CuesType.labelSmall,
+                color = stateColor,
+            )
+        }
+        LinearProgressIndicator(
+            progress = { known.toFloat() / gates.size.coerceAtLeast(1) },
+            color = stateColor,
+            trackColor = t.island,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        )
+        Column(Modifier.padding(top = 8.dp)) {
+            gates.forEachIndexed { index, gate ->
+                SignalGateRow(gate, onFix)
+                if (index < gates.lastIndex) {
+                    HorizontalDivider(color = t.hairline, thickness = 1.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignalGateRow(gate: SignalGate, onFix: () -> Unit) {
+    val t = cuesTokens
+    val unknown = gate.value as? ContextValue.Unknown
+    val valueText = when (val value = gate.value) {
+        is ContextValue.Known -> value.value
+        is ContextValue.Unknown -> unknownReasonLabel(value.reason)
+    }
+    val stateColor = if (unknown == null) t.go else t.warn
+    val canFix = unknown?.reason == com.cues.core.model.UnknownReason.PERMISSION_DENIED
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(if (canFix) Modifier.clickable { onFix() } else Modifier),
+    ) {
+        Box(Modifier.size(7.dp).background(stateColor, CircleShape))
+        Text(
+            gate.label,
+            style = CuesType.bodyMedium,
+            color = t.inkPrimary,
+            modifier = Modifier.padding(start = 10.dp).weight(0.9f),
+        )
+        Text(
+            valueText,
+            style = CuesType.labelSmall,
+            color = if (unknown == null) t.inkSecondary else t.warn,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1.1f),
+        )
+        if (canFix) {
+            Text(
+                "Grant",
+                style = CuesType.labelSmall,
+                color = t.doYellow,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 
@@ -294,37 +373,6 @@ private fun CueSlabCard(routine: Routine, activeSession: Session?, onClick: () -
 /** One row of the Signal Gates grid — a live [ContextValue] with a human label. */
 data class SignalGate(val label: String, val value: ContextValue<String>) {
     val isKnown: Boolean get() = value is ContextValue.Known
-}
-
-@Composable
-private fun SignalGateTile(gate: SignalGate, onFix: () -> Unit) {
-    val t = cuesTokens
-    SlabCard(
-        tier = SlabTier.ONE,
-        modifier = Modifier.width(150.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp),
-    ) {
-        Text(gate.label.uppercase(), style = CuesType.labelSmall, color = t.inkSlate)
-        when (val v = gate.value) {
-            is ContextValue.Known -> Text(v.value, style = CuesType.bodyMedium, color = t.inkPrimary, modifier = Modifier.padding(top = 4.dp))
-            is ContextValue.Unknown -> {
-                Text(
-                    "UNKNOWN · ${unknownReasonLabel(v.reason)}",
-                    style = CuesType.labelSmall,
-                    color = t.unknown,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                if (v.reason == com.cues.core.model.UnknownReason.PERMISSION_DENIED) {
-                    Text(
-                        "Grant →",
-                        style = CuesType.labelSmall,
-                        color = t.doYellow,
-                        modifier = Modifier.padding(top = 4.dp).clickable { onFix() },
-                    )
-                }
-            }
-        }
-    }
 }
 
 private fun unknownReasonLabel(reason: com.cues.core.model.UnknownReason): String = when (reason) {

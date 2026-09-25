@@ -49,6 +49,7 @@ fun DiagnosticsScreen(
     onDeviceModelEnabled: Boolean = false,
     onToggleOnDeviceModel: ((Boolean) -> Unit)? = null,
     onDownloadModel: (() -> Unit)? = null,
+    onChooseModel: (() -> Unit)? = null,
     onCancelDownloadModel: (() -> Unit)? = null,
     onRemoveModel: (() -> Unit)? = null,
 ) {
@@ -86,6 +87,7 @@ fun DiagnosticsScreen(
                 enabled = onDeviceModelEnabled,
                 onToggleEnabled = onToggleOnDeviceModel,
                 onDownload = onDownloadModel,
+                onChoose = onChooseModel,
                 onCancel = onCancelDownloadModel,
                 onRemove = onRemoveModel,
             )
@@ -209,6 +211,7 @@ private fun ModelBrainCard(
     enabled: Boolean,
     onToggleEnabled: ((Boolean) -> Unit)?,
     onDownload: () -> Unit,
+    onChoose: (() -> Unit)?,
     onCancel: (() -> Unit)?,
     onRemove: (() -> Unit)?,
 ) {
@@ -221,7 +224,7 @@ private fun ModelBrainCard(
         Column(Modifier.padding(14.dp)) {
             Text("Cues Brain", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
             Text(
-                "The on-device model. Runs entirely on this phone — no cue text ever leaves it.",
+                "Bring your own Gemma model. Drafting stays on this phone — no cue text leaves it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = cuesColors.ink200,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
@@ -250,10 +253,16 @@ private fun ModelBrainCard(
                         )
                     }
                     Button(
-                        onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onDownload() },
-                        enabled = canDownload && isOnWifi,
+                        onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChoose?.invoke() },
+                        enabled = onChoose != null,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    ) { Text("Download") }
+                    ) { Text("Install Gemma model") }
+                    if (canDownload && isOnWifi) {
+                        OutlinedButton(
+                            onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onDownload() },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        ) { Text("Download verified model") }
+                    }
                 }
 
                 is ModelProvisionState.Downloading -> {

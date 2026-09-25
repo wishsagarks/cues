@@ -1,6 +1,7 @@
 package com.cues.app.drafting
 
 import android.content.Context
+import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.cues.core.inference.ModelProvisionState
@@ -46,6 +47,36 @@ class ModelDownloader(
         else ModelProvisionState.NotInstalled
 
     fun canDownload(): Boolean = sourceUrl.isNotBlank() && expectedSha256.isNotBlank()
+
+    /** Installs a user-selected LiteRT-LM model into the same private path as a download. */
+    suspend fun installFromUri(uri: Uri): ModelProvisionState = withContext(Dispatchers.IO) {
+        val name = uri.lastPathSegment.orEmpty().substringAfterLast('/')
+        if (!name.endsWith(".litertlm", ignoreCase = true)) {
+            return@withContext ModelProvisionState.Failed(
+                "Choose a .litertlm Gemma model file.",
+                retryable = false,
+            )
+        }
+
+        val partFile = File(targetFile.parentFile, "${targetFile.name}.part")
+        targetFile.parentFile?.mkdirs()
+        try {
+            val input = context.contentResolver.openInputStream(uri)
+                ?: return@withContext ModelProvisionState.Failed("Could not open that model file.", retryable = true)
+            input.use { source ->
+                partFile.outputStream().use { destination -> source.copyTo(destination) }
+            }
+            if (partFile.length() == 0L) {
+                return@withContext ModelProvisionState.Failed("That model file is empty.", retryable = false)
+            }
+            Files.move(partFile.toPath(), targetFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            ModelProvisionState.Installed(sizeBytes = targetFile.length(), sha256 = null)
+        } catch (e: IOException) {
+            ModelProvisionState.Failed(e.message ?: "Could not install that model file.", retryable = true)
+        } finally {
+            partFile.delete()
+        }
+    }
 
     fun isOnWifi(): Boolean {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false

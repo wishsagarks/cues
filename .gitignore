@@ -42,3 +42,6 @@ video/public/audio/
 
 # Local agent worktree scratch state (Claude Code)
 .claude/
+
+# Graphify output
+graphify-out/

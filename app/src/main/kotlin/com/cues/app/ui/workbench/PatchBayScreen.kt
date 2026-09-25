@@ -1,5 +1,6 @@
 package com.cues.app.ui.workbench
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,12 +16,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.InstalledApp
 import com.cues.app.ui.components.EmptyState
@@ -59,9 +65,12 @@ fun PatchBayScreen(
     places: List<Place>,
     installedApps: () -> List<InstalledApp>,
     onCompile: (String) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val t = cuesTokens
+    val haptics = LocalHapticFeedback.current
+    BackHandler(onBack = onBack)
     var whenSel by remember { mutableStateOf<WhenSelection?>(null) }
     val ifSels = remember { androidx.compose.runtime.mutableStateListOf<IfSelection>() }
     val doSels = remember { androidx.compose.runtime.mutableStateListOf<DoSelection>() }
@@ -98,6 +107,19 @@ fun PatchBayScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text("Patch bay", style = MaterialTheme.typography.headlineSmall, color = t.inkPrimary)
+                OutlinedButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onBack()
+                }) { Text("Back") }
+            }
+        }
         item {
             SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
                 Text2("PATCH BAY", t.inkSlate)

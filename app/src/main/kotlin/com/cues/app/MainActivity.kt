@@ -2,6 +2,8 @@ package com.cues.app
 
 import android.os.Bundle
 import com.cues.app.drafting.LocalSpeechInput
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -320,6 +322,21 @@ private fun CuesApp(
     val context = LocalContext.current
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            modelProvisionState = com.cues.core.inference.ModelProvisionState.Verifying
+            scope.launch {
+                modelProvisionState = modelDownloader.installFromUri(uri)
+                if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed) {
+                    onDeviceModelEnabled = true
+                    onToggleOnDeviceModel(true)
+                    snackbarHost.showSnackbar("Gemma installed and enabled for drafting")
+                } else if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Failed) {
+                    snackbarHost.showSnackbar((modelProvisionState as com.cues.core.inference.ModelProvisionState.Failed).reason)
+                }
+            }
+        }
+    }
 
     fun refresh() {
         routines = cueService.list()
@@ -685,6 +702,7 @@ private fun CuesApp(
                             navController.popBackStack()
                             draft(sentence)
                         },
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -790,6 +808,7 @@ private fun CuesApp(
                         onDeviceModelEnabled = onDeviceModelEnabled,
                         onToggleOnDeviceModel = { onDeviceModelEnabled = it; onToggleOnDeviceModel(it) },
                         onDownloadModel = ::downloadModelNow,
+                        onChooseModel = { modelPicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
                         onCancelDownloadModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Downloading) ::cancelModelDownloadNow else null,
                         onRemoveModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed) ::removeModelNow else null,
                     )
