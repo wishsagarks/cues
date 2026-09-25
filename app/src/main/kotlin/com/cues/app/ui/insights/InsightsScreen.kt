@@ -16,7 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cues.app.ui.components.EmptyState
-import com.cues.app.ui.components.FilterChipRow
+import com.cues.app.ui.components.FixedSegmentedControl
 import com.cues.app.ui.components.KineticSwitch
 import com.cues.app.ui.components.SectionHeader
 import com.cues.app.ui.components.SlabCard
@@ -58,12 +58,18 @@ fun InsightsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            FilterChipRow(
-                options = listOf("7 days" to -1, "30 days" to -1),
-                selected = if (window == InsightsWindow.LAST_7_DAYS) 0 else 1,
-                onSelect = { onWindowChange(if (it == 0) InsightsWindow.LAST_7_DAYS else InsightsWindow.LAST_30_DAYS) },
-            )
+            Column {
+                Text("WINDOW", style = CuesType.labelSmall, color = t.inkSlate)
+                FixedSegmentedControl(
+                    options = listOf("LAST 7 DAYS", "LAST 30 DAYS"),
+                    selected = if (window == InsightsWindow.LAST_7_DAYS) 0 else 1,
+                    onSelect = { onWindowChange(if (it == 0) InsightsWindow.LAST_7_DAYS else InsightsWindow.LAST_30_DAYS) },
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
         }
+
+        item { SectionHeader("OVERVIEW", meta = "local, verified") }
 
         if (!report.hasData) {
             item {

@@ -7,10 +7,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -148,20 +150,27 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
 fun KineticSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val t = cuesTokens
     val haptics = com.cues.app.ui.theme.rememberCuesHaptics()
-    Switch(
-        checked = checked,
-        onCheckedChange = { haptics.tap(); onCheckedChange(it) },
-        enabled = enabled,
-        modifier = modifier,
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Color(0xFF0B0C10),
-            checkedTrackColor = t.doYellow,
-            checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = t.inkSlate,
-            uncheckedTrackColor = t.raised,
-            uncheckedBorderColor = t.hairline,
-        ),
-    )
+    // Keep the visual switch stable while preserving a comfortable 48dp
+    // touch target for every screen that uses this shared control.
+    Box(
+        modifier = modifier.width(52.dp).height(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Switch(
+            checked = checked,
+            onCheckedChange = { haptics.tap(); onCheckedChange(it) },
+            enabled = enabled,
+            modifier = Modifier.width(52.dp).height(32.dp),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF0B0C10),
+                checkedTrackColor = t.doYellow,
+                checkedBorderColor = Color.Transparent,
+                uncheckedThumbColor = t.inkSlate,
+                uncheckedTrackColor = t.raised,
+                uncheckedBorderColor = t.hairline,
+            ),
+        )
+    }
 }
 
 /** Clickable that tracks its own press state (for the 0.98 scale-down), using the platform's default ripple. */

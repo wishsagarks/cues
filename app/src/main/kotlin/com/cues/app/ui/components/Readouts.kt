@@ -8,11 +8,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -140,6 +141,43 @@ fun FilterChipRow(
             ) {
                 Text(
                     text = if (count >= 0) "$label ($count)" else label,
+                    style = CuesType.labelSmall,
+                    color = if (isSelected) Color(0xFF0B0C10) else t.inkSecondary,
+                )
+            }
+        }
+    }
+}
+
+/** Equal-width period/mode control with stable geometry and a full touch row. */
+@Composable
+fun FixedSegmentedControl(
+    options: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val t = cuesTokens
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(t.island, CuesShape.capsule)
+            .border(1.dp, t.hairline, CuesShape.capsule)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        options.forEachIndexed { index, label ->
+            val isSelected = index == selected
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(42.dp)
+                    .background(if (isSelected) t.doYellow else Color.Transparent, CuesShape.capsule)
+                    .clickableNoIndicationPublic { onSelect(index) },
+            ) {
+                Text(
+                    label,
                     style = CuesType.labelSmall,
                     color = if (isSelected) Color(0xFF0B0C10) else t.inkSecondary,
                 )
