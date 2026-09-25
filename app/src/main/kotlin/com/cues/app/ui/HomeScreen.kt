@@ -445,18 +445,21 @@ internal fun TemplateGallery(onPick: (Template) -> Unit) {
     val templates = remember { Templates.load() }
     if (templates.isEmpty()) return
     val haptics = LocalHapticFeedback.current
+    val t = com.cues.app.ui.theme.cuesTokens
     Column {
         Text(
             "TRY A TEMPLATE",
-            style = MaterialTheme.typography.labelSmall,
-            color = cuesColors.ink200,
+            style = com.cues.app.ui.theme.CuesType.labelSmall,
+            color = t.inkSlate,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(templates, key = { it.label }) { template ->
                 Surface(
-                    color = cuesColors.bg300,
-                    shape = RoundedCornerShape(20.dp),
+                    color = t.island,
+                    contentColor = t.inkSecondary,
+                    shape = com.cues.app.ui.theme.CuesShape.capsule,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, t.hairline),
                     modifier = Modifier.clickable {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onPick(template)
@@ -464,7 +467,7 @@ internal fun TemplateGallery(onPick: (Template) -> Unit) {
                 ) {
                     Text(
                         template.label,
-                        style = MaterialTheme.typography.labelMedium,
+                        style = com.cues.app.ui.theme.CuesType.labelSmall,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     )
                 }

@@ -4,9 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
@@ -44,6 +48,7 @@ fun CuesBottomNav(currentRoute: String?, onSelect: (String) -> Unit, modifier: M
         modifier = modifier
             .fillMaxWidth()
             .background(t.island)
+            .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -90,6 +95,12 @@ fun CuesTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = modifier
             .fillMaxWidth()
+            .background(t.voidSurface)
+            // Edge-to-edge (MainActivity.enableEdgeToEdge) draws behind the
+            // status bar, so a plain Row — unlike Material3's own TopAppBar,
+            // which does this internally — needs its own inset padding or
+            // the logo/title sit directly under the system clock.
+            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

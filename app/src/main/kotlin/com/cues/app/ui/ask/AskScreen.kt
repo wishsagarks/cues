@@ -130,9 +130,7 @@ fun AskScreen(
             }
         }
 
-        item {
-            Text("TRY A TEMPLATE", style = CuesType.labelSmall, color = t.inkSlate)
-        }
+        // TemplateGallery renders its own "TRY A TEMPLATE" label internally.
         item { TemplateGallery(onPick = { template -> text = template.sentence }) }
 
         item {

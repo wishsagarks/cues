@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -154,16 +155,18 @@ fun SectionHeader(title: String, meta: String? = null, modifier: Modifier = Modi
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(title, style = CuesType.headline.copy(fontSize = 15.sp), color = t.inkPrimary)
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.weight(1f, fill = false)) {
+            Text(title, style = CuesType.headline.copy(fontSize = 15.sp), color = t.inkPrimary, maxLines = 1)
             if (meta != null) {
                 Text(
                     "  ·  $meta",
                     style = CuesType.labelSmall,
                     color = t.inkSlate,
-                    modifier = Modifier.padding(bottom = 1.dp),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 1.dp).weight(1f, fill = false),
                 )
             }
         }

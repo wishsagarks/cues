@@ -2,6 +2,7 @@ package com.cues.app.ui.now
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,7 +113,18 @@ fun NowScreen(
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // A horizontally scrolling strip, not a plain Row: three chips
+            // routinely overflow a phone-width screen, and a Row's children
+            // (with no `weight`) are still measured with the *item's* loose
+            // maxWidth as their own upper bound — on a narrow device that
+            // starved the label text of room and wrapped it into a tall
+            // column of single characters, ballooning the whole row's
+            // height. A scrollable Row gives every chip its natural,
+            // unconstrained width instead.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            ) {
                 TrustChip("NO MODEL AT RUNTIME")
                 TrustChip("NO INTERNET PERMISSION")
                 TrustChip("DRAFTING: $drafterLabel")
