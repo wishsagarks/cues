@@ -1668,3 +1668,112 @@ session records at least one on-device and one Sarvam entry and the Insights
 card renders both correctly, and the 30-day retention is confirmed to prune
 correctly against a real clock over time (not just the unit-tested cutoff
 math).
+
+---
+
+## CL-38 — Developer-facing local Gemma surface: a real IPC endpoint, unexercised
+
+**Status:** open · **Raised:** 26 Sep 2026
+
+`CuesGemmaProvider` (`app/.../devkit/`) is a call-only `ContentProvider` —
+`content://<applicationId>.gemma` — letting another app installed on the same
+phone ask Cues' on-device Gemma for a completion, gated by a third opt-in
+switch (`CuesApplication.externalGemmaGate`, off by default every launch) on
+top of the authoring model's own two. It reuses `GatedLlmSession`/
+`LiteRtLmSession` unchanged, pointed at a second, separate model file
+(`filesDir/models/external/model.litertlm`), so nothing an external caller
+sends can reach cue authoring, `ActionRegistry` or `:core`'s trust boundary —
+this is a parallel export capability, not a new path into cue execution.
+
+**What makes this safe, by construction:**
+- The gate is off by default every launch, the same discipline as
+  `onDeviceModelUserEnabled`/`cloudAssistEnabled`, and is checked on every
+  call via the same `GatedLlmSession` wrapper the authoring model already
+  uses — nothing new to get wrong there.
+- A separate model file from the authoring path's `modelFile`: swapping a
+  BYOM model in for this surface can never silently replace the trusted
+  authoring model, and an absent file here is an honest, disclosed failure,
+  never a silent fallback to the authoring model.
+- Every attempt — allowed or denied — is logged
+  (`ExternalGemmaGate.recentCalls()`), shown in Diagnostics' "Recent callers"
+  list: a blocked caller is disclosed, never silently dropped.
+- The "\$ saved vs. cloud" figure reuses `InferenceCost.costFor`, the one
+  place a \$/token assumption is allowed to exist — it inherits CL-37's own
+  `UNVERIFIED` state rather than a second, separate cost formula.
+
+**What is not verified:**
+1. The provider has never been called by a real second installed app, or by
+   `adb shell content call`, on any device — everything above is written
+   against real, stable Android APIs (`ContentProvider.call`,
+   `Binder.getCallingUid`) but unexercised. See `docs/DEVICE_MATRIX.md` M10.
+2. **No permission-level access control.** The provider is
+   `exported="true"` with no `<uses-permission>`/signature-permission gate —
+   any installed app can attempt a call at any time; the only protection is
+   the in-memory `externalGemmaGate.enabled` toggle (reset every launch) and
+   the per-call caller-package log. A real developer-facing surface would
+   need a declared custom permission or a caller allowlist; neither exists.
+3. **No quota or rate limit.** A single caller, malicious or buggy, can call
+   `generate` in a tight loop; nothing here throttles it.
+   `ExternalCallerLedger` records usage after the fact, it does not gate it.
+4. **`ExternalGemmaGate` and `ExternalCallerLedger` are in-memory only** —
+   cleared on process death, not persisted to `JsonFileStore` the way
+   `InferenceLedger` is. A deliberate, disclosed scope cut rather than a
+   half-built persistence layer that had never been exercised either.
+5. **The BYOM path for this surface specifically has never been exercised**
+   with a real second `.litertlm` file distinct from the authoring model —
+   only argued from `ModelDownloader.installFromUri`'s already-disclosed
+   unverified state (CL-36).
+6. **`externalModelIdentity()`'s SHA-256 hash of a large model file runs on
+   first access after install/swap**, synchronously inside a suspend
+   context — timing against a real, large `.litertlm` file is unmeasured.
+
+**Remove when:** a real second installed app (or the `adb shell content
+call` harness, M10) gets a real response on the loaner with a real token
+count and backend, the "Recent callers" list is seen rendering both an
+allowed and a denied entry, and a decision is recorded on whether a
+permission-level gate is needed before this is ever demoed to someone
+outside the team.
+
+---
+
+## CL-39 — Model-assisted refine phrasing and suggestion narration: new callers of an unrun model
+
+**Status:** open · **Raised:** 26 Sep 2026
+
+Two narrower uses of the same on-device model CL-18 already covers, neither
+of which has ever run against a real side-loaded model on a device — both
+inherit CL-18's "written against real APIs, verified on nothing" status
+rather than adding a new kind of risk:
+
+- `OnDeviceRefinePhraser` (`core/.../assistant/`): when `IntentRouter`'s
+  deterministic patterns find no match at all and a draft is active, asks
+  the model to restate the edit in `RefineGrammarParser`'s small closed
+  vocabulary (`"set duration to <N> minutes"`, `"add/remove day <weekday>"`),
+  then applies the result through `Refiner.apply` — the same independent
+  revalidation every other edit already goes through. The model's words are
+  never trusted as the `RefineOperation` itself.
+- `SuggestionNarrator` (`app/.../coach/`): asks the model to restate an
+  already-computed coach `Suggestion`'s evidence as one readable sentence,
+  purely cosmetic copy under the existing structured card. Crosses no trust
+  boundary at all — it never produces a `Routine` or a `RefineOperation`, so
+  nothing here is ever seen by `Validator`.
+
+**What is not verified:**
+1. Neither class has ever produced a real output from a real model — both
+   are exercised only against `FakeLlmSession`-style test doubles, the same
+   gap CL-18 already names for `OnDeviceLlmDrafter`.
+2. `RefineGrammarParser`'s closed vocabulary is deliberately small (duration,
+   add/remove day) — whether the model reliably restates a free-text edit
+   into exactly one of those three sentence shapes, rather than a shape it
+   doesn't recognize, is unmeasured.
+3. `SuggestionNarrator` is not wired into any screen yet. The coach-suggestion
+   card it would sit under (`HomeScreen`'s, pre-redesign) was not carried
+   over into the `NowScreen` redesign (CL-33) — see `tasks/todo.md`'s Task 6
+   note. Reconnecting that card is the redesign's job; this class is ready
+   for a one-line call once it exists.
+
+**Remove when:** each class has produced a real edit/narration from a real
+side-loaded model on the loaner, `docs/MEASUREMENTS.md` records how often
+the model's refine phrasing actually parses versus falls through, and
+`SuggestionNarrator` has a real call site rendering its output on a device
+screen.

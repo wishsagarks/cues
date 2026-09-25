@@ -52,6 +52,11 @@ fun DiagnosticsScreen(
     onChooseModel: (() -> Unit)? = null,
     onCancelDownloadModel: (() -> Unit)? = null,
     onRemoveModel: (() -> Unit)? = null,
+    externalGemmaEnabled: Boolean = false,
+    onToggleExternalGemma: ((Boolean) -> Unit)? = null,
+    externalModelIdentity: String = "no BYOM model installed",
+    onChooseExternalModel: (() -> Unit)? = null,
+    recentExternalCalls: List<com.cues.app.devkit.ExternalCallLogEntry> = emptyList(),
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -90,6 +95,17 @@ fun DiagnosticsScreen(
                 onChoose = onChooseModel,
                 onCancel = onCancelDownloadModel,
                 onRemove = onRemoveModel,
+            )
+        }
+
+        if (onToggleExternalGemma != null) {
+            Spacer(Modifier.height(8.dp))
+            DeveloperSurfaceCard(
+                enabled = externalGemmaEnabled,
+                onToggleEnabled = onToggleExternalGemma,
+                modelIdentity = externalModelIdentity,
+                onChooseModel = onChooseExternalModel,
+                recentCalls = recentExternalCalls,
             )
         }
 
@@ -344,6 +360,82 @@ private fun ModelBrainCard(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         ) { Text("Retry") }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * CL-38: the developer-facing local Gemma surface — other apps on this same
+ * phone can call `content://<applicationId>.gemma` for an on-device
+ * completion, once this switch is on. Off by default every launch, same
+ * discipline as [ModelBrainCard]'s own "Use for drafting" switch. A model
+ * being installed for authoring does not mean this surface has one too — see
+ * its own "bring your own model" button and honest absence state below.
+ */
+@Composable
+private fun DeveloperSurfaceCard(
+    enabled: Boolean,
+    onToggleEnabled: (Boolean) -> Unit,
+    modelIdentity: String,
+    onChooseModel: (() -> Unit)?,
+    recentCalls: List<com.cues.app.devkit.ExternalCallLogEntry>,
+) {
+    val haptics = LocalHapticFeedback.current
+    Surface(
+        color = cuesColors.bg300,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).animateContentSize(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Developer surface", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text(
+                "Lets another app on this phone ask Cues' on-device Gemma for a completion. " +
+                    "Unverified beyond this build — see CLEANUP.md CL-38.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            Text(
+                "Model: $modelIdentity",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Expose to other apps", style = MaterialTheme.typography.bodySmall)
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onToggleEnabled(it)
+                    },
+                )
+            }
+            if (onChooseModel != null) {
+                OutlinedButton(
+                    onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChooseModel() },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) { Text("Bring your own model for this surface") }
+            }
+            if (recentCalls.isNotEmpty()) {
+                Text(
+                    "Recent callers",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                recentCalls.take(10).forEach { call ->
+                    Text(
+                        "${call.callerPackage} — ${if (call.allowed) "allowed" else "denied: ${call.reason}"} — " +
+                            DateFormat.getTimeInstance().format(Date(call.atMillis)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (call.allowed) cuesColors.ink200 else cuesColors.amber,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
         }

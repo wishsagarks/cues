@@ -256,6 +256,20 @@
         </provider>
 
         <!--
+          CL-38: the developer-facing local Gemma surface — a call-only
+          provider (see app/.../devkit/CuesGemmaProvider.kt), not a data
+          provider; every cursor/mutation method it inherits refuses. No
+          <uses-permission> gates it because ContentProvider.call() needs
+          none; the only protection is CuesApplication.externalGemmaGate's
+          in-memory, off-by-default toggle plus its own caller-package log —
+          disclosed as a real limitation, not hidden, in CLEANUP.md CL-38.
+        -->
+        <provider
+            android:name=".devkit.CuesGemmaProvider"
+            android:authorities="${applicationId}.gemma"
+            android:exported="true" />
+
+        <!--
           "Cues: iQOO utility bindings" (Task 16). Off by default; the user
           enables it from system Accessibility settings after reading its
           own consent text (@string/utility_bindings_accessibility_description).

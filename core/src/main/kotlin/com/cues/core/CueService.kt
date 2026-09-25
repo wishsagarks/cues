@@ -8,6 +8,7 @@ import com.cues.core.assistant.AssistantReply
 import com.cues.core.assistant.ControlKind
 import com.cues.core.assistant.Conversation
 import com.cues.core.assistant.IntentRouter
+import com.cues.core.assistant.OnDeviceRefinePhraser
 import com.cues.core.assistant.PendingCommand
 import com.cues.core.assistant.Refiner
 import com.cues.core.assistant.ReplyChip
@@ -120,6 +121,13 @@ class CueService(
      * exactly as before this parameter existed.
      */
     private val inferenceLedger: InferenceLedger? = null,
+    /**
+     * C1: the model-assisted fallback for edit phrasing — reached only when
+     * [intentRouter]'s deterministic patterns find no match at all.
+     * `null`, the default, means every unmatched edit request stays
+     * [AssistantIntent.Unsupported] exactly as before this parameter existed.
+     */
+    private val refinePhraser: OnDeviceRefinePhraser? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock, attention = attention)
@@ -212,19 +220,7 @@ class CueService(
                 intent,
                 AssistantReply(ReplyCode.CAPABILITIES, answeredFrom = ReplySource.ROUTINE_STORE),
             )
-            is AssistantIntent.Unsupported -> if (intent.routeTo == UnsupportedRoute.SYSTEM_AGENT) {
-                Turn(
-                    text,
-                    intent,
-                    AssistantReply(
-                        ReplyCode.HANDOFF_TO_SYSTEM_AGENT,
-                        answeredFrom = ReplySource.PARSER,
-                        chips = listOf(ReplyChip.Handoff()),
-                    ),
-                )
-            } else {
-                Turn(text, intent, AssistantReply(ReplyCode.UNSUPPORTED, answeredFrom = ReplySource.PARSER))
-            }
+            is AssistantIntent.Unsupported -> unsupportedTurn(conversation, text, intent)
         }
         turn.draft?.let {
             conversation.currentDraft = it
@@ -284,6 +280,50 @@ class CueService(
             AssistantReply(ReplyCode.DRAFT_REFINED, answeredFrom = ReplySource.PARSER),
             draft = refined,
         )
+    }
+
+    /**
+     * C1: [intentRouter] found no deterministic match at all. A system-agent
+     * request is routed as before; anything else gets one more chance — only
+     * when there is an active draft to edit and [refinePhraser] is wired —
+     * to be restated by the model in [RefineGrammarParser]'s closed
+     * vocabulary and applied through [Refiner.apply], the same independent
+     * revalidation every other edit already goes through. The model's own
+     * words never become the [RefineOperation] directly; only a sentence
+     * that parses deterministically does.
+     */
+    private suspend fun unsupportedTurn(
+        conversation: Conversation,
+        text: String,
+        intent: AssistantIntent.Unsupported,
+    ): Turn {
+        if (intent.routeTo == UnsupportedRoute.SYSTEM_AGENT) {
+            return Turn(
+                text,
+                intent,
+                AssistantReply(
+                    ReplyCode.HANDOFF_TO_SYSTEM_AGENT,
+                    answeredFrom = ReplySource.PARSER,
+                    chips = listOf(ReplyChip.Handoff()),
+                ),
+            )
+        }
+        val draft = conversation.currentDraft
+        if (draft != null && refinePhraser != null) {
+            val phrasing = refinePhraser.phrase(text)
+            recordInference(DraftSourceId.ON_DEVICE_LLM, phrasing?.report?.report)
+            val operation = phrasing?.operation
+            if (operation != null) {
+                val refined = Refiner.apply(draft, operation).routine
+                return Turn(
+                    text,
+                    AssistantIntent.Refine(operation),
+                    AssistantReply(ReplyCode.DRAFT_REFINED, answeredFrom = ReplySource.ON_DEVICE_LLM),
+                    draft = refined,
+                )
+            }
+        }
+        return Turn(text, intent, AssistantReply(ReplyCode.UNSUPPORTED, answeredFrom = ReplySource.PARSER))
     }
 
     private fun controlTurn(
@@ -802,14 +842,23 @@ class CueService(
             is DraftResult.NeedsClarification -> result.inferenceReport
             is DraftResult.Failed -> result.inferenceReport
         }
+        recordInference(result.source, report)
+    }
+
+    /**
+     * The shared funnel both draft calls and [refinePhraser]'s edit calls
+     * pass through — one place ledger bookkeeping happens, regardless of
+     * which kind of model call produced the report.
+     */
+    private fun recordInference(source: DraftSourceId, report: InferenceReport?) {
         if (report != null) {
             lastInferenceReport = report
             inferenceLedger?.takeIf { it.usageTrackingEnabled }?.let { ledger ->
-                val (costUsd, costBasis) = InferenceCost.costFor(result.source, report.estimatedTokens)
+                val (costUsd, costBasis) = InferenceCost.costFor(source, report.estimatedTokens)
                 ledger.appendInference(
                     InferenceLedgerEntry(
                         atMillis = clock.nowMillis(),
-                        source = result.source,
+                        source = source,
                         backend = report.backend,
                         estimatedTokens = report.estimatedTokens,
                         latencyMs = report.loadMs + report.generationMs,

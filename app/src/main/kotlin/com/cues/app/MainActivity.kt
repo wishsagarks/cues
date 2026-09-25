@@ -168,6 +168,9 @@ class MainActivity : ComponentActivity() {
                     modelDownloader = app.modelDownloader,
                     onDeviceModelUserEnabled = app.onDeviceModelUserEnabled,
                     onToggleOnDeviceModel = { app.onDeviceModelUserEnabled = it },
+                    externalModelDownloader = app.externalModelDownloader,
+                    externalGemmaGate = app.externalGemmaGate,
+                    externalModelIdentity = app::externalModelIdentity,
                     localSpeechInput = localSpeechInput,
                     pairedDevices = app::pairedDevices,
                     replySpeaker = replySpeaker,
@@ -261,6 +264,9 @@ private fun CuesApp(
     modelDownloader: com.cues.app.drafting.ModelDownloader,
     onDeviceModelUserEnabled: Boolean = false,
     onToggleOnDeviceModel: (Boolean) -> Unit = {},
+    externalModelDownloader: com.cues.app.drafting.ModelDownloader,
+    externalGemmaGate: com.cues.app.devkit.ExternalGemmaGate,
+    externalModelIdentity: () -> String,
     localSpeechInput: LocalSpeechInput,
     pairedDevices: () -> List<PairedDevice>,
     replySpeaker: com.cues.app.voice.ReplySpeaker,
@@ -291,6 +297,10 @@ private fun CuesApp(
     var modelProvisionState by remember { mutableStateOf(modelDownloader.currentState()) }
     var modelDownloadJob by remember { mutableStateOf<Job?>(null) }
     var onDeviceModelEnabled by remember { mutableStateOf(onDeviceModelUserEnabled) }
+    // CL-38: the developer-facing surface's own switch — off by default every
+    // launch, independent of onDeviceModelEnabled above (that one gates cue
+    // authoring; this one gates other apps on the phone calling in).
+    var externalGemmaEnabled by remember { mutableStateOf(externalGemmaGate.enabled) }
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
@@ -333,6 +343,22 @@ private fun CuesApp(
                     snackbarHost.showSnackbar("Gemma installed and enabled for drafting")
                 } else if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Failed) {
                     snackbarHost.showSnackbar((modelProvisionState as com.cues.core.inference.ModelProvisionState.Failed).reason)
+                }
+            }
+        }
+    }
+    // CL-38's own "bring your own model" install path — a separate file and
+    // a separate picker launch from modelPicker above, on purpose: this one
+    // never touches onDeviceModelEnabled/modelProvisionState.
+    val externalModelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                when (val result = externalModelDownloader.installFromUri(uri)) {
+                    is com.cues.core.inference.ModelProvisionState.Installed ->
+                        snackbarHost.showSnackbar("Developer-surface model installed")
+                    is com.cues.core.inference.ModelProvisionState.Failed ->
+                        snackbarHost.showSnackbar(result.reason)
+                    else -> {}
                 }
             }
         }
@@ -617,6 +643,7 @@ private fun CuesApp(
                         onToggleLedger = { store.setSignalOptIn(it) },
                         drafterLabel = diag.primaryDrafter.friendlyLabel(),
                         lastFallbackReason = diag.lastFallbackReason,
+                        lastInferenceReport = diag.lastInferenceReport,
                         onExportConsole = {
                             val html = com.cues.app.bridge.ExportImport.buildConsoleHtml(context, cueService, store)
                             val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
@@ -811,6 +838,11 @@ private fun CuesApp(
                         onChooseModel = { modelPicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
                         onCancelDownloadModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Downloading) ::cancelModelDownloadNow else null,
                         onRemoveModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed) ::removeModelNow else null,
+                        externalGemmaEnabled = externalGemmaEnabled,
+                        onToggleExternalGemma = { externalGemmaEnabled = it; externalGemmaGate.enabled = it },
+                        externalModelIdentity = externalModelIdentity(),
+                        onChooseExternalModel = { externalModelPicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
+                        recentExternalCalls = externalGemmaGate.recentCalls(),
                     )
                 }
 
