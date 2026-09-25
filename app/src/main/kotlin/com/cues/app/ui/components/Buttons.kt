@@ -50,13 +50,23 @@ fun KineticButton(
     val scale by animateFloatAsState(if (pressed) 0.98f else 1f, label = "kinetic-press")
     val haptics = com.cues.app.ui.theme.rememberCuesHaptics()
 
+    // A disabled state built from a low-alpha doYellow reads as a murky
+    // olive on the dark theme's near-black surfaces — alpha-blending a
+    // saturated accent color over a dark background doesn't desaturate the
+    // way it does over white. A neutral raised surface + slate text is the
+    // standard disabled treatment and stays legible (and clearly "not the
+    // accent") in both themes.
+    val fill = if (enabled) t.doYellow else t.raised
+    val content = if (enabled) Color(0xFF0B0C10) else t.inkSlate
+
     Row(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .scale(scale)
             .clip(CuesShape.capsule)
-            .background(if (enabled) t.doYellow else t.doYellow.copy(alpha = 0.35f))
+            .background(fill)
+            .then(if (!enabled) Modifier.border(1.dp, t.hairline, CuesShape.capsule) else Modifier)
             .then(
                 if (enabled) {
                     Modifier.clickableNoIndication(interaction) { haptics.confirm(); onClick() }
@@ -69,14 +79,14 @@ fun KineticButton(
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.height(18.dp).widthIn(max = 18.dp),
-                color = Color(0xFF0B0C10),
+                color = content,
                 strokeWidth = 2.dp,
             )
         } else {
             Text(
                 text = text,
                 style = CuesType.title,
-                color = Color(0xFF0B0C10),
+                color = content,
             )
         }
     }
