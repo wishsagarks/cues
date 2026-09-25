@@ -12,40 +12,53 @@ The app presents this as **WHEN / IF / DO / UNTIL / RESTORE** and asks for appro
 
 ## Status
 
-**Offline decision core implemented and tested. Android app built and run on an emulator, never on an iQOO. No measured results.**
+**Offline decision core implemented and tested. `:app` now compiles clean in every environment this project has been touched from, including one with no prior Android SDK access. Never installed on an iQOO. No measured results.**
 
-As of 24 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md)):
+As of 25 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md)):
 
-- **`:core`** is pure Kotlin/JVM and passes 281 tests. It covers the routine model, the
+- **`:core`** is pure Kotlin/JVM and passes 357 tests. It covers the routine model, the
   three-valued evaluator, compiler and approval digest, the closed action
   and signal registries (including a calendar condition kit — `Condition.CalendarBusy`/
   `CalendarNotBusy`), grammar drafting with clause accounting, the
-  session engine and receipts, plus Ask Cues, declared memory, the coach,
+  session engine and receipts, Ask Cues, declared memory, the coach,
   Cue Cards, the Console export, the macro validator and the utility
-  catalog. `./dev t` runs the suite on any machine with a JDK.
-- **`:app`** has compiled against the real Android APIs and been launched on
-  an Android emulator, where drafting and arming a cue worked. Everything
-  since (Tasks 15–20, plus the calendar condition kit, app shortcuts,
-  Workbench drag/drop, and a share target for shared text) is written
-  against real, mostly well-documented APIs but has not been compiled in
-  this environment — no Android SDK is available here, so `./dev b` is due
-  on the laptop before any of it can be called verified. It includes a
-  LiteRT-LM integration with no model side-loaded yet. With no model the app
-  falls back to the grammar parser, and it says so on every draft.
+  catalog, plus a redesign pass's structured receipts (`ReceiptRecord`),
+  the `Insights` aggregator, live-gate readouts (`GateReadout`), an
+  unreadable-input-to-remedy map (`UnknownRemedy`) and a Workbench
+  patch-bay sentence builder (`PatchSentence`) that round-trips every
+  kit through the grammar parser. `./dev t` runs the suite on any machine
+  with a JDK.
+- **`:app`** carries a full UI/UX redesign ("Kinetic Obsidian", from the
+  Stitch prototype in `docs/design/stitch/`): a navigation-compose shell
+  with 5 tabs (Now/Insights/Ask/Receipts/Workbench), a shared component
+  library, disk-is-truth store reactivity (`ObservableStore`/
+  `StoreGeneration`, so a session a background receiver started still
+  shows up correctly after a process kill), rebuilt Now/Ask/Review/Insights
+  screens wired to the real `:core` API above, a restyled session
+  notification/widget/quick-settings tile, and a new adaptive launcher
+  icon and splash. On the machine this redesign was built on,
+  `:app:compileDebugKotlin` succeeded for the first time this repository
+  has recorded (see CLEANUP.md CL-33) — `assembleDebug`/install/an actual
+  run are still blocked there by a pre-existing AGP-vs-compileSdk mismatch,
+  confirmed unrelated to the redesign. Receipts and Workbench are
+  intentionally partial this pass (old screens, new theme only); the
+  Workbench patch-bay UI and structured receipt cards are not built yet,
+  though their `:core` support is. It includes a LiteRT-LM integration
+  with no model side-loaded yet. With no model the app falls back to the
+  grammar parser, and it says so on every draft.
 - **Nothing has run on an iQOO.** Background delivery, the owned quiet rule,
   timing, camera, QR, Office Kit, accessibility, the utility-bindings
-  macro replay and model backends are all listed in
-  [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md), and every row is "Not run".
+  macro replay, model backends and the whole redesigned UI are all listed
+  in [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md), and every row is "Not run".
 - **Known software gaps**, each with its retirement condition in
-  [CLEANUP.md](CLEANUP.md) (32 entries as of this pass): the AppFunctions
+  [CLEANUP.md](CLEANUP.md) (34 entries as of this pass): the AppFunctions
   provider exists (`draftCue`/`startCue`/`stopCue`/`forecastToday`/
-  `currentContext`) but is uncompiled, and the "Jovi" handoff still opens
-  whatever the system assistant is rather than routing through it (CL-24).
-  Actions that need the user, three capabilities' in-app grant buttons, and
-  accepting a coach suggestion into a draft are all fixed in code (CL-25,
-  CL-26, CL-27) but, like the rest of `:app`, uncompiled here. A promoted
-  Live Update notification was deliberately not attempted — recorded as a
-  decision, not a gap, in CL-15.
+  `currentContext`) but is uncompiled on the loaner, and the "Jovi" handoff
+  still opens whatever the system assistant is rather than routing through
+  it (CL-24). Actions that need the user, three capabilities' in-app grant
+  buttons, and accepting a coach suggestion into a draft are all fixed in
+  code (CL-25, CL-26, CL-27). A promoted Live Update notification was
+  deliberately not attempted — recorded as a decision, not a gap, in CL-15.
 
 **There are no measured performance results.** Every latency, delivery and
 reliability figure in the design documents is a target until it is recorded
@@ -74,6 +87,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
 | [RED_LIGHT.md](RED_LIGHT.md) | Building when the laptop is only reachable through Office Kit |
 | [CLEANUP.md](CLEANUP.md) | Provisional choices, each with the condition that retires it |
+| [docs/design/stitch/DESIGN_SYSTEM.md](docs/design/stitch/DESIGN_SYSTEM.md) | Kinetic Obsidian/Daylight design system and the Stitch screen prototypes the `:app` redesign is built from |
 | [DEVELOPER_SETUP.md](docs/DEVELOPER_SETUP.md) | Kotlin, Android SDK and shared Claude/Codex skill setup |
 
 Earlier versions are in the git history.

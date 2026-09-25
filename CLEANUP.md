@@ -1299,18 +1299,23 @@ environment:
   past that as part of this redesign; the camera/OCR/QR features are
   unaffected in scope (their Kotlin source is unchanged) but currently
   cannot be exercised even at compile time in this environment.
-- Only the Now, Ask, Insights and Workbench tabs, plus Review/Detail/Checks,
-  were rebuilt or rewired this pass. Receipts is the old screen restyled by
-  inheriting the new theme only (no structured `ReceiptRecord` cards yet —
-  that type lives in a separate, parallel `:core` addition). Insights reads
-  the ledger and today's forecast directly rather than the planned `:core`
-  `Insights` aggregator, since that type was still being built in parallel
-  when this phase closed — expect `InsightsScreen` to be rewired onto the
-  real aggregator, not rebuilt, once it lands. Workbench is a navigation
-  hub to the existing Contexts/Memory/Utility-bindings/ingest screens, not
-  the patch-bay builder the plan describes; those screens themselves are
-  unchanged. Live surfaces (notification, widget, tiles, shortcuts) were
-  not restyled this pass.
+- **Update, same day:** the parallel `:core` addition landed (CL-34) and was
+  merged and wired in. `InsightsScreen` now renders the real `InsightsReport`
+  from `CueService.insights(window)`, not a ledger-only summary.
+  `AndroidActionExecutor` adopted `ActionExecutor.release(obligation,
+  session)`, closing the utility-restore bug this entry and CL-23 item 8
+  both flagged (`CleanupObligation.args` now carries the restore target,
+  not an in-memory map that died with the process). Session notification,
+  widget and the quick-settings tile were also restyled after this entry
+  was first written.
+- Receipts is still the old screen restyled by inheriting the new theme
+  only — no structured `ReceiptRecord` cards yet, though `ReceiptLog` is
+  wired (`CuesApplication` passes `receiptLog = store`) and every session
+  now has one waiting to be rendered. Workbench is still a navigation hub
+  to the existing Contexts/Memory/Utility-bindings/ingest screens, not the
+  patch-bay builder the plan describes, even though `:core`'s
+  `PatchSentence` — the piece that makes a patch-bay selection safe to
+  compile — already exists and is tested. App shortcuts were not restyled.
 
 **Remove when:** `assembleDebug` succeeds in some environment (this sandbox
 or the loaner), the redesigned screens have been seen running, and the
