@@ -15,3 +15,12 @@ sdk.dir=/path/to/Android/sdk
 # blank/absent and the toggle stays disabled; nothing calls out. Get a key at
 # https://dashboard.sarvam.ai/
 sarvam.apiKey=
+
+# Optional. Powers the "Cues Brain" on-device model download tile (CLEANUP.md
+# CL-36) — a Gemma3 .litertlm asset for LiteRT-LM. Leave blank/absent and the
+# tile honestly shows "not configured"; nothing downloads. Both must be set
+# together, and both must come from a real, verified source recorded in
+# docs/API_VERIFICATION.md's "Gemma model distribution" entry — never a
+# guessed URL or hash.
+gemma.modelUrl=
+gemma.modelSha256=

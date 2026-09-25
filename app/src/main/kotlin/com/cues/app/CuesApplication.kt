@@ -4,8 +4,9 @@ import android.app.Application
 import android.util.Log
 import com.cues.app.data.ObservableStore
 import com.cues.app.data.StoreGeneration
+import com.cues.app.drafting.GatedLlmSession
 import com.cues.app.drafting.LiteRtLmSession
-import com.cues.app.drafting.OnDeviceLlmDrafter
+import com.cues.app.drafting.ModelDownloader
 import com.cues.app.drafting.SarvamChatDrafter
 import com.cues.app.drafting.SarvamHttpChatSession
 import com.cues.app.drafting.UnconfiguredSarvamChatSession
@@ -25,6 +26,7 @@ import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.DifferentialDrafter
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.GrammarParser
+import com.cues.core.drafting.OnDeviceLlmDrafter
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.ActionArgs
 import com.cues.core.model.ActionId
@@ -156,17 +158,44 @@ class CuesApplication : Application() {
      * running only the winner going forward.
      */
     /**
-     * Where a side-loaded `.litertlm` model is expected, under private app
-     * storage — never `getExternalFilesDir`, and never written by this app.
-     * adb cannot write here directly: push to /data/local/tmp, then copy in
-     * with `run-as` (docs/DEVICE_MATRIX.md, M2). Nothing here downloads one. Its absence is the ordinary, honest case: every
-     * build without one falls all the way back to the parser.
+     * Where the on-device model is expected, under private app storage —
+     * never `getExternalFilesDir`. Two ways this can arrive, both writing
+     * exactly this path: a manual side-load (adb cannot write here directly —
+     * push to /data/local/tmp, then copy in with `run-as`, docs/DEVICE_MATRIX.md
+     * M2), or the "Cues Brain" tile's [modelDownloader] (CL-36). Its absence
+     * is the ordinary, honest case either way: every build without one falls
+     * all the way back to the parser.
      */
     private val modelFile: File by lazy { File(filesDir, "models/model.litertlm") }
 
+    /**
+     * CL-36: the download side of the "Cues Brain" tile. `canDownload()` is
+     * false — the tile honestly shows "not configured" — until both
+     * `BuildConfig.GEMMA_MODEL_URL` and `_SHA256` are set from a real,
+     * verified source (docs/API_VERIFICATION.md's "Gemma model distribution"
+     * entry), never a guessed value. A model already present from a manual
+     * `adb push`/`run-as` side-load (docs/DEVICE_MATRIX.md M2) works exactly
+     * the same either way — both routes write the same file.
+     */
+    val modelDownloader by lazy {
+        ModelDownloader(this, modelFile, BuildConfig.GEMMA_MODEL_URL, BuildConfig.GEMMA_MODEL_SHA256)
+    }
+
+    /**
+     * CL-36's second gate level, mirroring [cloudAssistAvailable]/
+     * `cloudAssistEnabled` below: a model being installed does not, by
+     * itself, mean it's used. Starts off every launch, same as cloud assist.
+     * Reachable from anywhere `drafter` is (Home, Ask, anywhere `CueService`
+     * drafts) — not scoped to one screen's Compose state, since drafting
+     * itself is not scoped to one screen.
+     */
+    var onDeviceModelUserEnabled: Boolean = false
+
     private val drafter by lazy {
         DifferentialDrafter(
-            first = OnDeviceLlmDrafter(session = LiteRtLmSession(this, modelFile.path)),
+            first = OnDeviceLlmDrafter(
+                session = GatedLlmSession(LiteRtLmSession(this, modelFile.path)) { onDeviceModelUserEnabled },
+            ),
             second = GrammarParser(
                 pairedDeviceProvider = ::pairedDevices,
                 contextsProvider = { store.allContexts() },
@@ -239,6 +268,7 @@ class CuesApplication : Application() {
             // instead of parsing prose. Optional, like usageLedger — nothing
             // that decides behaviour reads from it.
             receiptLog = store,
+            inferenceLedger = store,
         )
     }
 

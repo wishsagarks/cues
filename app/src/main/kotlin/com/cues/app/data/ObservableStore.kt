@@ -4,6 +4,8 @@ import com.cues.core.coach.CoachState
 import com.cues.core.coach.CoachStateStore
 import com.cues.core.coach.LedgerEvent
 import com.cues.core.coach.UsageLedger
+import com.cues.core.inference.InferenceLedger
+import com.cues.core.inference.InferenceLedgerEntry
 import com.cues.core.model.Fact
 import com.cues.core.model.NamedContext
 import com.cues.core.model.Patch
@@ -78,6 +80,7 @@ class ObservableStore(
     MacroStore by delegate,
     UtilityBindingStore by delegate,
     UsageLedger by delegate,
+    InferenceLedger by delegate,
     CoachStateStore by delegate {
 
     // ---- RoutineStore -----------------------------------------------------
@@ -190,6 +193,22 @@ class ObservableStore(
 
     override fun wipeLedger() {
         delegate.wipeLedger()
+        generation.bump()
+    }
+
+    // ---- InferenceLedger ---------------------------------------------------------
+    override fun setUsageTrackingEnabled(enabled: Boolean) {
+        delegate.setUsageTrackingEnabled(enabled)
+        generation.bump()
+    }
+
+    override fun appendInference(entry: InferenceLedgerEntry) {
+        delegate.appendInference(entry)
+        generation.bump()
+    }
+
+    override fun wipeInferenceLedger() {
+        delegate.wipeInferenceLedger()
         generation.bump()
     }
 

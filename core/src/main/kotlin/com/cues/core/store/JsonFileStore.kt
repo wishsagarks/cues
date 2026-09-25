@@ -26,6 +26,8 @@ import com.cues.core.coach.CoachState
 import com.cues.core.coach.CoachStateStore
 import com.cues.core.coach.LedgerEvent
 import com.cues.core.coach.UsageLedger
+import com.cues.core.inference.InferenceLedger
+import com.cues.core.inference.InferenceLedgerEntry
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -60,8 +62,9 @@ class JsonFileStore(
     private val maxReceiptFiles: Int = 200,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     initialSignalOptIn: Boolean = false,
+    initialUsageTrackingOptIn: Boolean = false,
 ) : RoutineStore, SessionStore, ReceiptSink, ReceiptLog, NamedContextStore, PatchStore, PlaceStore, FactStore,
-    UsageLedger, CoachStateStore, MacroStore, UtilityBindingStore {
+    UsageLedger, CoachStateStore, MacroStore, UtilityBindingStore, InferenceLedger {
 
     private val routinesDir = File(root, "routines").apply { mkdirs() }
     private val sessionsDir = File(root, "sessions").apply { mkdirs() }
@@ -78,6 +81,10 @@ class JsonFileStore(
     private val coachStateFile = File(root, "ledger/coach-state.json")
     private val signalOptInFile = File(root, "ledger/signal-opt-in.txt").also { file ->
         if (!file.exists()) file.writeText(initialSignalOptIn.toString())
+    }
+    private val inferenceLedgerDir = File(root, "ledger/inference").apply { mkdirs() }
+    private val usageTrackingOptInFile = File(root, "ledger/usage-tracking-opt-in.txt").also { file ->
+        if (!file.exists()) file.writeText(initialUsageTrackingOptIn.toString())
     }
 
     private val json = Json {
@@ -162,6 +169,31 @@ class JsonFileStore(
 
     override fun loadCoachState(): CoachState = readCoachState(coachStateFile) ?: CoachState()
     override fun saveCoachState(state: CoachState) = writeAtomic(coachStateFile, state)
+
+    // ---------------------------------------------------- InferenceLedger
+
+    override val usageTrackingEnabled: Boolean
+        get() = usageTrackingOptInFile.readText().trim().toBooleanStrictOrNull() ?: false
+    override fun setUsageTrackingEnabled(enabled: Boolean) = writeAtomicText(usageTrackingOptInFile, enabled.toString())
+
+    override fun appendInference(entry: InferenceLedgerEntry) {
+        writeAtomic(File(inferenceLedgerDir, "${entry.atMillis}-${java.util.UUID.randomUUID()}.json"), entry)
+        // 30 days, deliberately longer than the signal ledger's 14 above —
+        // see InferenceLedger's own doc comment for why.
+        val cutoff = nowMillis() - 30L * 86_400_000L
+        inferenceLedgerDir.listJsonFiles().forEach { file ->
+            val value = readInferenceLedgerEntry(file)
+            if (value == null || value.atMillis < cutoff) file.delete()
+        }
+    }
+
+    override fun inferenceEntries(): List<InferenceLedgerEntry> = inferenceLedgerDir.listJsonFiles()
+        .mapNotNull { readInferenceLedgerEntry(it) }
+        .sortedBy { it.atMillis }
+
+    override fun wipeInferenceLedger() {
+        inferenceLedgerDir.listJsonFiles().forEach { it.delete() }
+    }
 
     // -------------------------------------------------------- SessionStore
 
@@ -353,6 +385,7 @@ class JsonFileStore(
     private fun readMacro(file: File): UiMacro? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readBinding(file: File): UtilityBinding? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readLedgerEvent(file: File): LedgerEvent? = readOrQuarantine(file) { json.decodeFromString(it) }
+    private fun readInferenceLedgerEntry(file: File): InferenceLedgerEntry? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readCoachState(file: File): CoachState? = readOrQuarantine(file) { json.decodeFromString(it) }
     private fun readReceiptRecord(file: File): ReceiptRecord? = readOrQuarantine(file) { json.decodeFromString(it) }
 

@@ -1549,3 +1549,122 @@ and translated read-back on screen, and this AGP/Gradle/KSP bump has also run
 on the iQOO loaner, not only this one emulator. Until then, do not claim any
 Sarvam call works — only that the app compiles, installs and runs with the
 feature off.
+
+---
+
+## CL-36 — "Cues Brain" model download tile: wired and gated, unverified against a real asset or a real device
+
+**Status:** open · **Raised:** 25 Sep 2026
+
+CL-18 item 2 named the actual gap: `LiteRtLmSession` has always expected a
+`.litertlm` file at `filesDir/models/model.litertlm`, and nothing in the app
+ever placed one there — only a manual `adb push`/`run-as` side-load
+(docs/DEVICE_MATRIX.md M2) did. This sprint adds a self-serve alternative: a
+"Cues Brain" card on the Diagnostics screen (`app/.../ui/DiagnosticsScreen.kt`)
+backed by `ModelDownloader` (`app/.../drafting/ModelDownloader.kt`) that
+streams the model into place itself, and `GatedLlmSession`
+(`app/.../drafting/GatedLlmSession.kt`) that adds a second, explicit
+"turned on" switch on top of "installed" — the same two-level opt-in shape
+CL-35's cloud assist already established.
+
+**What makes this safe, by construction:**
+- `ModelDownloader` writes to exactly the path `LiteRtLmSession`/
+  `CuesApplication.modelFile` already expected — `LiteRtLmSession` itself
+  needed zero changes, since it already re-checks `File(modelPath).isFile`
+  on every `generate()` call.
+- Wi-Fi-gated, no cellular override — a Gemma3 `.litertlm` asset is
+  plausibly hundreds of MB, unlike Sarvam's small per-call payloads.
+- Streams to a same-directory `.part` file, verifies SHA-256 incrementally
+  while streaming, and only atomically renames into place on a match — a
+  cancelled or corrupt download can never be mistaken for an install (see
+  the `finally` block in `ModelDownloader.download`).
+- Off by default even once installed: `CuesApplication.onDeviceModelUserEnabled`
+  starts `false` every launch, mirroring `cloudAssistEnabled` exactly.
+- The Diagnostics card states SoC-allowlist *eligibility*
+  (`LiteRtLmSession.npuSocEligible`) separately from a *real run's* backend
+  (`CueService.Diagnostics.lastInferenceReport`) and never conflates the
+  two — the one rule CL-18 established that this new UI must not regress.
+
+**What is not verified:**
+1. **No real model source is pinned.** `BuildConfig.GEMMA_MODEL_URL`/
+   `_SHA256` read from `local.properties`' `gemma.modelUrl`/`gemma.modelSha256`,
+   both blank by default — the tile honestly shows "not configured" until a
+   real Gemma3 `.litertlm` asset URL, SHA-256, size and license terms are
+   read from Google's own LiteRT-LM/model-distribution channel and recorded
+   in `docs/API_VERIFICATION.md`'s "Gemma model distribution" entry, the
+   same discipline as the `litertlm` version pin and the NPU SoC table.
+2. **No real download has been exercised.** Only construction/logic —
+   Wi-Fi gating, streaming, checksum, atomic rename, cooperative
+   cancellation — has been written and compiled; none of it has run against
+   a real multi-hundred-MB file over real Wi-Fi. Cancel-mid-download and
+   process-death-mid-download behavior (the `.part` file must never be
+   mistaken for an install) are unverified on a device.
+3. **The atomic-swap-while-idle assumption is unconfirmed.** `LiteRtLmSession`
+   constructs a new `Engine`/`EngineConfig` per `generate()` call rather than
+   holding one open for the process lifetime, which is what makes an atomic
+   rename into `model.litertlm` safe while a draft is in flight — this is
+   read from the current source, not confirmed against a real in-flight
+   inference call racing a rename.
+4. **`npuSocEligible()` is the same unconfirmed allowlist CL-18 item 3
+   already flags** (`SM8750`/`SM8650`/`SM8550`, copied from
+   `docs/API_VERIFICATION.md`'s published table) — the tile's eligibility
+   line is only as trustworthy as that table already was.
+5. **No UI has been seen on a device.** The card (progress, cancel, install,
+   remove, the enable switch) compiles but has not been visually confirmed
+   on a phone or emulator screen.
+
+**Remove when:** a real URL/hash is sourced and recorded, a download is
+exercised end-to-end (including cancel and a killed-process retry) over real
+Wi-Fi on a device, the atomic-swap-while-idle behavior is confirmed safe with
+a draft in flight, and the eligibility line is checked against the loaner's
+real `Build.SOC_MODEL` (M2) — recorded here or in `docs/MEASUREMENTS.md` with
+the source of each result noted.
+
+---
+
+## CL-37 — Model usage & cost tracking: real token/latency counts, no verified Sarvam price yet
+
+**Status:** open · **Raised:** 25 Sep 2026
+
+Insights gained a "MODEL USAGE & COST" section, backed by a new opt-in,
+30-day `InferenceLedger` (`core/.../inference/InferenceLedger.kt`, separate
+from `UsageLedger`'s own 14-day signal ledger — a different concern) that
+records one entry per drafting call: source, backend, an estimated token
+count, latency and cost. `InferenceReport` gained a real `estimatedTokens: Int`
+field (previously only a derived `tokensPerSecond: Double` existed), and
+`SarvamChatDrafter` now attaches an `InferenceReport` to every result — it
+never did before this sprint, a real, separate gap this entry also closes.
+
+**What makes this safe, by construction:**
+- A separate opt-in from signal learning (`InsightsReport.usageTrackingEnabled`),
+  off by default, wired through `CueService.recordInference` — the one
+  funnel every draft call already passes through, so no UI call site needs
+  its own bookkeeping.
+- On-device cost is always, structurally, exactly `$0.00` — a real fact, not
+  an estimate, since no network call happened (`InferenceCost.costFor`).
+- A Sarvam call with no verified rate on file shows `CostBasis.UNVERIFIED`
+  ("cost not verified") in the UI, never a fabricated `$0.00` or an invented
+  number.
+
+**What is not verified:**
+1. `InferenceCost.sarvamCostPer1kTokensUsd` is `null` — no real Sarvam
+   per-token or per-call price has been read from Sarvam's own published
+   pricing and recorded in `docs/API_VERIFICATION.md`'s "Sarvam AI pricing"
+   entry. Every Sarvam call in the ledger will show "cost not verified"
+   until that happens.
+2. Token counts remain the same whitespace-split estimate `InferenceReport`'s
+   doc comment always disclosed, not any model's real tokenizer output —
+   this sprint only moved that estimate into a stored field, it did not make
+   it more precise.
+3. No ledger entry has been produced on a device — the append/prune/read
+   path (`JsonFileStore`'s `ledger/inference` directory) is written and
+   unit-testable, but has not been exercised through a real draft call on a
+   phone.
+4. The new Insights card and its toggle have not been seen on a device
+   screen, only compiled.
+
+**Remove when:** a real Sarvam rate is sourced and recorded, a real device
+session records at least one on-device and one Sarvam entry and the Insights
+card renders both correctly, and the 30-day retention is confirmed to prune
+correctly against a real clock over time (not just the unit-tested cutoff
+math).

@@ -21,6 +21,9 @@ import com.cues.core.model.Routine
 import com.cues.core.model.Session
 import com.cues.core.model.SessionState
 import com.cues.core.model.UnknownReason
+import com.cues.core.inference.CostBasis
+import com.cues.core.inference.InferenceBackend
+import com.cues.core.inference.InferenceLedgerEntry
 import com.cues.core.ports.Clock
 import com.cues.core.receipt.ReceiptKind
 import com.cues.core.receipt.ReceiptRecord
@@ -52,6 +55,36 @@ data class LedgerView(
     /** Whether signal learning is switched on — the opt-in, not whether a ledger exists. */
     val enabled: Boolean,
     val events: List<LedgerEvent>,
+)
+
+/**
+ * What the inference (token/cost) ledger contributes — the same shape as
+ * [LedgerView], for the same reason: passed as data so [Insights.compute]
+ * never does I/O of its own, `null` in place of a whole view means there is
+ * no ledger at all, distinct from one that is switched off.
+ */
+data class InferenceLedgerView(
+    /** Whether usage/cost tracking is switched on — its own opt-in, separate from [LedgerView.enabled]. */
+    val enabled: Boolean,
+    val entries: List<InferenceLedgerEntry>,
+)
+
+/**
+ * Token/cost totals for the window, split by [InferenceLedgerEntry.source] —
+ * the Insights tab's "usage & cost" section. Every count/sum here is a pure
+ * aggregation of the window's [InferenceLedgerEntry] records, nothing
+ * estimated beyond what each entry already carries.
+ */
+data class InferenceUsage(
+    val onDeviceCalls: Int,
+    val onDeviceTokens: Long,
+    val onDeviceLatencyMedianMs: Long?,
+    val cloudCalls: Int,
+    val cloudTokens: Long,
+    val cloudLatencyMedianMs: Long?,
+    /** Null when no verified cost basis exists yet — an honest absence, never a fabricated $0.00. */
+    val cloudCostUsd: Double?,
+    val cloudCostBasis: CostBasis?,
 )
 
 /**
@@ -88,13 +121,30 @@ data class InsightsReport(
      * on; only signal observations need the opt-in.
      */
     val ledgerEventsInWindow: Int?,
+    /** Whether usage/cost tracking is on. False, not null, when there is no inference ledger at all — mirrors [ledgerEnabled]'s own shape, its own separate opt-in. */
+    val usageTrackingEnabled: Boolean,
+    /**
+     * Null exactly when the inference ledger is off or empty in the window —
+     * independent of [hasData]: someone can draft/test the model without
+     * ever arming a routine, so this is computed even when the rest of the
+     * report is the empty state.
+     */
+    val inferenceUsage: InferenceUsage?,
 ) {
     companion object {
-        fun empty(window: InsightsWindow, fromMillis: Long, toMillis: Long, ledgerEnabled: Boolean) = InsightsReport(
+        fun empty(
+            window: InsightsWindow,
+            fromMillis: Long,
+            toMillis: Long,
+            ledgerEnabled: Boolean,
+            usageTrackingEnabled: Boolean = false,
+            inferenceUsage: InferenceUsage? = null,
+        ) = InsightsReport(
             window, fromMillis, toMillis, hasData = false, timeInCues = null, counts = null,
             skipReasons = emptyList(), cleanup = null, blocked = emptyList(), perRoutine = emptyList(),
             spans = emptyList(), skipMarks = emptyList(), coverage = null,
             ledgerEnabled = ledgerEnabled, ledgerEventsInWindow = null,
+            usageTrackingEnabled = usageTrackingEnabled, inferenceUsage = inferenceUsage,
         )
     }
 }
@@ -260,6 +310,7 @@ object Insights {
         clock: Clock,
         /** Local time for the 24-hour chart. The zone is not part of any count. */
         zone: ZoneId = ZoneId.systemDefault(),
+        inferenceLedger: InferenceLedgerView? = null,
     ): InsightsReport {
         val now = clock.nowMillis()
         val from = now - window.millis
@@ -274,11 +325,17 @@ object Insights {
             .filter { it.kind == ReceiptKind.SKIPPED }
             .filterNot { record -> record.reasons.any { it.code == ReasonCode.DUPLICATE_EVENT_SAME_CONNECTION } }
         val ledgerEnabled = ledger?.enabled == true
+        val usageTrackingEnabled = inferenceLedger?.enabled == true
         val outstanding = outstandingObligations(sessions)
         val attentionIds = sessions.filter { it.owesCleanup() }.map { it.id }.toSet()
 
+        // Computed ahead of the empty-state early return below: someone can
+        // draft/test the on-device model without ever arming a routine, and
+        // that usage should still show up in an otherwise-empty report.
+        val inferenceUsage = inferenceUsage(inferenceLedger, ::inWindow)
+
         if (windowSessions.isEmpty() && windowRecords.isEmpty() && outstanding.isEmpty()) {
-            return InsightsReport.empty(window, from, now, ledgerEnabled)
+            return InsightsReport.empty(window, from, now, ledgerEnabled, usageTrackingEnabled, inferenceUsage)
         }
 
         val receiptsRecorded = windowRecords.isNotEmpty()
@@ -313,6 +370,8 @@ object Insights {
             ),
             ledgerEnabled = ledgerEnabled,
             ledgerEventsInWindow = ledger?.events?.count { inWindow(it.atMillis) },
+            usageTrackingEnabled = usageTrackingEnabled,
+            inferenceUsage = inferenceUsage,
         )
     }
 
@@ -334,6 +393,29 @@ object Insights {
     }
 
     private fun Session.durationMillis(): Long = ((endedAtMillis ?: startedAtMillis) - startedAtMillis).coerceAtLeast(0)
+
+    // ------------------------------------------------------ inference usage
+
+    /** Null exactly when there's no ledger at all, or it holds nothing in the window — never a row of zeros. */
+    private fun inferenceUsage(ledger: InferenceLedgerView?, inWindow: (Long) -> Boolean): InferenceUsage? {
+        val entries = ledger?.entries?.filter { inWindow(it.atMillis) } ?: return null
+        if (entries.isEmpty()) return null
+
+        val onDevice = entries.filter { it.backend != InferenceBackend.CLOUD }
+        val cloud = entries.filter { it.backend == InferenceBackend.CLOUD }
+        val cloudCost = cloud.lastOrNull()
+
+        return InferenceUsage(
+            onDeviceCalls = onDevice.size,
+            onDeviceTokens = onDevice.sumOf { it.estimatedTokens.toLong() },
+            onDeviceLatencyMedianMs = median(onDevice.map { it.latencyMs }),
+            cloudCalls = cloud.size,
+            cloudTokens = cloud.sumOf { it.estimatedTokens.toLong() },
+            cloudLatencyMedianMs = median(cloud.map { it.latencyMs }),
+            cloudCostUsd = cloud.takeIf { it.isNotEmpty() }?.sumOf { it.costUsd },
+            cloudCostBasis = cloudCost?.costBasis,
+        )
+    }
 
     // ------------------------------------------------------------ skip reasons
 

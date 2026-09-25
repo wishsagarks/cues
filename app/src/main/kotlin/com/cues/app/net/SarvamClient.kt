@@ -30,7 +30,7 @@ import java.util.UUID
  * Every call here is a plain, one-shot REST request. This class knows nothing
  * about Cues' drafting or review model — it only turns Sarvam's HTTP API into
  * Kotlin data, exactly the way [com.cues.app.drafting.LiteRtLmSession] turns
- * LiteRT-LM into [com.cues.app.drafting.InferenceOutput]. Callers (
+ * LiteRT-LM into [com.cues.core.drafting.InferenceOutput]. Callers (
  * [com.cues.app.drafting.SarvamChatDrafter], the regional-voice input path,
  * the translated read-back) decide what any of this means for a cue.
  */

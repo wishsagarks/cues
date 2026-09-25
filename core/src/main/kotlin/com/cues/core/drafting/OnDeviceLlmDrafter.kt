@@ -1,8 +1,5 @@
-package com.cues.app.drafting
+package com.cues.core.drafting
 
-import com.cues.core.drafting.DraftResult
-import com.cues.core.drafting.RoutineDrafter
-import com.cues.core.drafting.GrammarParser
 import com.cues.core.inference.InferenceBackend
 import com.cues.core.inference.InferenceReport
 import com.cues.core.model.DraftSourceId
@@ -14,30 +11,38 @@ data class InferenceOutput(val text: String, val report: InferenceReport)
  * A local-model text generator, kept behind this port so [OnDeviceLlmDrafter]
  * — and everything above it — never depends on which runtime is behind it.
  *
- * Suspend rather than a plain call: [LiteRtLmSession]'s real implementation
- * can take several seconds to load a model, and `OnDeviceLlmDrafter.draft`
- * is already suspend precisely so a slow drafter never has to fake being
+ * Suspend rather than a plain call: a real implementation (LiteRT-LM on the
+ * phone, or a local Ollama server on a laptop — see `core/.../cli/OllamaLlmSession.kt`)
+ * can take several seconds to load a model, and `OnDeviceLlmDrafter.draft` is
+ * already suspend precisely so a slow drafter never has to fake being
  * synchronous.
+ *
+ * Lives in `:core`, not `:app`, on purpose: nothing here touches Android —
+ * only the concrete LiteRT-LM/Android binding (`app/.../drafting/LiteRtLmSession.kt`)
+ * does, which is why that one class stays in `:app` while this contract and
+ * everything built on it moved here. That split is what lets a laptop-only
+ * implementation (Ollama over plain JVM `HttpClient`) share this exact
+ * drafter instead of duplicating it.
  */
 fun interface LlmSession {
     suspend fun generate(prompt: String): InferenceOutput
 }
 
 /**
- * The honest default for anyone running Cues without a side-loaded model.
- * No asset, no attempt, no fabricated answer — this is what
- * [DifferentialDrafter]/[CompositeDrafter] fall all the way back to the
- * parser from.
+ * The honest default for anyone running Cues without a configured model —
+ * no side-loaded phone model, no laptop server reachable. No asset, no
+ * attempt, no fabricated answer — this is what [DifferentialDrafter]/[CompositeDrafter]
+ * fall all the way back to the parser from.
  */
 class UnconfiguredLlmSession : LlmSession {
     override suspend fun generate(prompt: String): InferenceOutput =
-        throw IllegalStateException("No side-loaded model is configured.")
+        throw IllegalStateException("No on-device or local model is configured.")
 }
 
 /** For bake-offs and tests: a fixed answer and an optional, explicit report. */
 class FakeLlmSession(
     private val answer: String,
-    private val report: InferenceReport = InferenceReport(InferenceBackend.CPU, loadMs = 0, generationMs = 0, tokensPerSecond = 0.0),
+    private val report: InferenceReport = InferenceReport(InferenceBackend.CPU, loadMs = 0, generationMs = 0, estimatedTokens = 0),
 ) : LlmSession {
     override suspend fun generate(prompt: String): InferenceOutput = InferenceOutput(answer, report)
 }
@@ -48,10 +53,9 @@ class FakeLlmSession(
  * words are never trusted as structure, only as candidate prose for the same
  * deterministic compiler every other draft goes through.
  *
- * [session] does the actual generation; see [LiteRtLmSession] for the real
- * on-device runtime and [docs/API_VERIFICATION.md] for what backends it can
- * reach. This class stays runtime-agnostic on purpose: everything here would
- * be identical against llama.cpp or MediaPipe if either replaced LiteRT-LM.
+ * [session] does the actual generation; see `app/.../drafting/LiteRtLmSession.kt`
+ * for the real on-device runtime and `core/.../cli/OllamaLlmSession.kt` for
+ * the laptop-only one — this class stays runtime-agnostic on purpose.
  */
 class OnDeviceLlmDrafter(
     private val session: LlmSession = UnconfiguredLlmSession(),

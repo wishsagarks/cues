@@ -18,10 +18,12 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 
 /**
- * Stands in for [com.cues.app.drafting.OnDeviceLlmDrafter] — which lives in
- * `:app` precisely because it wraps an Android-only runtime, and so cannot be
- * exercised from `:core`'s JVM test suite. What *is* `:core`'s to prove is
- * the contract everything above a real drafter depends on: an
+ * A minimal stand-in for a real model-backed drafter (see
+ * [com.cues.core.drafting.OnDeviceLlmDrafter] for the genuine one, which
+ * takes an injectable [com.cues.core.drafting.LlmSession] and so is fakeable
+ * on its own — this class exists only to keep this test's focus on
+ * [CueService]'s plumbing, not drafting itself). What's `:core`'s to prove
+ * here is the contract everything above a real drafter depends on: an
  * [InferenceReport] a drafter attaches to a [DraftResult.Drafted] survives
  * into [CueService.Diagnostics] and into the conversation turn that
  * displayed it, and a parser-only draft claims no backend at all.
@@ -42,7 +44,7 @@ class InferenceReportPlumbingTest {
         val root = createTempDirectory("inference-report-test").toFile()
         try {
             val store = JsonFileStore(root)
-            val report = InferenceReport(InferenceBackend.NPU, loadMs = 1200, generationMs = 340, tokensPerSecond = 18.5)
+            val report = InferenceReport(InferenceBackend.NPU, loadMs = 1200, generationMs = 340, estimatedTokens = 6)
             val service = CueService(
                 store, store, store, RecordingExecutor(), FakeClock(Fixtures.NOW),
                 CapabilityProvider { emptySet() }, FakeModelDrafter(report),

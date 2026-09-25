@@ -83,6 +83,7 @@ import com.cues.core.assistant.ReplyCode
 import com.cues.core.assistant.Turn
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.ZoneId
@@ -162,6 +163,9 @@ class MainActivity : ComponentActivity() {
                     adapterHealth = { app.adapterSupervisor.health() },
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
                     runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices(), com.cues.app.BuildConfig.SARVAM_API_KEY) },
+                    modelDownloader = app.modelDownloader,
+                    onDeviceModelUserEnabled = app.onDeviceModelUserEnabled,
+                    onToggleOnDeviceModel = { app.onDeviceModelUserEnabled = it },
                     localSpeechInput = localSpeechInput,
                     pairedDevices = app::pairedDevices,
                     replySpeaker = replySpeaker,
@@ -252,6 +256,9 @@ private fun CuesApp(
     adapterHealth: () -> List<com.cues.core.ports.ListenerHealth>,
     syncAdapters: () -> Unit,
     runBakeOff: suspend () -> com.cues.core.corpus.BakeOffReport,
+    modelDownloader: com.cues.app.drafting.ModelDownloader,
+    onDeviceModelUserEnabled: Boolean = false,
+    onToggleOnDeviceModel: (Boolean) -> Unit = {},
     localSpeechInput: LocalSpeechInput,
     pairedDevices: () -> List<PairedDevice>,
     replySpeaker: com.cues.app.voice.ReplySpeaker,
@@ -275,6 +282,13 @@ private fun CuesApp(
     var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
     var isBakingOff by remember { mutableStateOf(false) }
     var bakeOffReport by remember { mutableStateOf<String?>(null) }
+    // CL-36: the "Cues Brain" download tile's state. Re-read from disk on
+    // first composition — this covers both a manual adb-push side-load
+    // (docs/DEVICE_MATRIX.md M2) and a download this same process already
+    // completed, without either route needing to know about the other.
+    var modelProvisionState by remember { mutableStateOf(modelDownloader.currentState()) }
+    var modelDownloadJob by remember { mutableStateOf<Job?>(null) }
+    var onDeviceModelEnabled by remember { mutableStateOf(onDeviceModelUserEnabled) }
     var isDiagnosticsRefreshing by remember { mutableStateOf(false) }
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
@@ -436,6 +450,28 @@ private fun CuesApp(
         }
     }
 
+    fun downloadModelNow() {
+        modelProvisionState = com.cues.core.inference.ModelProvisionState.Downloading(0, null)
+        modelDownloadJob = scope.launch {
+            modelProvisionState = modelDownloader.download { downloaded, total ->
+                modelProvisionState = com.cues.core.inference.ModelProvisionState.Downloading(downloaded, total)
+            }
+        }
+    }
+
+    fun cancelModelDownloadNow() {
+        modelDownloadJob?.cancel()
+        // The job's own coroutine won't reach its assignment once cancelled
+        // (that's the point of cancelling it) — re-read from disk directly,
+        // same as first composition, so the UI reflects reality either way.
+        modelProvisionState = modelDownloader.currentState()
+    }
+
+    fun removeModelNow() {
+        modelDownloader.remove()
+        modelProvisionState = modelDownloader.currentState()
+    }
+
     /**
      * The explicit, opt-in "third opinion" (docs/FDD.md's "Optional cloud
      * assist" section): reached only from here, only after the offline pair
@@ -570,6 +606,7 @@ private fun CuesApp(
                             context.startActivity(com.cues.app.bridge.ExportImport.shareIntent(context, uri))
                         },
                         onFixCapability = { navController.navigate(CuesRoutes.CHECKS) },
+                        onToggleUsageTracking = { store.setUsageTrackingEnabled(it) },
                     )
                 }
 
@@ -746,6 +783,15 @@ private fun CuesApp(
                         bakeOffReport = bakeOffReport,
                         onRunBakeOff = ::runBakeOffNow,
                         cueDiagnostics = cueService.diagnostics(),
+                        modelProvisionState = modelProvisionState,
+                        canDownloadModel = modelDownloader.canDownload(),
+                        isOnWifi = modelDownloader.isOnWifi(),
+                        npuEligible = com.cues.app.drafting.LiteRtLmSession.npuSocEligible(),
+                        onDeviceModelEnabled = onDeviceModelEnabled,
+                        onToggleOnDeviceModel = { onDeviceModelEnabled = it; onToggleOnDeviceModel(it) },
+                        onDownloadModel = ::downloadModelNow,
+                        onCancelDownloadModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Downloading) ::cancelModelDownloadNow else null,
+                        onRemoveModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed) ::removeModelNow else null,
                     )
                 }
 

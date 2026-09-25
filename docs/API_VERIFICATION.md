@@ -6,6 +6,7 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 
 - Kotlin/Android artifact: `com.google.ai.edge.litertlm:litertlm-android`. **Pinned to `0.16.1`, integrated and compiled this sprint** — see `app/.../drafting/LiteRtLmSession.kt`. Releases 0.17.0+ depend on `kotlin-reflect:2.4.0`, whose own compiled classes carry Kotlin 2.4.0 metadata that this project's 2.2.21 compiler cannot read at all (a hard incompatibility, not a resolvable version conflict); every release through 0.16.1 depends on `kotlin-reflect:2.2.21`, matching this project. Re-check this before ever bumping the pin.
 - Public Kotlin configuration supports `Backend.CPU()`, `Backend.GPU()`, and `Backend.NPU(nativeLibraryDir = ...)`. `Message` carries no `.text`; plain text is `message.contents.contents.filterIsInstance<Content.Text>()`.
+- **No embeddings API.** Checked 25 Sep 2026 against the same getting-started doc this section already cites: the public Kotlin surface is text generation only (`Engine`, `Conversation.sendMessage`/`sendMessageAsync`, `Message`/`Content`, tool-calling types) — there is no embed-text call. This settles a question CLEANUP.md CL-18/CL-36 left open: wiring `core/.../ports/Ports.kt`'s `Embedder` port to LiteRT-LM as a real vector embedder is not buildable against the pinned `0.16.1` release. A future attempt needs either a different embedding-capable runtime or the slower, honest fallback of one yes/no `generate()` call per candidate — never a fabricated embedding.
 - Qualcomm NPU requires a SoC-specific `.litertlm` model plus QAIRT runtime/dispatch libraries. The official table currently lists SM8750, SM8650, and SM8550 Gemma3-1B int4 models.
 - The plan's likely iQOO 15 hardware is newer than that published table. Cues inspects `Build.SOC_MODEL` (API 31+) and treats NPU as unavailable unless it matches that published table; GPU, then CPU, then parser-only are the labelled fallbacks — see CLEANUP.md CL-18 for what remains unverified (no model has been side-loaded, no SoC has been read on a real device, and the library exposes no independent "which backend ran" query, only whether `Engine.initialize()` threw).
 - The GPU tier needs `<uses-native-library android:name="libvndksupport.so" android:required="false"/>` and the same for `libOpenCL.so` inside `<application>`.
@@ -116,6 +117,50 @@ is needed either).
 - Source: https://docs.sarvam.ai/api-reference-docs/speech-to-text/transcribe
 - Source: https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
 - Source: https://docs.sarvam.ai/api-reference-docs/chat/chat-completions
+
+## Ollama (laptop dev-only)
+
+**Written, not exercised against a live server.** `core/.../cli/OllamaLlmSession.kt`
+backs `./dev llm "<sentence>"` — a way to draft through a Gemma-class model
+without the event phone or a side-loaded `.litertlm` file, for iterating on
+prompts/grammar from a laptop. It is CLI-only: no `:app` production code path
+constructs it, and it never ships in the APK.
+
+- Endpoint: `POST http://localhost:11434/api/generate`, JSON body
+  (`model`, `prompt`, `stream: false`), JSON response expected to carry
+  `response` (the generated text) and `done` (bool). This is Ollama's
+  documented non-streaming generate contract, read from its own docs, not
+  exercised here — **confirm the exact field names against a real
+  `ollama serve` response before trusting this class**, the same "verify
+  before you claim it" rule as every other entry in this file.
+- No backend/device claim: `OllamaLlmSession` always reports
+  `InferenceBackend.CPU`, deliberately conservative rather than a guess at
+  what device Ollama actually used — nothing in the documented response says.
+- Suggested local setup: `ollama pull gemma3:1b`, `ollama serve`, then
+  `./dev llm "..."`. With the server unreachable, `DifferentialDrafter`'s
+  existing guarded-timeout/catch already degrades to the grammar parser's own
+  answer — verified locally (see CLEANUP.md).
+- Source: https://github.com/ollama/ollama/blob/main/docs/api.md
+
+## Gemma model distribution (on-device "brain" download)
+
+**Not yet sourced.** The download tile (`app/.../drafting/ModelDownloader.kt`,
+CLEANUP.md CL-36) needs a real `.litertlm` asset URL, SHA-256 and license
+terms for a Gemma3-1B int4 build — the same model class this file's LiteRT-LM
+section already cites for the NPU path — read from Google's own LiteRT-LM/
+model-distribution channel, the way the `litertlm` version pin and the NPU
+SoC table above were sourced. Until an entry with a real URL/hash lands here,
+`BuildConfig.GEMMA_MODEL_URL`/`GEMMA_MODEL_SHA256` stay blank and the tile
+honestly shows "not configured" — never a guessed or placeholder URL.
+
+## Sarvam AI pricing (for the analytics tab's cost figures)
+
+**Not yet sourced.** `core/.../inference/InferenceCost.kt`'s
+`sarvamCostPer1kTokensUsd` stays `null` — every Sarvam call in the usage/cost
+ledger shows `CostBasis.UNVERIFIED` ("cost not verified"), never a fabricated
+`$0.00` or an invented rate — until a real per-token or per-call price is
+read from https://docs.sarvam.ai's billing pages and recorded here with the
+date it was checked.
 
 ## Dependency policy
 

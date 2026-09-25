@@ -9,6 +9,7 @@
 #
 #   ./dev t              core tests            (no Android SDK needed)
 #   ./dev d "sentence"   compile + review + rehearse a cue, in the terminal
+#   ./dev llm "sentence" same, drafted via local Ollama (Gemma) + parser, laptop-only
 #   ./dev today          print the deterministic fixture forecast
 #   ./dev chat "text"    one Ask Cues conversation turn
 #   ./dev coach          replay the evidence-backed coach fixture
@@ -91,6 +92,11 @@ case "$cmd" in
     ;;
 
   today) $GW -q :core:demo -Pq="--today" ;;
+
+  llm)
+    [ $# -ge 1 ] || { red 'Usage: ./dev llm "When my earbuds connect after 6 PM..."'; exit 1; }
+    $GW -q :core:llm -Pq="$1"
+    ;;
 
   chat)
     [ $# -ge 1 ] || { red 'Usage: ./dev chat "ask Cues about a cue"'; exit 1; }

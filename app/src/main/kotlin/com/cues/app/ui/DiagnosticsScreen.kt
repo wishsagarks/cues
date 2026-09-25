@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.DeviceDiagnostics
 import com.cues.app.runtime.ManualObservation
 import com.cues.core.CueService
+import com.cues.core.inference.ModelProvisionState
 import java.text.DateFormat
 import java.util.Date
 
@@ -39,6 +42,15 @@ fun DiagnosticsScreen(
     bakeOffReport: String? = null,
     onRunBakeOff: (() -> Unit)? = null,
     cueDiagnostics: CueService.Diagnostics? = null,
+    modelProvisionState: ModelProvisionState = ModelProvisionState.NotInstalled,
+    canDownloadModel: Boolean = false,
+    isOnWifi: Boolean = false,
+    npuEligible: Boolean = false,
+    onDeviceModelEnabled: Boolean = false,
+    onToggleOnDeviceModel: ((Boolean) -> Unit)? = null,
+    onDownloadModel: (() -> Unit)? = null,
+    onCancelDownloadModel: (() -> Unit)? = null,
+    onRemoveModel: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -62,6 +74,22 @@ fun DiagnosticsScreen(
         DiagnosticCard("On-device speech", diagnostics.onDeviceSpeech)
         DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
         cueDiagnostics?.let { DiagnosticCard("Drafting path", it.render()) }
+
+        if (onDownloadModel != null) {
+            Spacer(Modifier.height(8.dp))
+            ModelBrainCard(
+                state = modelProvisionState,
+                canDownload = canDownloadModel,
+                isOnWifi = isOnWifi,
+                npuEligible = npuEligible,
+                lastInferenceReport = cueDiagnostics?.lastInferenceReport,
+                enabled = onDeviceModelEnabled,
+                onToggleEnabled = onToggleOnDeviceModel,
+                onDownload = onDownloadModel,
+                onCancel = onCancelDownloadModel,
+                onRemove = onRemoveModel,
+            )
+        }
 
         Button(
             onClick = {
@@ -161,6 +189,164 @@ private fun DiagnosticCard(label: String, value: String) {
         }
     }
 }
+
+/**
+ * CL-36: the download/install tile for the on-device model ("Cues Brain").
+ *
+ * The one rule this card must never break: it may say what tier is
+ * *eligible* ([npuEligible], a SoC-allowlist check) but never that NPU *is*
+ * accelerating anything — that claim only ever comes from [lastInferenceReport],
+ * a real run's own [InferenceReport.backend][com.cues.core.inference.InferenceReport],
+ * exactly [com.cues.core.inference.InferenceReport]'s own honesty rule.
+ */
+@Composable
+private fun ModelBrainCard(
+    state: ModelProvisionState,
+    canDownload: Boolean,
+    isOnWifi: Boolean,
+    npuEligible: Boolean,
+    lastInferenceReport: com.cues.core.inference.InferenceReport?,
+    enabled: Boolean,
+    onToggleEnabled: ((Boolean) -> Unit)?,
+    onDownload: () -> Unit,
+    onCancel: (() -> Unit)?,
+    onRemove: (() -> Unit)?,
+) {
+    val haptics = LocalHapticFeedback.current
+    Surface(
+        color = cuesColors.bg300,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).animateContentSize(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Cues Brain", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text(
+                "The on-device model. Runs entirely on this phone — no cue text ever leaves it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+
+            when (state) {
+                is ModelProvisionState.NotInstalled -> {
+                    Text(
+                        eligibilityLine(npuEligible),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                    )
+                    if (!canDownload) {
+                        Text(
+                            "Not configured — no model source is set for this build.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cuesColors.ink200,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    } else if (!isOnWifi) {
+                        Text(
+                            "Connect to Wi-Fi to download.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cuesColors.ink200,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    Button(
+                        onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onDownload() },
+                        enabled = canDownload && isOnWifi,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    ) { Text("Download") }
+                }
+
+                is ModelProvisionState.Downloading -> {
+                    val total = state.totalBytes
+                    val fraction = total?.let { (state.bytesDownloaded.toFloat() / it).coerceIn(0f, 1f) }
+                    Text(
+                        if (total != null) {
+                            "Downloading… ${mb(state.bytesDownloaded)} / ${mb(total)} MB"
+                        } else {
+                            "Downloading… ${mb(state.bytesDownloaded)} MB"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                    )
+                    if (fraction != null) {
+                        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    }
+                    if (onCancel != null) {
+                        OutlinedButton(
+                            onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onCancel() },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        ) { Text("Cancel") }
+                    }
+                }
+
+                ModelProvisionState.Verifying -> {
+                    Text("Verifying…", style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                }
+
+                is ModelProvisionState.Installed -> {
+                    Text(
+                        "Installed — ${mb(state.sizeBytes)} MB",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                    )
+                    Text(
+                        eligibilityLine(npuEligible),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    Text(
+                        lastInferenceReport?.let { "Last actual run: ${it.backend.name}, ${it.loadMs}ms load" }
+                            ?: "No draft has used it yet — nothing has actually run.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Use for drafting", style = MaterialTheme.typography.bodySmall)
+                        Switch(
+                            checked = enabled,
+                            onCheckedChange = {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onToggleEnabled?.invoke(it)
+                            },
+                            enabled = onToggleEnabled != null,
+                        )
+                    }
+                    if (onRemove != null) {
+                        OutlinedButton(
+                            onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onRemove() },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        ) { Text("Remove") }
+                    }
+                }
+
+                is ModelProvisionState.Failed -> {
+                    Text(state.reason, style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+                    if (state.retryable) {
+                        Button(
+                            onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onDownload() },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        ) { Text("Retry") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Never "NPU accelerated" — only what the SoC allowlist says is eligible, per CL-18's rule applied to this UI. */
+private fun eligibilityLine(npuEligible: Boolean): String =
+    if (npuEligible) "Eligible for: NPU, GPU, CPU (this SoC is on the published table)"
+    else "Eligible for: GPU, CPU (this SoC has no published NPU build)"
+
+private fun mb(bytes: Long): String = "%.1f".format(bytes / 1_000_000.0)
 
 @Composable
 private fun ManualCheck(

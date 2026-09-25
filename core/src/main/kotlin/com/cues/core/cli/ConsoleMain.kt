@@ -76,7 +76,7 @@ object ConsoleMain {
                     ),
                     primaryDrafter = "GRAMMAR_PARSER",
                     lastFallbackReason = null,
-                    lastInferenceReport = InferenceReport(InferenceBackend.CPU, loadMs = 812, generationMs = 340, tokensPerSecond = 14.2),
+                    lastInferenceReport = InferenceReport(InferenceBackend.CPU, loadMs = 812, generationMs = 340, estimatedTokens = 5),
                     generatedAtMillis = now,
                 ),
             )

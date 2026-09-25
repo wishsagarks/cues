@@ -39,6 +39,19 @@ fun sarvamApiKey(): String {
     return properties.getProperty("sarvam.apiKey", "")
 }
 
+// CL-36: the on-device model download source, read the same way sarvamApiKey()
+// is above — local.properties only, gitignored. Blank means the "Cues Brain"
+// tile honestly shows "not configured"; nothing downloads until both a real
+// URL and its matching SHA-256 are set. See docs/API_VERIFICATION.md's
+// "Gemma model distribution" entry for why neither has a real value yet.
+fun cuesBrainProperty(key: String): String {
+    val propsFile = rootProject.file("local.properties")
+    if (!propsFile.isFile) return ""
+    val properties = Properties()
+    propsFile.inputStream().use { properties.load(it) }
+    return properties.getProperty(key, "")
+}
+
 android {
     namespace = "com.cues.app"
     // CL-24: bumped 36 -> 37 alongside the AGP 9.1.1 bump above — AppFunctions
@@ -57,6 +70,8 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SARVAM_API_KEY", "\"${sarvamApiKey()}\"")
+        buildConfigField("String", "GEMMA_MODEL_URL", "\"${cuesBrainProperty("gemma.modelUrl")}\"")
+        buildConfigField("String", "GEMMA_MODEL_SHA256", "\"${cuesBrainProperty("gemma.modelSha256")}\"")
     }
 
     buildTypes {

@@ -16,6 +16,24 @@ kotlinc -version
 The Gradle wrapper remains the build authority; use `./dev t`, `./dev b`, and
 `./dev perms` for project verification.
 
+## Optional: Gemma-backed drafting without a phone
+
+`./dev llm "<sentence>"` drafts through a local Ollama server instead of the
+phone's side-loaded LiteRT-LM model — useful for iterating on prompts/grammar
+without the event device. See `docs/API_VERIFICATION.md`'s "Ollama
+(laptop dev-only)" entry for the exact contract this relies on.
+
+```sh
+brew install ollama
+ollama pull gemma3:1b
+ollama serve &
+./dev llm "When my earbuds connect after 6 PM, start a 45-minute focus timer."
+```
+
+With no server running, `./dev llm` still works — it honestly falls back to
+the grammar parser's own answer, the same way the phone falls back when no
+model is side-loaded.
+
 ## Agent skills
 
 The project Android/Compose skill is versioned at

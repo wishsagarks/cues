@@ -1,13 +1,19 @@
 package com.cues.core.inference
 
 /**
- * Which tier a local-model run actually loaded on, in the order Cues tries
- * them: NPU first, then GPU, then CPU. Never asserted from a device's specs
- * or a plan — only from what the runtime accepted without throwing when
- * asked to load at that tier. See [InferenceReport]'s own doc comment for
- * what that promise does and does not cover.
+ * Which tier a model run actually loaded on, in the order Cues tries the
+ * on-device tiers: NPU first, then GPU, then CPU. Never asserted from a
+ * device's specs or a plan — only from what the runtime accepted without
+ * throwing when asked to load at that tier. See [InferenceReport]'s own doc
+ * comment for what that promise does and does not cover.
+ *
+ * [CLOUD] is not a local tier at all — it labels a call that ran on Sarvam's
+ * servers (CLEANUP.md CL-35), kept in this same enum so every drafter can
+ * attach one [InferenceReport] regardless of where it ran, but never
+ * conflated with NPU/GPU/CPU: a cloud call proves nothing about the phone's
+ * own inference chain.
  */
-enum class InferenceBackend { NPU, GPU, CPU }
+enum class InferenceBackend { NPU, GPU, CPU, CLOUD }
 
 /**
  * What actually happened the last time the on-device model ran — the whole
@@ -25,6 +31,9 @@ data class InferenceReport(
     val backend: InferenceBackend,
     val loadMs: Long,
     val generationMs: Long,
-    /** Estimated by splitting the response on whitespace, not the model's own token count. */
-    val tokensPerSecond: Double,
-)
+    /** Estimated by splitting the response on whitespace, not the model's own tokenizer. */
+    val estimatedTokens: Int,
+) {
+    /** Derived, not stored, so this can never silently disagree with [estimatedTokens]/[generationMs]. */
+    val tokensPerSecond: Double get() = estimatedTokens * 1_000.0 / generationMs.coerceAtLeast(1)
+}

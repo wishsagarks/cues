@@ -25,6 +25,7 @@ import com.cues.app.ui.components.StatusPill
 import com.cues.app.ui.components.StatusTone
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
+import com.cues.core.inference.CostBasis
 import com.cues.core.insights.InsightsReport
 import com.cues.core.insights.InsightsWindow
 import com.cues.core.insights.SkipFamily
@@ -46,6 +47,7 @@ fun InsightsScreen(
     lastFallbackReason: String?,
     onExportConsole: () -> Unit,
     onFixCapability: () -> Unit,
+    onToggleUsageTracking: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val t = cuesTokens
@@ -262,6 +264,56 @@ fun InsightsScreen(
             }
         }
 
+        val usage = report.inferenceUsage
+        if (usage != null) {
+            item { SectionHeader("MODEL USAGE & COST") }
+            item {
+                SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text("ON-DEVICE", style = CuesType.labelSmall, color = t.inkSlate)
+                        Text("${usage.onDeviceCalls} call(s)", style = CuesType.labelSmall, color = t.inkSlate)
+                    }
+                    Text(
+                        "${usage.onDeviceTokens} tokens (est.) · \$0.00" +
+                            (usage.onDeviceLatencyMedianMs?.let { " · median ${it}ms" } ?: ""),
+                        style = CuesType.body,
+                        color = t.go,
+                        modifier = Modifier.padding2(top = 2.dp),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().padding2(top = 12.dp),
+                    ) {
+                        Text("CLOUD (SARVAM)", style = CuesType.labelSmall, color = t.inkSlate)
+                        Text("${usage.cloudCalls} call(s)", style = CuesType.labelSmall, color = t.inkSlate)
+                    }
+                    Text(
+                        "${usage.cloudTokens} tokens (est.) · ${costLine(usage.cloudCostUsd, usage.cloudCostBasis)}" +
+                            (usage.cloudLatencyMedianMs?.let { " · median ${it}ms" } ?: ""),
+                        style = CuesType.body,
+                        color = t.inkSecondary,
+                        modifier = Modifier.padding2(top = 2.dp),
+                    )
+                }
+            }
+        }
+
+        item {
+            SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Text("USAGE & COST TRACKING", style = CuesType.labelSmall, color = t.inkSlate)
+                        Text(
+                            "Records each model call's token estimate and cost locally for 30 days.",
+                            style = CuesType.labelSmall,
+                            color = t.inkSlate,
+                        )
+                    }
+                    KineticSwitch(checked = report.usageTrackingEnabled, onCheckedChange = onToggleUsageTracking)
+                }
+            }
+        }
+
         item {
             com.cues.app.ui.components.GhostButton("Export Cue Console (HTML)", onExportConsole, modifier = Modifier.fillMaxWidth())
         }
@@ -276,6 +328,13 @@ private fun KpiTile(label: String, value: String, color: androidx.compose.ui.gra
         Text(label, style = CuesType.labelSmall, color = cuesTokens.inkSlate)
         Text(value, style = CuesType.headline, color = color, modifier = Modifier.padding2(top = 2.dp))
     }
+}
+
+/** Never a fabricated `$0.00` for an unverified rate — this says so plainly instead. */
+private fun costLine(costUsd: Double?, basis: CostBasis?): String = when (basis) {
+    CostBasis.CLOUD_METERED -> "$" + "%.4f".format(costUsd ?: 0.0)
+    CostBasis.ON_DEVICE_FREE -> "$0.00"
+    CostBasis.UNVERIFIED, null -> "cost not verified"
 }
 
 private fun Modifier.padding2(top: androidx.compose.ui.unit.Dp = 0.dp, bottom: androidx.compose.ui.unit.Dp = 0.dp): Modifier =

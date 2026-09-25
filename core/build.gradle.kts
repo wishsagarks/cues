@@ -80,6 +80,16 @@ tasks.register<JavaExec>("chat") {
     if (project.hasProperty("q")) args(project.property("q").toString())
 }
 
+// `./dev llm "<sentence>"` routes here — laptop-only, needs `ollama serve` running.
+tasks.register<JavaExec>("llm") {
+    group = "cues"
+    description = "Drafts through a local Ollama server (Gemma) cross-checked against the parser. Laptop-only, no device."
+    mainClass.set("com.cues.core.cli.LlmMainKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+    if (project.hasProperty("q")) args(project.property("q").toString())
+}
+
 tasks.register<JavaExec>("coach") {
     group = "cues"
     description = "Replays the deterministic coach fixture."

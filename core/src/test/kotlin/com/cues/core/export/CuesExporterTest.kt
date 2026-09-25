@@ -90,7 +90,7 @@ class CuesExporterTest {
 
     @Test
     fun `an inference report's backend, timings and rate all travel through untouched`() {
-        val report = InferenceReport(InferenceBackend.NPU, loadMs = 900, generationMs = 200, tokensPerSecond = 12.5)
+        val report = InferenceReport(InferenceBackend.NPU, loadMs = 900, generationMs = 400, estimatedTokens = 5)
 
         val export = sampleExport(lastInferenceReport = report)
 

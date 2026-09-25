@@ -2,6 +2,8 @@ package com.cues.app.drafting
 
 import android.content.Context
 import android.os.Build
+import com.cues.core.drafting.InferenceOutput
+import com.cues.core.drafting.LlmSession
 import com.cues.core.inference.InferenceBackend
 import com.cues.core.inference.InferenceReport
 import com.google.ai.edge.litertlm.Backend
@@ -71,6 +73,10 @@ class LiteRtLmSession(
             InferenceBackend.NPU -> Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
             InferenceBackend.GPU -> Backend.GPU()
             InferenceBackend.CPU -> Backend.CPU()
+            // This session only ever builds its tier list from NPU/GPU/CPU (see
+            // `generate()` above) — CLOUD labels a Sarvam call elsewhere and
+            // should never reach a local LiteRT-LM tier request.
+            InferenceBackend.CLOUD -> error("CLOUD is not a local inference tier.")
         }
         val config = EngineConfig(modelPath = modelPath, backend = backend, cacheDir = context.cacheDir.path)
 
@@ -104,19 +110,30 @@ class LiteRtLmSession(
                         backend = tier,
                         loadMs = loadMs,
                         generationMs = genMs,
-                        tokensPerSecond = tokens * 1_000.0 / genMs,
+                        estimatedTokens = tokens,
                     ),
                 )
             }
         }
     }
 
-    private fun npuSocMatches(): Boolean {
-        val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else null
-        return soc != null && soc in supportedNpuSocModels
-    }
+    private fun npuSocMatches(): Boolean = npuSocEligible(supportedNpuSocModels)
 
-    private companion object {
+    companion object {
         val DEFAULT_NPU_SOC_MODELS = setOf("SM8750", "SM8650", "SM8550")
+
+        /**
+         * The same one-line allowlist check [LiteRtLmSession] itself runs
+         * before attempting the NPU tier — pulled out so the "Cues Brain"
+         * tile can show *eligibility* without constructing a session (which
+         * needs a model path/`Context`) and without duplicating the
+         * allowlist. This is never a claim that NPU *will* run, only that
+         * this SoC is on the published table — see [com.cues.core.inference.InferenceReport]'s
+         * own doc comment for the actual, only-after-a-real-run claim.
+         */
+        fun npuSocEligible(supportedNpuSocModels: Set<String> = DEFAULT_NPU_SOC_MODELS): Boolean {
+            val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else null
+            return soc != null && soc in supportedNpuSocModels
+        }
     }
 }

@@ -42,6 +42,9 @@ import com.cues.core.ports.PatchStore
 import com.cues.core.ports.PlaceStore
 import com.cues.core.ports.FactStore
 import com.cues.core.ports.Embedder
+import com.cues.core.inference.InferenceCost
+import com.cues.core.inference.InferenceLedger
+import com.cues.core.inference.InferenceLedgerEntry
 import com.cues.core.inference.InferenceReport
 import com.cues.core.receipt.ReceiptRecord
 import com.cues.core.receipt.ReceiptRecords
@@ -109,6 +112,14 @@ class CueService(
      * parameter existed. Nothing that decides behaviour reads from it.
      */
     private val receiptLog: com.cues.core.ports.ReceiptLog? = null,
+    /**
+     * Where per-call token/cost records go for the Insights tab's usage
+     * section, alongside [usageLedger]'s signal-pattern events — a separate
+     * concern, its own opt-in ([InferenceLedger.usageTrackingEnabled]).
+     * Optional, like [usageLedger]: `null` means no bookkeeping at all,
+     * exactly as before this parameter existed.
+     */
+    private val inferenceLedger: InferenceLedger? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock, attention = attention)
@@ -741,6 +752,9 @@ class CueService(
             window = window,
             clock = clock,
             zone = zoneId(),
+            inferenceLedger = inferenceLedger?.let {
+                com.cues.core.insights.InferenceLedgerView(it.usageTrackingEnabled, it.inferenceEntries())
+            },
         )
     }
 
@@ -775,14 +789,36 @@ class CueService(
         )
     }
 
-    /** Keeps [lastInferenceReport] current from whichever [DraftResult] variant carries one, if any. */
+    /**
+     * Keeps [lastInferenceReport] current from whichever [DraftResult]
+     * variant carries one, if any, and — when [inferenceLedger] is wired and
+     * its own opt-in is on — appends one [InferenceLedgerEntry] per call.
+     * This is the one funnel every draft call already passes through, so no
+     * UI call site needs its own bookkeeping.
+     */
     private fun recordInference(result: DraftResult) {
         val report = when (result) {
             is DraftResult.Drafted -> result.inferenceReport
             is DraftResult.NeedsClarification -> result.inferenceReport
             is DraftResult.Failed -> result.inferenceReport
         }
-        if (report != null) lastInferenceReport = report
+        if (report != null) {
+            lastInferenceReport = report
+            inferenceLedger?.takeIf { it.usageTrackingEnabled }?.let { ledger ->
+                val (costUsd, costBasis) = InferenceCost.costFor(result.source, report.estimatedTokens)
+                ledger.appendInference(
+                    InferenceLedgerEntry(
+                        atMillis = clock.nowMillis(),
+                        source = result.source,
+                        backend = report.backend,
+                        estimatedTokens = report.estimatedTokens,
+                        latencyMs = report.loadMs + report.generationMs,
+                        costUsd = costUsd,
+                        costBasis = costBasis,
+                    ),
+                )
+            }
+        }
     }
 
     // ------------------------------------------------------------- receipts

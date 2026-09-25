@@ -96,7 +96,8 @@ private object FixturesForCli {
     fun snapshot() = com.cues.core.context.SnapshotBuilder.build(System.currentTimeMillis(), java.time.ZoneId.systemDefault())
 }
 
-private fun printReview(result: DraftResult.Drafted) {
+/** Not private: `LlmMain` reuses this so `./dev llm`'s output matches `./dev d`'s exactly. */
+internal fun printReview(result: DraftResult.Drafted) {
     val routine = Normalizer.normalize(result.routine)
 
     println(bold("Review") + dim("  (drafted by ${result.source.name.lowercase().replace('_', ' ')})"))
@@ -132,7 +133,7 @@ private fun printReview(result: DraftResult.Drafted) {
     println()
 }
 
-private fun printRehearsal(routine: Routine) {
+internal fun printRehearsal(routine: Routine) {
     println(bold("Rehearsal") + dim("  (sample events — nothing on the phone changes)"))
 
     Rehearsal.run(routine).rows.forEach { row ->
