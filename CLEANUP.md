@@ -1265,17 +1265,12 @@ environment:
    over this codebase has now been exercised, even though the file it needs
    for a full resource-link/package/install still doesn't exist here.
 
-**What is still not verified:**
-- A full `assembleDebug`/`./dev b`/`./dev r` — this pass only reached
-  `compileDebugKotlin`, not resource linking, dexing, packaging or install.
-  compileSdk 36 vs AGP 8.7.3 (item 2) blocks that until one of them moves.
-- Everything about the new UI on an actual emulator or phone: navigation,
-  the new Compose theme/typography/motion, the Now cockpit's live-session
-  hero and signal gates, the disk-is-truth `StoreGeneration` reactivity
-  under a real process kill, dark/light switching, touch targets, and the
-  bundled variable fonts (Space Grotesk / Plus Jakarta Sans / JetBrains
-  Mono, all OFL — see `docs/design/fonts/`) actually rendering per-weight
-  via `FontVariation`.
+**Superseded by the update below:** a full `assembleDebug` and a run on an
+emulator both happened later the same day, once the guava/listenablefuture
+conflict (the very next item) got a real fix instead of a workaround. See
+that update for what was actually confirmed and what — dark theme,
+`StoreGeneration` under a real process kill, the bundled fonts' per-weight
+`FontVariation` rendering, a physical device — still isn't.
 - Two pre-existing files, untouched by this redesign and confirmed
   unaffected by it (no diff against `main`), still fail to compile in this
   environment: `camera/CueCardScanScreen.kt` and
@@ -1306,21 +1301,106 @@ environment:
   session)`, closing the utility-restore bug this entry and CL-23 item 8
   both flagged (`CleanupObligation.args` now carries the restore target,
   not an in-memory map that died with the process). Session notification,
-  widget and the quick-settings tile were also restyled after this entry
-  was first written.
+  widget and the quick-settings tile were also restyled. A Workbench patch
+  bay was added (touch-to-patch controls compiled live through
+  `PatchSentence`, then the same `CueService.draft` path).
+- **Update, same day: `assembleDebug` succeeded, and the app ran on an
+  emulator.** The guava/listenablefuture conflict above turned out to have
+  a real, permanent fix, not just a local workaround: CameraX 1.5.3 expects
+  the *consuming app* to add a `ListenableFuture` provider itself (its own
+  setup docs say so) rather than declaring one as a dependency, so nothing
+  on the compile classpath satisfied `ProcessCameraProvider.getInstance()`'s
+  return type. `app/build.gradle.kts` now depends on
+  `com.google.guava:guava` directly (pinned in `libs.versions.toml` to the
+  version `androidx.appsearch` already resolves to) and excludes the
+  standalone `listenablefuture` module project-wide, so guava's own bundled
+  copy of the class is the only one on any classpath — no version force,
+  no duplicate-class conflict. `res/xml/app_metadata.xml` is committed as a
+  documented placeholder (see the comment in that file) so the
+  `android.app.appfunctions.app_metadata` manifest reference resolves;
+  KSP still does not generate a real one in this environment. With both of
+  those, `./gradlew :app:assembleDebug -x :app:checkDebugAarMetadata`
+  (that one flag still needed — see item 2 above, unchanged) produced a
+  real, installable APK.
+  - Installed and launched on the `Cues_Pixel_9` AVD already present on
+    this machine (`emulator -avd Cues_Pixel_9`). No crash, no fatal
+    exception in `logcat`. This is the first time any part of `:app` has
+    been observed running, anywhere, in this project's recorded history.
+  - Screenshots surfaced four real bugs, all fixed and reverified by
+    reinstalling: (1) the Now cockpit's three trust chips sat in a plain
+    `Row`, whose non-weighted children are still measured with the *row's
+    own* loose maxWidth as their upper bound — on a phone-width screen the
+    third chip's text wrapped into a tall single-character column,
+    ballooning the whole row (and the visible gap above "SIGNAL GATES")
+    to roughly 320dp; made the row `horizontalScroll` instead, which also
+    matches the plan's "horizontal chip row" description better than a
+    row that silently overflowed. (2) `CuesTopBar`/`CuesBottomNav` are
+    plain `Row`s, not Material3's `TopAppBar`/`NavigationBar`, so
+    `enableEdgeToEdge()` let the status bar draw directly over the logo
+    and the gesture bar crowd the tab labels; both now take
+    `Modifier.windowInsetsPadding(WindowInsets.statusBars /
+    .navigationBars)`. (3) `AskScreen` rendered "TRY A TEMPLATE" twice —
+    once itself, once again inside the reused `TemplateGallery` — and
+    `TemplateGallery`'s chips still used the *old* `com.cues.app.ui.Theme`
+    (`cuesColors`, uninstantiated in the new `CuesTheme`, so it silently
+    fell back to `DarkSemantic`), rendering dark chips on a light screen;
+    fixed the duplicate and restyled `TemplateGallery` onto the new
+    tokens. (4) `SectionHeader`'s meta text had no `maxLines`, so a long
+    one (Workbench's "touch-to-patch, checked live against the grammar")
+    wrapped onto a second line that visually sat *above* the title instead
+    of beside it; now single-line with ellipsis, both title and meta given
+    a shared `weight(1f, fill = false)` so long text truncates instead of
+    wrapping.
+  - The Workbench patch bay was exercised end to end on the emulator:
+    selected "Charger plugged in" (WHEN) and "Request quiet (DND)" (DO),
+    watched the live preview compile "When I plug in the charger, quiet
+    notifications." through the real `PatchSentence`/`GrammarParser`
+    round-trip, tapped "Compile to Review", and landed on Review showing
+    "drafted by grammar parser", clause-accounted source text ("Every word
+    accounted for."), the WHEN/IF/DO/UNTIL/RESTORE cards with correct
+    badge colors, the DND action's honest restore copy ("release our
+    quiet rule — and nothing else. Another quiet mode stays as it is."),
+    and Approve correctly disabled with "Grant access first" pending the
+    notification-policy permission. This is the first time the full
+    authoring path — draft, clause accounting, review, permission gating —
+    has been seen running rather than only unit-tested.
 - Receipts is still the old screen restyled by inheriting the new theme
   only — no structured `ReceiptRecord` cards yet, though `ReceiptLog` is
   wired (`CuesApplication` passes `receiptLog = store`) and every session
-  now has one waiting to be rendered. Workbench is still a navigation hub
-  to the existing Contexts/Memory/Utility-bindings/ingest screens, not the
-  patch-bay builder the plan describes, even though `:core`'s
-  `PatchSentence` — the piece that makes a patch-bay selection safe to
-  compile — already exists and is tested. App shortcuts were not restyled.
+  now has one waiting to be rendered.
+- Encountered and worked around three times in this pass, not yet
+  understood: importing `androidx.compose.foundation.layout.weight`
+  explicitly in a file (rather than relying on the implicit `RowScope`/
+  `ColumnScope` receiver already in scope inside a `Row { }`/`Column { }`
+  lambda) resolves to an unrelated **internal** `RowColumnParentData.weight`
+  property in this pinned Compose Foundation version and fails to compile
+  ("it is internal in file"). Every file that hit this
+  (`ui/components/Readouts.kt`, `ui/insights/InsightsScreen.kt`,
+  `ui/workbench/WorkbenchScreen.kt`) was fixed by simply deleting the
+  import — `.weight(...)` still resolves correctly via the implicit
+  receiver with no import at all. Worth a real explanation before adding
+  another `Row`/`Column` file that needs `weight`.
 
-**Remove when:** `assembleDebug` succeeds in some environment (this sandbox
-or the loaner), the redesigned screens have been seen running, and the
-guava/listenablefuture conflict is resolved or shown unrelated to the AGP
-bump this entry declines to make.
+**What is still not verified:**
+- A physical iQOO, or any physical device — everything above ran on the
+  `Cues_Pixel_9` AVD only.
+- Dark theme, touch-target sizing, TalkBack, font-scale, and every screen
+  this pass didn't specifically navigate to and screenshot (Insights,
+  Receipts, Review's permission-grant buttons actually granting, Cue
+  Detail, Checks, the remaining Workbench editors, camera/QR capture).
+- Live surfaces (the session notification's chronometer/progress bar, the
+  widget, the quick-settings tile) — none has an armed, running session to
+  render against yet in any environment.
+- `android.app.appfunctions.app_metadata`'s real content — the committed
+  file is a documented empty placeholder, not what KSP would generate.
+- Whether the guava/listenablefuture fix holds under `--offline` or on a
+  machine that has never resolved `androidx.appsearch` at all (this
+  machine already had `guava-32.0.1-android.jar` cached from an earlier
+  `--refresh-dependencies` attempt in this same session).
+
+**Remove when:** the app has run on a physical iQOO (or any physical
+device), the screens this pass didn't reach have been screenshotted, and
+a real (KSP-generated) `app_metadata.xml` replaces the placeholder.
 
 ---
 

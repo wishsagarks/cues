@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Placeholder, not generated. AndroidManifest.xml's
+  android.app.appfunctions.app_metadata <property> points at this resource
+  and expects the appfunctions KSP processor to generate it from the
+  @AppFunction-annotated methods in CuesAppFunctionService. That generation
+  has not been observed to happen in any environment this project has run
+  in — see CLEANUP.md CL-24 and CL-33 — so without a file here at all,
+  resource linking fails outright and no APK can be built, gating even
+  unrelated work behind AppFunctions' own unverified state.
+
+  This empty stub satisfies the reference so the rest of the app can be
+  built and run. It carries no real app-function metadata, so the system
+  cannot discover Cues' functions through it; that is the same "not built"
+  state CL-24 already discloses, not a new claim. Replace with the real
+  KSP-generated file the moment that generation is observed to work.
+-->
+<appfunctions-metadata xmlns:appfunctions="http://schemas.android.com/apk/res/android" />

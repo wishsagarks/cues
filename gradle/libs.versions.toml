@@ -49,6 +49,10 @@ litertlm = "0.16.1"
 # metadata requires Android Gradle Plugin 8.9.1+, this project uses 8.7.3,
 # and 1.5.3 only requires 8.6.0+.
 cameraX = "1.5.3"
+# What androidx.appsearch (pulled in by appfunctions) already resolves to;
+# pinned to match rather than left to float, so there is exactly one guava
+# on the classpath. See app/build.gradle.kts and CLEANUP.md CL-33.
+guava = "32.0.1-android"
 mlkitTextRecognition = "16.0.1"
 mlkitBarcodeScanning = "17.3.0"
 zxingCore = "3.5.3"
@@ -103,6 +107,7 @@ androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
 mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcodeScanning" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
 appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
 

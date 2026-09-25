@@ -63,6 +63,14 @@ kotlin {
     jvmToolchain(17)
 }
 
+configurations.all {
+    // See the `com.google.guava:guava` dependency below for the full story:
+    // this half stops its own bundled ListenableFuture class from colliding
+    // with the standalone `listenablefuture:1.0` artifact CameraX would
+    // otherwise also pull in. See CLEANUP.md CL-33.
+    exclude(group = "com.google.guava", module = "listenablefuture")
+}
+
 dependencies {
     // Every decision Cues makes lives here, platform-free and already tested.
     implementation(project(":core"))
@@ -101,6 +109,17 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    // CameraX's own setup docs ask consumers to add this directly:
+    // ProcessCameraProvider.getInstance() returns a
+    // com.google.common.util.concurrent.ListenableFuture, and camera-core
+    // 1.5.3 does not declare a dependency that puts that class on the
+    // compile classpath by itself — androidx.appsearch (pulled in
+    // transitively by appfunctions) happens to depend on full guava at
+    // runtime, but that is incidental and not something camera code should
+    // rely on being present. Pinned to the version appsearch already
+    // resolves to, so there is one guava on the classpath, not two. See
+    // CLEANUP.md CL-33.
+    implementation(libs.guava)
     implementation(libs.mlkit.text.recognition)
 
     // Cue Cards, offline: zxing-core renders a QR bitmap (pure Java, no
