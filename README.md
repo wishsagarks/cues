@@ -84,11 +84,12 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [API_VERIFICATION.md](docs/API_VERIFICATION.md) | Official-source API and dependency gate, with every pin explained |
 | [PERMISSIONS.md](docs/PERMISSIONS.md) | Every declared permission, what uses it and when it is requested |
 | [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md) | The iQOO verification matrix and `./dev probe` protocol |
+| [iqoo-loaner.md](iqoo-loaner.md) | Execution order for the first physical-device session: DEVICE_MATRIX.md's rows reordered into a time-boxed runbook |
 | [DEMO.md](docs/DEMO.md) | Demo script, its device gates, what is cut, and backup evidence |
 | [DISCLOSURE.md](docs/DISCLOSURE.md) | What was verified, where, and what may not be claimed yet |
 | [SUBMISSION.md](docs/SUBMISSION.md) | Phase 1 submission copy |
 | [Cues_Deck.pptx](docs/Cues_Deck.pptx) | Eleven-slide deck with speaker notes |
-| [CLAUDE.md](CLAUDE.md) | Repository conventions and the rules that are not style preferences |
+| [CLAUDE.md](CLAUDE.md) / [GEMINI.md](GEMINI.md) / [CODEX.md](CODEX.md) | Repository conventions and the rules that are not style preferences |
 | [RED_LIGHT.md](RED_LIGHT.md) | Building when the laptop is only reachable through Office Kit |
 | [CLEANUP.md](CLEANUP.md) | Provisional choices, each with the condition that retires it |
 | [docs/design/stitch/DESIGN_SYSTEM.md](docs/design/stitch/DESIGN_SYSTEM.md) | Kinetic Obsidian/Daylight design system and the Stitch screen prototypes the `:app` redesign is built from |
