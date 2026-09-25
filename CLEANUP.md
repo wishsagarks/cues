@@ -1381,13 +1381,32 @@ that update for what was actually confirmed and what — dark theme,
   receiver with no import at all. Worth a real explanation before adding
   another `Row`/`Column` file that needs `weight`.
 
+- **Update, same day: dark theme checked too.** `cmd uimode night yes` on
+  the same AVD, reinstalled, and rescreenshotted Now, Ask, Workbench, the
+  patch bay and Review. All render correctly and consistently — the
+  obsidian surfaces, clause-badge colors (including DO's filled
+  yellow-on-black treatment, which only applies in dark theme) and status
+  colors all read as intended. Found and fixed one real issue:
+  `KineticButton`'s disabled state was `t.doYellow.copy(alpha = 0.35f)`,
+  which renders as a legible soft peach over the light theme's near-white
+  but as a murky, low-contrast olive over the dark theme's near-black —
+  alpha-blending a saturated color doesn't desaturate the same way against
+  a light background as a dark one. Replaced with the standard disabled
+  treatment (neutral raised surface, hairline border, slate text), which
+  is unambiguous in both themes; confirmed by rescreenshotting both. Also
+  hit one transient, non-reproducible blank-screen artifact from toggling
+  `cmd uimode` rapidly while mid-navigation, which forces an Activity
+  relaunch (`MainActivity` declares no `configChanges` for `uiMode`) —
+  gone on the next clean launch, and not something a real user's Settings
+  toggle would race with taps the way scripted `adb` commands did.
+
 **What is still not verified:**
 - A physical iQOO, or any physical device — everything above ran on the
   `Cues_Pixel_9` AVD only.
-- Dark theme, touch-target sizing, TalkBack, font-scale, and every screen
-  this pass didn't specifically navigate to and screenshot (Insights,
-  Receipts, Review's permission-grant buttons actually granting, Cue
-  Detail, Checks, the remaining Workbench editors, camera/QR capture).
+- Touch-target sizing, TalkBack, font-scale, and every screen this pass
+  didn't specifically navigate to and screenshot (Insights, Receipts,
+  Review's permission-grant buttons actually granting, Cue Detail, Checks,
+  the remaining Workbench editors, camera/QR capture).
 - Live surfaces (the session notification's chronometer/progress bar, the
   widget, the quick-settings tile) — none has an armed, running session to
   render against yet in any environment.
