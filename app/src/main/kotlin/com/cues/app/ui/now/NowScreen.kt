@@ -126,7 +126,13 @@ fun NowScreen(
                 modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
             ) {
                 TrustChip("NO MODEL AT RUNTIME")
-                TrustChip("NO INTERNET PERMISSION")
+                // CL-35: was "NO INTERNET PERMISSION" — no longer true once the
+                // opt-in cloud assist feature declares INTERNET. The invariant
+                // that's still true, and still the one this chip is actually
+                // about, is that nothing downstream of approval ever touches
+                // the network — see ReviewScreen's "After approval: no model,
+                // no network." and docs/FDD.md's "Optional cloud assist" section.
+                TrustChip("NO NETWORK AT RUNTIME")
                 TrustChip("DRAFTING: $drafterLabel")
             }
         }

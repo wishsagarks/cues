@@ -21,7 +21,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +64,14 @@ fun AskScreen(
     onDraft: (String) -> Unit,
     drafterLabel: String,
     onStartVoice: (onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) -> Unit,
+    cloudAssistAvailable: Boolean = false,
+    cloudAssistEnabled: Boolean = false,
+    onToggleCloudAssist: () -> Unit = {},
+    onStartCloudVoice: (onResult: (original: String, translated: String) -> Unit, onError: (String) -> Unit) -> Unit =
+        { _, onError -> onError("Cloud assist is not available.") },
+    isTryingCloudAssist: Boolean = false,
+    onTranslateReadback: (englishText: String, onDone: (String) -> Unit, onError: (String) -> Unit) -> Unit =
+        { _, _, onError -> onError("Cloud assist is not available.") },
     deviceCandidates: List<PairedDevice>?,
     onSelectDevice: (PairedDevice) -> Unit,
     onDismissDevicePicker: () -> Unit,
@@ -81,6 +91,9 @@ fun AskScreen(
     }
     var isListening by remember { mutableStateOf(false) }
     var speechMessage by remember { mutableStateOf<String?>(null) }
+    var isCloudListening by remember { mutableStateOf(false) }
+    var cloudOriginalTranscript by remember { mutableStateOf<String?>(null) }
+    var cloudReadbackText by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val t = cuesTokens
 
@@ -92,8 +105,24 @@ fun AskScreen(
             { message -> speechMessage = message; isListening = false },
         )
     }
+    val startCloudVoice = {
+        speechMessage = null
+        cloudOriginalTranscript = null
+        isCloudListening = true
+        onStartCloudVoice(
+            { original, translated ->
+                text = translated
+                cloudOriginalTranscript = original
+                isCloudListening = false
+            },
+            { message -> speechMessage = message; isCloudListening = false },
+        )
+    }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startVoice() else speechMessage = "Microphone access was not granted. Type your cue instead."
+    }
+    val cloudMicrophonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startCloudVoice() else speechMessage = "Microphone access was not granted. Type your cue instead."
     }
     var pendingDeviceDraft by remember { mutableStateOf<String?>(null) }
     val bluetoothPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -122,10 +151,47 @@ fun AskScreen(
     ) {
         item { TrustChip("DRAFTING: $drafterLabel") }
 
+        if (cloudAssistAvailable) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Cloud language assist (Sarvam)", style = CuesType.labelSmall, color = t.inkPrimary)
+                        Text(
+                            "Optional and off by default. Sends audio/text to Sarvam over the network — see docs/PERMISSIONS.md.",
+                            style = CuesType.labelSmall,
+                            color = t.inkSlate,
+                        )
+                    }
+                    Switch(checked = cloudAssistEnabled, onCheckedChange = { onToggleCloudAssist() })
+                }
+            }
+        }
+
         if (assistantTurns.isNotEmpty()) {
             item {
                 SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-                    AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
+                    Column {
+                        AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
+                        if (cloudAssistEnabled) {
+                            TextButton(onClick = {
+                                cloudReadbackText = null
+                                onTranslateReadback(
+                                    assistantTurns.last().reply.text,
+                                    { translated -> cloudReadbackText = translated },
+                                    { message -> speechMessage = message },
+                                )
+                            }) {
+                                Text("Translate & speak (Sarvam, online)")
+                            }
+                            cloudReadbackText?.let { translated ->
+                                Text(
+                                    "Translated via Sarvam (online): $translated",
+                                    style = CuesType.labelSmall,
+                                    color = t.inkSlate,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -157,7 +223,7 @@ fun AskScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 com.cues.app.ui.components.GhostButton(
                     text = if (isListening) "Listening…" else "Speak",
-                    enabled = !isListening && !isDrafting,
+                    enabled = !isListening && !isCloudListening && !isDrafting,
                     onClick = {
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                             startVoice()
@@ -177,16 +243,47 @@ fun AskScreen(
             }
         }
 
+        if (cloudAssistEnabled) {
+            item {
+                com.cues.app.ui.components.GhostButton(
+                    text = if (isCloudListening) "Listening…" else "Speak (your language, online)",
+                    enabled = !isListening && !isCloudListening && !isDrafting,
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            startCloudVoice()
+                        } else {
+                            cloudMicrophonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            cloudOriginalTranscript?.let { original ->
+                item {
+                    Text(
+                        "Heard (your language, via Sarvam): $original",
+                        style = CuesType.labelSmall,
+                        color = t.inkSlate,
+                    )
+                }
+            }
+        }
+
         speechMessage?.let { message ->
             item { Text(message, style = CuesType.labelSmall, color = t.warn) }
         }
 
         item {
-            AnimatedVisibility(visible = isListening || isDrafting) {
+            AnimatedVisibility(visible = isListening || isCloudListening || isDrafting || isTryingCloudAssist) {
                 Column {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = t.doYellow, trackColor = t.raised)
                     Text(
-                        if (isListening) "Listening on this phone…" else "Turning your words into a reviewable cue…",
+                        when {
+                            isListening -> "Listening on this phone…"
+                            isCloudListening -> "Listening, then sending to Sarvam (online)…"
+                            isTryingCloudAssist -> "Trying cloud assist (Sarvam, online)…"
+                            else -> "Turning your words into a reviewable cue…"
+                        },
                         style = CuesType.labelSmall,
                         color = t.inkSlate,
                         modifier = Modifier.padding(top = 6.dp),
@@ -197,7 +294,11 @@ fun AskScreen(
 
         item {
             Text(
-                "Speech stays on this phone. If it's unavailable, type or correct the transcript here.",
+                if (cloudAssistEnabled) {
+                    "The default mic keeps speech on this phone. Cloud language assist, when used, sends audio or text to Sarvam over the network."
+                } else {
+                    "Speech stays on this phone. If it's unavailable, type or correct the transcript here."
+                },
                 style = CuesType.labelSmall,
                 color = t.inkSlate,
             )

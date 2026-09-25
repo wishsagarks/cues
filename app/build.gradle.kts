@@ -8,9 +8,15 @@
 // guess. The first build on the laptop is what confirms them. See CL-04 in
 // CLEANUP.md.
 
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // CL-24: 'org.jetbrains.kotlin.android' removed as part of the AGP 9.1.1
+    // bump — AGP 9.0+ bundles Kotlin support directly and refuses to apply
+    // this plugin (https://issuetracker.google.com/438678642). KSP is bumped
+    // to 2.3.12 (from 2.2.21-2.0.5) to get a version that works with AGP's
+    // built-in Kotlin instead of needing android.builtInKotlin=false.
     alias(libs.plugins.kotlin.compose)
     // AppFunctions (Task 17): its annotation processor generates the service
     // class and app_metadata/schema XML assets from @AppFunction-annotated
@@ -18,9 +24,26 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// CL-35: the opt-in cloud-assist API key, read the same way settings.gradle.kts
+// already reads sdk.dir — an explicit local.properties entry, gitignored, with
+// no fallback that would make a stale value silently carry between machines.
+// Absent or blank means the feature's toggle stays disabled; nothing calls out.
+// Unqualified `java.util.Properties` collides here with AGP's own `java { }`
+// script extension (JavaPluginExtension), which shadows the `java` package
+// prefix — the file-level import above avoids it.
+fun sarvamApiKey(): String {
+    val propsFile = rootProject.file("local.properties")
+    if (!propsFile.isFile) return ""
+    val properties = Properties()
+    propsFile.inputStream().use { properties.load(it) }
+    return properties.getProperty("sarvam.apiKey", "")
+}
+
 android {
     namespace = "com.cues.app"
-    compileSdk = 36
+    // CL-24: bumped 36 -> 37 alongside the AGP 9.1.1 bump above — AppFunctions
+    // (androidx.appfunctions:1.0.0-alpha12) requires compileSdk 37+.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.cues.android"
@@ -33,6 +56,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SARVAM_API_KEY", "\"${sarvamApiKey()}\"")
     }
 
     buildTypes {
@@ -47,6 +71,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -83,6 +108,14 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
+
+    // CL-35: the only caller of INTERNET in this app — Sarvam's REST APIs,
+    // called with the platform's own java.net.http.HttpClient (no new HTTP
+    // dependency needed). kotlinx-serialization-json is already :core's JSON
+    // library (CuesExporter); reused here for parsing Sarvam's responses via
+    // its JsonElement API, same manual-builder style, no new plugin needed
+    // since nothing here is a @Serializable data class.
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

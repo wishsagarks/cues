@@ -29,7 +29,7 @@ data class AssistantReply(
     val text: String get() = ReplyCopy.render(code, args)
 }
 
-enum class ReplySource { PARSER, ON_DEVICE_LLM, RECEIPTS, FORECAST, ROUTINE_STORE }
+enum class ReplySource { PARSER, ON_DEVICE_LLM, SARVAM_CLOUD, RECEIPTS, FORECAST, ROUTINE_STORE }
 
 enum class ReplyCode {
     DRAFT_READY,

@@ -5,6 +5,8 @@ Open Innovation. Hyderabad City Battle, September 26–27, as supplied in the ev
 Status: the offline decision core is implemented and unit-tested. No device integration, no on-device model and no performance results yet.
 
 > **Updated 24 September 2026.** This is the Phase 1 copy as submitted, kept for the record. Current status: the Android app has been built and launched on an emulator, but not on an iQOO. A LiteRT-LM integration exists with no model side-loaded, and there are still no measured results. Before reusing any sentence below, check it against [DISCLOSURE.md](DISCLOSURE.md).
+>
+> **Updated 25 September 2026.** A feature branch (`feat/sarvam-integration`) has since added an optional, opt-in cloud-assist capability built on Sarvam AI's APIs (CLEANUP.md CL-35). The airplane-mode demo claims below describe the default, demonstrated hero loop only — that loop does not use this capability and remains fully offline.
 
 ## Idea title
 

@@ -399,6 +399,7 @@ class CueService(
     private fun DraftSourceId.replySource(): ReplySource = when (this) {
         DraftSourceId.GRAMMAR_PARSER -> ReplySource.PARSER
         DraftSourceId.ON_DEVICE_LLM -> ReplySource.ON_DEVICE_LLM
+        DraftSourceId.SARVAM_CLOUD -> ReplySource.SARVAM_CLOUD
         // Never actually reached today: a Cue Card import goes straight to
         // Review, not through converse(). Kept exhaustive anyway, because an
         // exhaustive `when` is exactly what caught every other drafter

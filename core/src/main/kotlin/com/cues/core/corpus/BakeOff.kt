@@ -50,8 +50,17 @@ object BakeOff {
             wrongMeaningAccepts = wrongMeaning,
             p50Millis = percentile(.5),
             p95Millis = percentile(.95),
-            runtime = if (drafter.id == DraftSourceId.GRAMMAR_PARSER) "kotlin" else "on-device",
-            backend = if (drafter.id == DraftSourceId.GRAMMAR_PARSER) "grammar" else "llm",
+            runtime = when (drafter.id) {
+                DraftSourceId.GRAMMAR_PARSER -> "kotlin"
+                DraftSourceId.SARVAM_CLOUD -> "cloud"
+                else -> "on-device"
+            },
+            backend = when (drafter.id) {
+                DraftSourceId.GRAMMAR_PARSER -> "grammar"
+                DraftSourceId.SARVAM_CLOUD -> "sarvam-105b"
+                else -> "llm"
+            },
+            networkOn = drafter.id == DraftSourceId.SARVAM_CLOUD,
         )
     })
 }

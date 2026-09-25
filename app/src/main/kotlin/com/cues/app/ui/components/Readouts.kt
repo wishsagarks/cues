@@ -94,7 +94,7 @@ fun CountdownRing(
     }
 }
 
-/** A pill chip surfacing a provable claim ("NO INTERNET PERMISSION"). Tap opens an evidence sheet. */
+/** A pill chip surfacing a provable claim ("NO NETWORK AT RUNTIME"). Tap opens an evidence sheet. */
 @Composable
 fun TrustChip(text: String, onClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val t = cuesTokens

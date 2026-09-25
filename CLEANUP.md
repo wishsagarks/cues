@@ -838,13 +838,40 @@ introduced here. Tracked separately as CL-28 rather than fixed in this
 pass, since fixing it means deciding how a manual trigger identifies its
 target routine, a design question bigger than this file.
 
+**Update, 25 Sep 2026 — `./dev b` now succeeds; `kspDebugKotlin` has run for
+the first time.** CL-35's Sarvam work needed `:app` to actually build, which
+surfaced that it could not: `androidx.appfunctions:1.0.0-alpha12`'s own AAR
+metadata requires AGP 9.1.0+/compileSdk 37, and this project was pinned to
+AGP 8.7.3/compileSdk 36 — `checkDebugAarMetadata` failed before any Kotlin
+compiled, appfunctions or otherwise. Bumped: `agp` 8.7.3 → 9.1.1 (the newest
+patch of the minimum required minor version), `compileSdk` 36 → 37, `ksp`
+2.2.21-2.0.5 → 2.3.12 (the pinned KSP could not apply under AGP 9's built-in
+Kotlin; a newer KSP could), and the Gradle wrapper 8.14.3 → 9.3.1 (AGP
+9.1.1's stated minimum). `org.jetbrains.kotlin.android` was removed from
+`app/build.gradle.kts` — AGP 9+ bundles Kotlin support and refuses to apply
+it. Versions confirmed from
+https://developer.android.com/build/releases/past-releases/agp-9-1-0-release-notes
+and Maven/dl.google.com's own metadata, not guessed.
+
+With that bump: `./dev b` builds a debug APK, `kspDebugKotlin` runs without
+error (so AppFunctions' annotation processing executes for the first time —
+not verified equal to the manifest's declared service/asset names, just
+verified to run), the APK installs and launches cleanly on an emulator
+(`Cues_Pixel_9`, API 35), and a full type-a-cue → parser draft → Review
+round trip was exercised there with no crash. **Still not done:** no
+`adb shell cmd app_function list-app-functions`/`execute-app-function` check
+on-device (the AppFunctions-specific part of "remove when," unchanged below);
+this AGP/Gradle/KSP bump itself has run only on this one emulator, never on
+the iQOO loaner; and CL-04's original "every version below is a considered
+guess, the first build on the laptop confirms them" now applies to this new
+set of versions too, not the old ones.
+
 **Remove when:** M7 records what the handoff resolves to on the loaner, and
 the card's label matches that result ("Jovi" only if the probe resolves to
 Jovi, otherwise "system assistant"). The AppFunctions half retires
-separately: `./dev b`/`./dev perms` compile this on the laptop, `adb shell
-cmd app_function list-app-functions` on the loaner shows all four
-functions, and `adb shell cmd app_function execute-app-function` actually
-runs `draftCue` and produces a real reviewable draft in the app.
+separately: `adb shell cmd app_function list-app-functions` on the loaner
+shows all four functions, and `adb shell cmd app_function execute-app-function`
+actually runs `draftCue` and produces a real reviewable draft in the app.
 
 ---
 
@@ -1452,3 +1479,73 @@ Checks has been read on the loaner with a realistic ledger, and the figure
 is recorded in `docs/MEASUREMENTS.md` with its source. If it exceeds 300 ms,
 or file reads dominate, first move the ledger to a single append-only file
 (plan §10.2) before considering SQLite/Room.
+
+---
+
+## CL-35 — Sarvam cloud assist: the app's first network path, opt-in and unverified on a device
+
+**Status:** open · **Raised:** 25 Sep 2026
+
+Cues has been offline-only since the project started — `INTERNET` was
+declared and then `tools:node="remove"`'d the first time a dependency merged
+it in accidentally (CL-06/R4), and `./dev perms` failed the build if it ever
+reappeared. This sprint adds it back deliberately: an opt-in "cloud language
+assist" feature backed by Sarvam AI (translate, transliterate, chat
+completion, speech-to-text, text-to-speech), for regional-Indian-language
+cue drafting, a translated read-back of the assistant's reply, and a cloud
+chat model consulted as an explicit third opinion when the offline
+grammar/on-device-model pair disagrees or both fail.
+
+**What makes this safe, by construction:**
+- Off by default. `AskScreen`'s "Cloud language assist" switch only appears
+  when `BuildConfig.SARVAM_API_KEY` is non-blank, and even then defaults to
+  unchecked every launch (`CuesApplication.cloudAssistAvailable`,
+  `MainActivity.kt`'s `cloudAssistEnabled` state).
+- Authoring-time only. Every Sarvam call happens before approval — regional
+  voice input translates into the existing `GrammarParser`/`OnDeviceLlmDrafter`
+  pipeline unchanged, and the cloud chat drafter (`SarvamChatDrafter`,
+  `DraftSourceId.SARVAM_CLOUD`) is independently validated exactly like the
+  on-device model (`CuesApplication.tryCloudAssist`, mirroring
+  `DifferentialDrafter.guarded`). Nothing downstream of approval touches it.
+- Provenance is honest. A cloud draft is labeled `SARVAM_CLOUD` end to end
+  (`ReplySource.SARVAM_CLOUD`, the diagnostics screen, the receipt); a
+  translated string is always shown labeled "via Sarvam (online)" next to
+  the original English, never replacing it.
+
+**What is not verified:**
+1. No Sarvam call has ever been exercised against a live API key — the
+   endpoint/payload shapes in `SarvamClient.kt` are read from
+   https://docs.sarvam.ai on 25 Sep 2026, not confirmed against a real
+   response. `sarvam/test_sarvam.py`'s six-call smoke test uses Sarvam's
+   Python SDK, not this Kotlin client, so it does not confirm this code path.
+2. ~~`:app` cannot currently be compiled at all in this environment~~ —
+   **resolved 25 Sep 2026** by the AGP 9.1.1/compileSdk 37/KSP 2.3.12/Gradle
+   9.3.1 bump this same entry needed (full detail in CL-24's update). `./dev b`
+   now succeeds, `./dev perms` confirms `INTERNET` is present, and the APK
+   installs and runs on an emulator (`Cues_Pixel_9`, API 35) with a full
+   type-a-cue → parser draft → Review round trip and no crash. This confirms
+   the Sarvam Kotlin in this entry *compiles* — it still does not confirm any
+   of it *works*, since no Sarvam API key has been exercised (item 1 above)
+   and the cloud-assist toggle, being off with no key configured, was never
+   itself on screen during that emulator run.
+3. `SarvamSpeechInput` records for a fixed 6-second window rather than
+   detecting silence — a deliberate simplification, not a measured choice.
+4. The translated read-back only offers Hindi (`hi-IN`) — there is no
+   language-picker UI.
+5. `HomeScreen.kt`'s "Speak replies" toggle (and the parallel pattern this
+   entry's own cloud-assist switch follows) is itself dead code in the
+   redesigned app — `AskScreen.kt` is what's live, which is where this
+   sprint's toggle actually lives instead.
+6. Fixed in the same emulator pass: `NowScreen.kt`'s "NO INTERNET PERMISSION"
+   trust chip was a hardcoded claim that the AGP bump's `INTERNET` permission
+   made false the moment it rendered. Changed to "NO NETWORK AT RUNTIME" —
+   the invariant that's actually still true (nothing downstream of approval
+   touches the network) and the one this chip was always meant to assert.
+
+**Remove when:** a real device session calls each Sarvam endpoint once with a
+configured key and records the actual response shape against
+`SarvamClient.kt`, exercises the cloud-assist toggle, regional voice input
+and translated read-back on screen, and this AGP/Gradle/KSP bump has also run
+on the iQOO loaner, not only this one emulator. Until then, do not claim any
+Sarvam call works — only that the app compiles, installs and runs with the
+feature off.

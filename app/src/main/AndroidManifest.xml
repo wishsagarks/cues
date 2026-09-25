@@ -45,13 +45,16 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
-      R4 (CLEANUP.md CL-06): com.google.android.datatransport:transport-backend-cct,
-      a telemetry dependency pulled in transitively through MediaPipe's GenAI
-      library, merges this in. Cues has no network path — see CLAUDE.md and
-      "Not in these sprints" in docs/SPRINT_4_5.md — so it is removed rather
-      than carried as an unused, unexplainable permission on the review screen.
+      CL-35: the one, opt-in exception to "no network." Used only by the
+      cloud language assist feature (Sarvam AI) — off by default, gated on a
+      user-visible toggle and a configured API key, and never on any path
+      downstream of approval. See docs/PERMISSIONS.md and docs/FDD.md's
+      "Optional cloud assist" section. Previously removed via
+      tools:node="remove" (R4/CL-06) because nothing used it; now it is used,
+      deliberately, so it is declared rather than left as a dependency-merged
+      accident.
     -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

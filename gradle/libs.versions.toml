@@ -16,7 +16,14 @@ coroutines = "1.10.2"
 junit = "5.14.4"
 
 # --- unverified from here down: confirm on first laptop build ---
-agp = "8.7.3"
+# agp: bumped 8.7.3 -> 9.1.1 (CL-24) — androidx.appfunctions:1.0.0-alpha12 and
+# its androidx.appsearch:1.1.0 dependency require AGP 9.1.0+/compileSdk 37;
+# 8.7.3 could not even pass checkDebugAarMetadata. 9.1.1 is the newest patch
+# of the exact minimum required minor version (9.1.0), chosen over jumping to
+# a later minor (9.2+) to keep the rest of this bump as small as possible.
+# Requires Gradle 9.3.1+ (gradle-wrapper.properties) and KGP 2.2.10+ (already
+# on 2.2.21) — confirmed from https://developer.android.com/build/releases/past-releases/agp-9-1-0-release-notes.
+agp = "9.1.1"
 composeBom = "2024.12.01"
 androidxCore = "1.15.0"
 splashscreen = "1.0.1"
@@ -73,7 +80,7 @@ appfunctions = "1.0.0-alpha12"
 # com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin — reachable
 # even where dl.google.com is blocked, since KSP resolves from Central/the
 # Gradle Plugin Portal, not Google's Maven.
-ksp = "2.2.21-2.0.5"
+ksp = "2.3.12"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

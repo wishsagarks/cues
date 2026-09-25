@@ -81,6 +81,16 @@ enum class DraftSourceId {
      * label is ever attached; see `CueCards.reimport`.
      */
     IMPORTED_CARD,
+
+    /**
+     * A cloud chat model (Sarvam), consulted only when the user has opted
+     * into cloud assist and the offline drafters above disagreed or both
+     * failed. Its prose is never trusted as structure — it is re-parsed by
+     * the same [GrammarParser][com.cues.core.drafting.GrammarParser] and
+     * independently validated exactly like [ON_DEVICE_LLM] — and it never
+     * appears downstream of approval. See CLEANUP.md CL-35.
+     */
+    SARVAM_CLOUD,
 }
 
 @Serializable

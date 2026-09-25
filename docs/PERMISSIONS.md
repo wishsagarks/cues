@@ -1,10 +1,12 @@
 # Permissions
 
 What `app/src/main/AndroidManifest.xml` declares, why, and when the user is
-asked. Checked against the source manifest on 24 September 2026. The
-**merged** manifest (the source plus what dependencies merge in) is checked
-by `./dev perms`, which fails if `INTERNET` appears. That check was not
-re-run for this revision; see [DISCLOSURE.md](DISCLOSURE.md).
+asked. Checked against the source manifest on 24 September 2026, updated 25
+September 2026 for CL-35's `INTERNET` permission. The **merged** manifest
+(the source plus what dependencies merge in) is checked by `./dev perms`,
+which now fails if `INTERNET` is *missing* rather than if it appears — see
+CLEANUP.md CL-35. That check was not re-run for this revision; see
+[DISCLOSURE.md](DISCLOSURE.md).
 
 The rule: every permission belongs to a named action, adapter or screen.
 Capabilities a cue needs are derived from its actions and signals by
@@ -26,7 +28,12 @@ when the app resumes, and arming re-checks them live.
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` | Normal | `SessionService`, the visible running session | Install time |
 | `CAMERA` | Runtime | Timetable capture and Cue Card QR scan only, released when the screen closes | On opening either capture screen. The Photo Picker route needs no permission |
 | `com.android.alarm.permission.SET_ALARM` | Normal | `SET_ALARM` handoff to the clock app, which the platform requires to invoke `ACTION_SET_ALARM` | Install time. The clock app still shows its own confirm screen |
-| `INTERNET` | **Removed** (`tools:node="remove"`) | Nothing. Dependencies have merged it in before (R4) | Never |
+| `INTERNET` | Normal | Cloud language assist only (CLEANUP.md CL-35) — Sarvam AI's translate, speech-to-text, text-to-speech and chat completion calls. No other feature calls out | Install time (a normal permission, granted automatically), but the feature itself stays off until the user turns on "Cloud language assist" in Ask, and only if `BuildConfig.SARVAM_API_KEY` is configured |
+
+`INTERNET` was `tools:node="remove"`'d from 4.5 through this sprint (R4/CL-06)
+because nothing used it. It is declared again, deliberately, for CL-35 — not
+a dependency-merged accident this time. `./dev perms` now expects it present
+and fails if it is *missing*, the inverse of what it checked before.
 
 `USE_EXACT_ALARM` is granted without a prompt, but Google Play restricts it to
 alarm-clock and calendar apps. That doesn't affect a side-loaded event build.
@@ -51,6 +58,7 @@ they launch, and nothing about their data.
 ## Deliberately absent
 
 No location (fine or coarse), no background microphone, no notification-listener
-access, no `QUERY_ALL_PACKAGES`, no storage/media permission, no
-`SYSTEM_ALERT_WINDOW`, and no network. Adding any of them needs a CLEANUP entry
-and a line in this file first.
+access, no `QUERY_ALL_PACKAGES`, no storage/media permission, and no
+`SYSTEM_ALERT_WINDOW`. Adding any of them needs a CLEANUP entry and a line in
+this file first — as CL-35 did for `INTERNET` above, the one exception to
+"no network" the app now has.

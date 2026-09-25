@@ -100,6 +100,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var localSpeechInput: LocalSpeechInput
     private lateinit var replySpeaker: com.cues.app.voice.ReplySpeaker
 
+    /** `null` whenever cloud assist has no configured API key — see CuesApplication.cloudAssistAvailable, CLEANUP.md CL-35. */
+    private var sarvamClient: com.cues.app.net.SarvamClient? = null
+    private var sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null
+    private var sarvamReadback: com.cues.app.voice.SarvamReadback? = null
+
     private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
     private var newCueShortcutTick by androidx.compose.runtime.mutableStateOf(0)
     private var startRoutineShortcutId by androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -137,6 +142,12 @@ class MainActivity : ComponentActivity() {
         val app = application as CuesApplication
         localSpeechInput = LocalSpeechInput(this)
         replySpeaker = com.cues.app.voice.ReplySpeaker(this)
+        if (app.cloudAssistAvailable) {
+            val client = com.cues.app.net.SarvamClient(BuildConfig.SARVAM_API_KEY)
+            sarvamClient = client
+            sarvamSpeechInput = com.cues.app.voice.SarvamSpeechInput(this, client)
+            sarvamReadback = com.cues.app.voice.SarvamReadback(this, client)
+        }
         incomingScreenText = sharedOrCapturedText(intent)
         applyShortcutIntent(intent)
 
@@ -150,10 +161,15 @@ class MainActivity : ComponentActivity() {
                     monitoring = app.monitoring,
                     adapterHealth = { app.adapterSupervisor.health() },
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
-                    runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices()) },
+                    runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices(), com.cues.app.BuildConfig.SARVAM_API_KEY) },
                     localSpeechInput = localSpeechInput,
                     pairedDevices = app::pairedDevices,
                     replySpeaker = replySpeaker,
+                    cloudAssistAvailable = app.cloudAssistAvailable,
+                    tryCloudAssist = app::tryCloudAssist,
+                    sarvamSpeechInput = sarvamSpeechInput,
+                    sarvamReadback = sarvamReadback,
+                    translateToEnglish = { text -> sarvamClient?.translate(text, sourceLanguageCode = "auto", targetLanguageCode = "en-IN")?.translatedText ?: text },
                     testUtilityAction = app::testUseUtility,
                     incomingScreenText = incomingScreenText,
                     newCueShortcutTick = newCueShortcutTick,
@@ -223,6 +239,7 @@ private fun DraftSourceId.friendlyLabel(): String = when (this) {
     DraftSourceId.GRAMMAR_PARSER -> "GRAMMAR PARSER"
     DraftSourceId.ON_DEVICE_LLM -> "ON-DEVICE MODEL"
     DraftSourceId.IMPORTED_CARD -> "IMPORTED CARD"
+    DraftSourceId.SARVAM_CLOUD -> "SARVAM (ONLINE)"
 }
 
 @Composable
@@ -238,6 +255,11 @@ private fun CuesApp(
     localSpeechInput: LocalSpeechInput,
     pairedDevices: () -> List<PairedDevice>,
     replySpeaker: com.cues.app.voice.ReplySpeaker,
+    cloudAssistAvailable: Boolean = false,
+    tryCloudAssist: suspend (String) -> com.cues.core.drafting.DraftResult = { com.cues.core.drafting.DraftResult.Failed(DraftSourceId.SARVAM_CLOUD, "Cloud assist is not configured.") },
+    sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null,
+    sarvamReadback: com.cues.app.voice.SarvamReadback? = null,
+    translateToEnglish: suspend (String) -> String = { it },
     testUtilityAction: (com.cues.core.model.UtilityId, com.cues.core.model.UtilityState) -> com.cues.core.ports.ActionOutcome,
     incomingScreenText: String? = null,
     newCueShortcutTick: Int = 0,
@@ -263,6 +285,12 @@ private fun CuesApp(
     val conversation = remember { Conversation() }
     var assistantTurns by remember { mutableStateOf<List<Turn>>(emptyList()) }
     var speakReplies by remember { mutableStateOf(false) }
+    // CL-35: off by default even when a key is configured — cloud assist is
+    // an explicit, per-session opt-in, not a standing preference read from
+    // storage. Mirrors speakReplies' own in-memory-only pattern above.
+    var cloudAssistEnabled by remember { mutableStateOf(false) }
+    var isTryingCloudAssist by remember { mutableStateOf(false) }
+    val cloudAssistOn = cloudAssistEnabled && cloudAssistAvailable
     var utilityTestResult by remember { mutableStateOf<String?>(null) }
     val coachPolicy = remember { CoachPolicy(store) }
     var coachSuggestion by remember {
@@ -341,12 +369,92 @@ private fun CuesApp(
         }
     }
 
+    /**
+     * The regional-language mic button's data flow (docs/FDD.md's "Optional
+     * cloud assist" section, architecture decision 3): record → Sarvam STT →
+     * Sarvam translate to en-IN → hand the English string to the existing,
+     * untouched draft pipeline exactly as typed English input already is.
+     * Both strings reach [onResult] so the caller can show/correct either
+     * before submitting — [LocalSpeechInput]'s default mic button is
+     * completely untouched by this.
+     */
+    fun startCloudVoice(onResult: (original: String, translated: String) -> Unit, onError: (String) -> Unit) {
+        val input = sarvamSpeechInput
+        if (input == null) {
+            onError("Cloud assist is not available.")
+            return
+        }
+        scope.launch {
+            when (val result = input.listen()) {
+                is com.cues.core.ports.SpeechResult.Recognized -> {
+                    val translated = try {
+                        translateToEnglish(result.transcript)
+                    } catch (e: Exception) {
+                        result.transcript
+                    }
+                    onResult(result.transcript, translated)
+                }
+                is com.cues.core.ports.SpeechResult.PermissionDenied ->
+                    onError("Microphone access was not granted. Type your cue instead.")
+                is com.cues.core.ports.SpeechResult.NoMatch ->
+                    onError("No speech was recognised. You can correct or type your cue instead.")
+                is com.cues.core.ports.SpeechResult.Unavailable ->
+                    onError("Cloud speech is unavailable right now. Type your cue instead.")
+                is com.cues.core.ports.SpeechResult.Failed ->
+                    onError("${result.reason} Type your cue instead.")
+            }
+        }
+    }
+
+    /**
+     * Translated read-back of the assistant's own reply text (docs/FDD.md's
+     * "Optional cloud assist" section, architecture decision 4) — never
+     * [ReplySpeaker]'s job, since the translation is genuinely different text
+     * from what Cues rendered. Hindi is the only target offered today; there
+     * is no language-picker UI yet (CLEANUP.md CL-35).
+     */
+    fun startCloudReadback(englishText: String, onDone: (String) -> Unit, onError: (String) -> Unit) {
+        val readback = sarvamReadback
+        if (readback == null) {
+            onError("Cloud assist is not available.")
+            return
+        }
+        scope.launch {
+            try {
+                onDone(readback.translateAndSpeak(englishText, targetLanguageCode = "hi-IN"))
+            } catch (e: Exception) {
+                onError(e.message ?: "Could not translate and speak that reply.")
+            }
+        }
+    }
+
     fun runBakeOffNow() {
         isBakingOff = true
         scope.launch {
             bakeOffReport = runBakeOff().render()
             isBakingOff = false
         }
+    }
+
+    /**
+     * The explicit, opt-in "third opinion" (docs/FDD.md's "Optional cloud
+     * assist" section): reached only from here, only after the offline pair
+     * already disagreed or both failed, and only with cloud assist on.
+     * [tryCloudAssist] independently validates its own result, so a
+     * [com.cues.core.drafting.DraftResult.Drafted] here is exactly as trusted
+     * as any other draft reaching Review.
+     */
+    suspend fun offerCloudAssist(fallbackMessage: String, text: String) {
+        isTryingCloudAssist = true
+        when (val result = tryCloudAssist(text)) {
+            is com.cues.core.drafting.DraftResult.Drafted -> {
+                missingCapabilities = emptySet()
+                reviewDraft = result.routine
+                navController.navigate(CuesRoutes.REVIEW)
+            }
+            else -> notify(fallbackMessage)
+        }
+        isTryingCloudAssist = false
     }
 
     fun draft(text: String) {
@@ -371,13 +479,16 @@ private fun CuesApp(
                 turn.reply.code == ReplyCode.NEEDS_CLARIFICATION -> {
                     val ids = turn.reply.chips.filterIsInstance<com.cues.core.assistant.ReplyChip.Choice>().map { it.id }.toSet()
                     val candidates = pairedDevices().filter { it.id in ids }
-                    if (candidates.isNotEmpty()) {
-                        deviceSourceText = text
-                        deviceCandidates = candidates
-                    } else {
-                        notify(turn.reply.text)
+                    when {
+                        candidates.isNotEmpty() -> {
+                            deviceSourceText = text
+                            deviceCandidates = candidates
+                        }
+                        cloudAssistOn -> offerCloudAssist(turn.reply.text, text)
+                        else -> notify(turn.reply.text)
                     }
                 }
+                cloudAssistOn && turn.reply.code == ReplyCode.DRAFT_FAILED -> offerCloudAssist(turn.reply.text, text)
                 else -> notify(turn.reply.text)
             }
             isDrafting = false
@@ -468,6 +579,12 @@ private fun CuesApp(
                         onDraft = ::draft,
                         drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
                         onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
+                        cloudAssistAvailable = cloudAssistAvailable,
+                        cloudAssistEnabled = cloudAssistEnabled,
+                        onToggleCloudAssist = { cloudAssistEnabled = !cloudAssistEnabled },
+                        onStartCloudVoice = ::startCloudVoice,
+                        isTryingCloudAssist = isTryingCloudAssist,
+                        onTranslateReadback = ::startCloudReadback,
                         deviceCandidates = deviceCandidates,
                         onSelectDevice = { device ->
                             val source = deviceSourceText

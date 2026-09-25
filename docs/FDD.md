@@ -106,13 +106,39 @@ The digest detects an accidental mismatch with approved data; it is not a securi
 
 ## Input and compilation
 
-Use a verified offline speech engine. Android exposes an on-device availability check; availability and downloaded language support must be tested on the phone. The local language model can be Gemma/Phi class or another suitable small model, but choose it based on actual latency, memory and correctness. Do not assume NPU support for either model.
+Use a verified offline speech engine for the default, always-available path; see "Optional cloud assist (Sarvam)" below for the opt-in exception. Android exposes an on-device availability check; availability and downloaded language support must be tested on the phone. The local language model can be Gemma/Phi class or another suitable small model, but choose it based on actual latency, memory and correctness. Do not assume NPU support for either model.
 
 Grammar constraints, if supported by the chosen runtime, limit output shape. Independent validation still checks supported types, numeric ranges, resolved entities, contradictory predicates and semantic completeness. A correctly shaped rule can misunderstand “unless”, negate a condition or attach the wrong device.
 
 Never discard an unsupported clause to make a request fit. Return a clarification or a readable limitation. User-visible review derives from the normalized rule, not a fresh model-generated paraphrase.
 
 Speech reference: [Android SpeechRecognizer](https://developer.android.com/reference/android/speech/SpeechRecognizer).
+
+### Optional cloud assist (Sarvam)
+
+An opt-in "cloud language assist" backed by Sarvam AI (translate, speech-to-text,
+text-to-speech, chat completion) exists for regional-Indian-language cue
+drafting, a translated read-back of the assistant's reply, and a cloud chat
+model consulted as an explicit third opinion when the offline
+grammar/on-device-model pair disagrees or both fail. It is off by default even
+when a key is configured — the switch only appears when
+`BuildConfig.SARVAM_API_KEY` is non-blank, and still starts unchecked every
+launch.
+
+Every Sarvam call happens at authoring time only, before approval. It does not
+change where the trust boundary sits: nothing downstream of approval consults
+a model, cloud or local, and the cloud chat drafter is no exception. Its
+output re-enters the same `GrammarParser` compilation and independent
+validation the on-device model's output already goes through — the same
+clause accounting, type/range/entity checks and the same never-discard-a-clause
+rule above apply regardless of which drafter produced the text.
+
+Provenance is never blurred. A draft produced by the cloud chat path is
+labelled `DraftSourceId.SARVAM_CLOUD`; a reply it drafts carries
+`ReplySource.SARVAM_CLOUD`; a translated string is shown labelled "Translated
+via Sarvam (online)" next to the original English, never replacing it. See
+CLEANUP.md CL-35 for what is and is not verified about this path, and
+docs/API_VERIFICATION.md for the endpoints it calls.
 
 ## Event and context adapters
 
@@ -249,7 +275,7 @@ What `:app` cannot yet prove on the phone is listed row by row in
 
 ## Security and privacy
 
-Keep transcripts, rules and receipts in private local storage with bounded retention settings. Raw audio need not persist after transcription. Model assets may require an initial download, but no network request is allowed in the demonstrated authoring or runtime paths after provisioning.
+Keep transcripts, rules and receipts in private local storage with bounded retention settings. Raw audio need not persist after transcription. Model assets may require an initial download, but no network request is allowed in the demonstrated authoring or runtime paths after provisioning, in the default path — see "Optional cloud assist (Sarvam)" above for the opt-in exception.
 
 Sharing typed data removes a need to transfer executable code; it does not make arbitrary routines safe. Future imports require size/depth limits, schema validation, entity rebinding, permission preflight and user approval. Disable imports that request unsupported behavior. Review external effects separately if they are ever introduced.
 

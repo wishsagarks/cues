@@ -2,7 +2,7 @@
 
 **Context you declare. Behaviour that ends.**
 
-A proposed Android app for iQOO smartphones. The unit is a **cue**: a context you name, and the behaviour that begins and ends with it. A user speaks a cue, reviews its complete behaviour — including how it ends — and approves a persistent local rule. Speech recognition and rule drafting run on the device. After approval, ordinary Android code responds to device events; no model and no network participate in runtime decisions.
+A proposed Android app for iQOO smartphones. The unit is a **cue**: a context you name, and the behaviour that begins and ends with it. A user speaks a cue, reviews its complete behaviour — including how it ends — and approves a persistent local rule. Speech recognition and rule drafting run on the device. After approval, ordinary Android code responds to device events; no model and no network participate in runtime decisions in the default path (CLEANUP.md CL-35 covers the opt-in exception).
 
 Cues is deliberately not an automation or workflow builder, and does not try to develop a deep understanding of its user. Context is **declared, not inferred** — a cue uses only the signals you attach to it and knows nothing else.
 
@@ -118,6 +118,10 @@ Kit is used only as a file and clipboard transport. No OriginOS API is assumed.
 OEM packages, Origin Island rendering and utility toggles are discovered on
 the device and recorded before anything depends on them. The OriginOS 7
 visual pass borrows motion and material quality, not iQOO branding.
+
+Cues' first optional network path is an opt-in cloud language assist backed
+by Sarvam AI, off by default and confined to authoring time, never the
+runtime path above (CLEANUP.md CL-35).
 
 ## Building
 

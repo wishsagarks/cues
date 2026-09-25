@@ -15,13 +15,13 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 
 ## AppFunctions
 
-**Written, not compiled.** Task 17 (`app/.../appfunctions/CuesAppFunctionService.kt`) implements `draftCue`, `forecastToday`, `currentContext`, `startCue` and `stopCue`, with the dependency, KSP plugin and manifest service declared. None of it has run — no Android SDK in the environment that wrote it, so KSP has never generated the service class or its XML assets. See CLEANUP.md CL-24.
+**Compiled, not confirmed on a device.** Task 17 (`app/.../appfunctions/CuesAppFunctionService.kt`) implements `draftCue`, `forecastToday`, `currentContext`, `startCue` and `stopCue`, with the dependency, KSP plugin and manifest service declared. As of 25 Sep 2026 (CL-24's update), `kspDebugKotlin` has run for the first time — an AGP 9.1.1/compileSdk 37/KSP 2.3.12 bump (CL-35 needed `:app` to build at all) got past the AAR-metadata block that had prevented any Kotlin here from compiling. That confirms the generated code compiles; it does not confirm the generated service class name, `app_functions_schema.xsd`, `cues_app_function_service.xml` or `@xml/app_metadata` actually match what the manifest references, or that `adb shell cmd app_function` can see or call any of it — those still need a real device check. See CLEANUP.md CL-24.
 
 - Re-verified 24 Sep 2026 (superseding this file's earlier alpha11 note, which had never been checked against an actual snippet): Android platform App Functions require API 36 and remain a preview. **Current Jetpack release is `1.0.0-alpha12`** — confirmed both from the release-notes page and from every relevant reference page (`AppFunctionService`, `AppFunction`, `AppFunctionSerializable`, `AppFunctionServiceEntryPoint`, `AppFunctionElementNotFoundException`, `AppFunctionInvalidArgumentException`) independently saying "Added in 1.0.0-alpha12".
 - The architecture changed since this file's first pass: alpha10 introduced `@AppFunctionServiceEntryPoint`, which now generates the concrete service class and consolidates what used to be a separate `appfunctions-service` artifact and an `AppFunctionConfiguration.Provider`. Only two dependencies are needed: `androidx.appfunctions:appfunctions` (`implementation`) and `androidx.appfunctions:appfunctions-compiler` (`ksp`) — there is no current `appfunctions-service` artifact to add separately.
 - Functions are annotated `@AppFunction(isDescribedByKDoc = true)` inside an `@AppFunctionServiceEntryPoint`-annotated `abstract class ... : AppFunctionService()`; parameter/return types are `@AppFunctionSerializable` data classes. `AppFunctionInvalidArgumentException`/`AppFunctionElementNotFoundException` are the predefined ways to fail a call.
 - The manifest declares the KSP-generated `<service>` (`BIND_APP_FUNCTION_SERVICE`, an `AppFunctionService` intent-filter, and `schema`/`v2` `<property>` entries naming KSP-generated XML assets) plus one app-wide `app_metadata` `<property>`, also KSP-generated — none of these four generated artifacts have actually been produced here to confirm the manifest's exact naming matches.
-- KSP itself is pinned to `2.2.21-2.0.5`, matching this project's exact Kotlin version, confirmed from Maven Central's own `maven-metadata.xml` — reachable even where `dl.google.com` is blocked, since KSP resolves from Central/the Gradle Plugin Portal rather than Google's Maven.
+- KSP was pinned to `2.2.21-2.0.5` (matching this project's exact Kotlin version) until 25 Sep 2026, when CL-24/CL-35's AGP 9.1.1 bump required KSP `2.3.12` instead — the old pin's paired Kotlin-version scheme could not apply under AGP 9's built-in Kotlin compilation. Confirmed from Maven Central's own `maven-metadata.xml` — reachable even where `dl.google.com` is blocked, since KSP resolves from Central/the Gradle Plugin Portal rather than Google's Maven.
 - Kept from the original plan: retain ordinary in-app/Jovi-launch handoff (`IntentRouter`/`ACTION_ASSIST`) when OriginOS does not discover this provider.
 - Source: https://developer.android.com/jetpack/androidx/releases/appfunctions
 - Source: https://developer.android.com/ai/appfunctions/add-appfunctions
@@ -72,6 +72,50 @@ TTS is integrated (`ReplySpeaker`, CL-19). Shortcuts are **not built** (Task 9 l
 - Static and dynamic shortcuts launch app-owned intents; dynamic routine shortcuts remain bounded by the device launcher limit.
 - Source: https://developer.android.com/reference/android/speech/tts/TextToSpeech
 - Source: https://developer.android.com/develop/ui/compose/system/shortcuts/creating-shortcuts
+
+## Sarvam AI (cloud language assist)
+
+**Written, not compiled or called with a real key.** CLEANUP.md CL-35: the
+app's first network dependency, opt-in only. No official Kotlin/Java SDK
+exists — Sarvam publishes a Python SDK only (`sarvamai`, used by
+`sarvam/test_sarvam.py`'s six-call smoke test) — so `app/.../net/SarvamClient.kt`
+calls the REST API directly with `java.net.HttpURLConnection`, adding no new
+HTTP dependency. Deliberately not Java 11's `java.net.http.HttpClient`: that
+newer client is only available on Android API 34+, while this app's minSdk
+is 29 — `HttpURLConnection` has been present since API 1.
+`kotlinx-serialization-json` is reused for parsing (already `:core`'s JSON
+library via `CuesExporter`; used here through its `JsonElement`/
+`buildJsonObject` API, not `@Serializable` classes, so no new Gradle plugin
+is needed either).
+
+- Endpoints, headers and payload shapes below were read from
+  https://docs.sarvam.ai on 25 Sep 2026 — not yet confirmed against a live
+  response; see CLEANUP.md CL-35.
+- Auth: header `api-subscription-key: <key>` on every call (matches
+  `sarvam/test_sarvam.py`'s `SarvamAI(api_subscription_key=...)`).
+- Translate — `POST https://api.sarvam.ai/translate`, JSON body
+  (`input`, `source_language_code`, `target_language_code`), JSON response
+  (`translated_text`, `source_language_code`). `source_language_code: "auto"`
+  is used throughout rather than a separate language-identification call.
+- Speech-to-text (Saaras) — `POST https://api.sarvam.ai/speech-to-text`,
+  `multipart/form-data` with a `file` field (Cues sends a 16kHz mono PCM WAV
+  it records itself via `AudioRecord` — see `SarvamSpeechInput.kt`), JSON
+  response with `transcript`/`language_code`.
+- Text-to-speech (Bulbul) — `POST https://api.sarvam.ai/text-to-speech`, JSON
+  body (`text`, `language_code`, `speaker`, `model`), JSON response with
+  `audios: [base64 WAV]` — decoded and played via `android.media.MediaPlayer`
+  from a cache-dir temp file (`SarvamReadback.kt`).
+- Chat completion (`sarvam-105b`) — `POST https://api.sarvam.ai/v1/chat/completions`,
+  same auth header, OpenAI-shaped `messages`/`choices` JSON. Used only by
+  `SarvamChatDrafter`, and only as an explicit, opt-in third opinion after the
+  offline grammar/on-device-model pair disagrees or both fail — never in the
+  default pipeline. Its output is re-parsed by `GrammarParser` and
+  independently validated exactly like `OnDeviceLlmDrafter`'s output; see
+  `docs/FDD.md`'s "Optional cloud assist" section.
+- Source: https://docs.sarvam.ai/api-reference-docs/translate/translate-text
+- Source: https://docs.sarvam.ai/api-reference-docs/speech-to-text/transcribe
+- Source: https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
+- Source: https://docs.sarvam.ai/api-reference-docs/chat/chat-completions
 
 ## Dependency policy
 

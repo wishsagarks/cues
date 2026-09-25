@@ -19,7 +19,7 @@
 #   ./dev bo             score the checked-in corpus (not a device measurement)
 #   ./dev demo           offline scripted demo, CLI only, transcript to evidence/
 #   ./dev b              assemble debug APK
-#   ./dev perms          dump merged-manifest permissions (R4)
+#   ./dev perms          dump merged-manifest permissions (expects INTERNET, CL-35)
 #   ./dev i              install on the connected device
 #   ./dev r              install and launch
 #   ./dev w [host:port]  wireless adb: pair / connect
@@ -160,12 +160,12 @@ case "$cmd" in
     out="$(mktemp)"
     "$aapt" dump permissions "$apk" | tee "$out"
     if grep -q 'android.permission.INTERNET' "$out"; then
-      red "INTERNET is present in the merged manifest — R4 fails. See CLEANUP.md."
+      ok "INTERNET is present in the merged manifest — intentional (CL-35, cloud assist). See docs/PERMISSIONS.md."
+      rm -f "$out"
+    else
+      red "INTERNET is missing from the merged manifest — cloud assist (CL-35) would silently no-op. See AndroidManifest.xml."
       rm -f "$out"
       exit 1
-    else
-      ok "No INTERNET permission in the merged manifest — R4 passes."
-      rm -f "$out"
     fi
     ;;
 

@@ -87,6 +87,10 @@ result there:
 | Jovi integration of any kind | M7 |
 | Coverage-gap detection catches a real missed event | R6 (CL-10) |
 | Emulator results stand for the phone | Never. The 23 Sep AVD run (commit `a9f9c09`) proves launch, draft and arm on stock Android only |
+| Any Sarvam AI call (translate, speech-to-text, text-to-speech, chat completion) succeeding against a live key | CLEANUP.md CL-35 item 1: a real call against `SarvamClient.kt` is exercised and confirmed — `sarvam/test_sarvam.py`'s Python-SDK smoke test does not count |
+| Cloud voice input (regional-language speech-to-text) working end to end | CLEANUP.md CL-35 items 1–2: a live key succeeds and `:app` compiles at all, which is currently blocked on CL-24's AGP/compileSdk gap |
+| A translated read-back of the assistant's reply playing end to end | CLEANUP.md CL-35 items 1–2, same as above |
+| The cloud chat drafter's (`SarvamChatDrafter`) disagreement-tie-breaker path resolving as designed | CLEANUP.md CL-35 items 1–2, same as above |
 
 ## What can be said today
 

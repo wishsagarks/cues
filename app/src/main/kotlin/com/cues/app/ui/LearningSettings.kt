@@ -34,7 +34,8 @@ fun LearningSettings(
             Column(Modifier.weight(1f)) {
                 Text("Notice on-device patterns")
                 Text(
-                    "Optional 14-day signal log. It stays on this phone; the app has no internet permission.",
+                    "Optional 14-day signal log. It stays on this phone and is never sent anywhere — including to the " +
+                        "optional cloud language assist feature, which this log is not part of.",
                     style = MaterialTheme.typography.bodySmall,
                     color = cuesColors.ink200,
                 )

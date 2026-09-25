@@ -8,3 +8,10 @@
 # Linux:   sdk.dir=/home/<you>/Android/Sdk
 # Windows: sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 sdk.dir=/path/to/Android/sdk
+
+# Optional. Powers the opt-in "cloud language assist" feature (CLEANUP.md
+# CL-35) — Sarvam AI's speech, translation and chat APIs, used only in the
+# authoring path and only once a user turns the feature on in-app. Leave
+# blank/absent and the toggle stays disabled; nothing calls out. Get a key at
+# https://dashboard.sarvam.ai/
+sarvam.apiKey=
