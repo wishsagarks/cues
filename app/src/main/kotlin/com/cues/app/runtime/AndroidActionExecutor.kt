@@ -82,10 +82,6 @@ class AndroidActionExecutor(
     // dies mid-run leaves the ringer as Cues set it rather than guessing.
     private val ringerModeBefore = mutableMapOf<String, Int>()
 
-    // What state to put a utility back into on release, keyed by session.
-    // Same in-memory, non-survives-a-restart caveat as ringerModeBefore.
-    private val utilityRestoreState = mutableMapOf<String, Pair<UtilityId, UtilityState>>()
-
     // Zen rule ids returned by the platform aren't derivable from the session
     // id, so they're cached here for release — an instance property, not a
     // companion object, because a process-wide static map was exactly the
@@ -132,7 +128,32 @@ class AndroidActionExecutor(
         OwnedResource.DND_CONTRIBUTION -> releaseDnd(sessionId)
         OwnedResource.PINNED_NOTE -> releasePinnedNote(sessionId)
         OwnedResource.RINGER_MODE -> releaseRingerMode(sessionId)
-        OwnedResource.UTILITY_CONTRIBUTION -> releaseUtility(sessionId)
+        // No obligation context here to say which utility, or which state to
+        // restore to — this overload only exists for [ActionExecutor]
+        // callers that predate the obligation-carrying one below. Refusing
+        // rather than guessing is the honest outcome (plan §10.4): never
+        // SUCCEEDED without actually knowing what was restored.
+        OwnedResource.UTILITY_CONTRIBUTION ->
+            ActionOutcome(ActionState.COMPENSATION_FAILED, "Can't tell what to restore.")
+    }
+
+    /**
+     * [ActionExecutor.release]'s obligation-carrying overload: for
+     * [OwnedResource.UTILITY_CONTRIBUTION] the restore target comes from
+     * [CleanupObligation.args] — the approved [ActionArgs.UseUtility] this
+     * obligation was acquired with — persisted at acquisition, not from
+     * anything this executor might have held only in memory. Every other
+     * resource has nothing utility-specific to derive, so it falls through
+     * to the plain resource/session-id overload unchanged.
+     */
+    override fun release(obligation: CleanupObligation, session: Session): ActionOutcome {
+        if (obligation.resource != OwnedResource.UTILITY_CONTRIBUTION) {
+            return release(obligation.resource, session.id)
+        }
+        val request = obligation.args as? ActionArgs.UseUtility
+            ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "Can't tell what to restore.")
+        val restoreTo = if (request.state == UtilityState.ON) UtilityState.OFF else UtilityState.ON
+        return releaseUtility(request.utilityId, restoreTo)
     }
 
     // ------------------------------------------------------------- timer
@@ -635,11 +656,12 @@ class AndroidActionExecutor(
             ?: return ActionOutcome(ActionState.BLOCKED, "The taught macro for $label is missing.")
 
         return when (val outcome = CuesAccessibilityService.playMacroNow(macro)) {
-            MacroRunOutcome.Succeeded -> {
-                val restoreTo = if (request.state == UtilityState.ON) UtilityState.OFF else UtilityState.ON
-                utilityRestoreState[sessionId] = request.utilityId to restoreTo
-                ActionOutcome(ActionState.SUCCEEDED, "$label turned ${request.state.name.lowercase()}.")
-            }
+            // STEPS_CONFIRMED, never READ_BACK: the macro's own on-screen
+            // postconditions held, but nothing here re-reads the utility's
+            // real platform state — Review/Receipts must show this as
+            // "assumed", not a plain success (plan §10.4).
+            MacroRunOutcome.Succeeded ->
+                ActionOutcome(ActionState.SUCCEEDED, "$label turned ${request.state.name.lowercase()}.", verification = Verification.STEPS_CONFIRMED)
             is MacroRunOutcome.Blocked -> ActionOutcome(ActionState.BLOCKED, outcome.detail)
         }
     }
@@ -650,10 +672,15 @@ class AndroidActionExecutor(
      * toggle's current state to compare against first — that would need the
      * target app's own screen in the foreground, which release does not
      * force open just to check — see CLEANUP.md. It replays unconditionally.
+     *
+     * [utilityId]/[restoreTo] come from the *session's own persisted
+     * [CleanupObligation.args]* (see the [release] overload below), never
+     * from anything held only in this executor's memory — a process death
+     * between [useUtility] and this call used to erase the restore target
+     * entirely, letting release silently report SUCCEEDED having restored
+     * nothing (CLEANUP.md CL-23 item 8 / plan §10.4).
      */
-    private fun releaseUtility(sessionId: String): ActionOutcome {
-        val (utilityId, restoreTo) = utilityRestoreState.remove(sessionId)
-            ?: return ActionOutcome(ActionState.SUCCEEDED, "No prior utility state was held.")
+    private fun releaseUtility(utilityId: UtilityId, restoreTo: UtilityState): ActionOutcome {
         val bindingStore = utilityBindings
             ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "Utility bindings are not configured on this build.")
         val macroStore = macros
@@ -669,7 +696,7 @@ class AndroidActionExecutor(
             ?: return ActionOutcome(ActionState.COMPENSATION_FAILED, "The taught macro for this utility is missing.")
 
         return when (val outcome = CuesAccessibilityService.playMacroNow(macro)) {
-            MacroRunOutcome.Succeeded -> ActionOutcome(ActionState.SUCCEEDED, "Restored.")
+            MacroRunOutcome.Succeeded -> ActionOutcome(ActionState.SUCCEEDED, "Restored (assumed).", verification = Verification.STEPS_CONFIRMED)
             is MacroRunOutcome.Blocked -> ActionOutcome(ActionState.COMPENSATION_FAILED, outcome.detail)
         }
     }
