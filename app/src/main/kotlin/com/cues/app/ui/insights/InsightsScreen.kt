@@ -26,9 +26,13 @@ import com.cues.app.ui.components.StatusTone
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.inference.CostBasis
+import com.cues.core.inference.InferenceBackend
+import com.cues.core.inference.InferenceCost
+import com.cues.core.inference.InferenceReport
 import com.cues.core.insights.InsightsReport
 import com.cues.core.insights.InsightsWindow
 import com.cues.core.insights.SkipFamily
+import com.cues.core.model.DraftSourceId
 
 /**
  * Insights (redesign plan §3.2), now reading the real `:core` [Insights]
@@ -45,6 +49,8 @@ fun InsightsScreen(
     onToggleLedger: (Boolean) -> Unit,
     drafterLabel: String,
     lastFallbackReason: String?,
+    /** The real backend a model actually loaded on last time it ran — see [InferenceReport]. `null` renders no badge, never a guess. */
+    lastInferenceReport: InferenceReport? = null,
     onExportConsole: () -> Unit,
     onFixCapability: () -> Unit,
     onToggleUsageTracking: (Boolean) -> Unit = {},
@@ -262,8 +268,13 @@ fun InsightsScreen(
 
         item {
             SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-                Text("DRAFTING PATH", style = CuesType.labelSmall, color = t.inkSlate)
-                Text(drafterLabel, style = CuesType.bodyMedium, color = t.inkPrimary)
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Text("DRAFTING PATH", style = CuesType.labelSmall, color = t.inkSlate)
+                        Text(drafterLabel, style = CuesType.bodyMedium, color = t.inkPrimary)
+                    }
+                    lastInferenceReport?.let { BackendPill(it.backend) }
+                }
                 if (lastFallbackReason != null) {
                     Text("Fell back: $lastFallbackReason", style = CuesType.labelSmall, color = t.warn)
                 }
@@ -286,6 +297,14 @@ fun InsightsScreen(
                         color = t.go,
                         modifier = Modifier.padding2(top = 2.dp),
                     )
+                    if (usage.onDeviceTokens > 0) {
+                        Text(
+                            savedVsCloudLine(usage.onDeviceTokens),
+                            style = CuesType.labelSmall,
+                            color = t.inkSlate,
+                            modifier = Modifier.padding2(top = 2.dp),
+                        )
+                    }
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth().padding2(top = 12.dp),
@@ -341,6 +360,30 @@ private fun costLine(costUsd: Double?, basis: CostBasis?): String = when (basis)
     CostBasis.CLOUD_METERED -> "$" + "%.4f".format(costUsd ?: 0.0)
     CostBasis.ON_DEVICE_FREE -> "$0.00"
     CostBasis.UNVERIFIED, null -> "cost not verified"
+}
+
+/**
+ * What the on-device tokens *would* have cost on Sarvam's own rate — reuses
+ * [InferenceCost.costFor] rather than a second cost formula, so this can
+ * never silently disagree with the CLOUD (SARVAM) line above it. Renders
+ * "not verified" instead of a number until a real Sarvam rate is pinned
+ * (CLEANUP.md CL-37) — same discipline as [costLine].
+ */
+private fun savedVsCloudLine(onDeviceTokens: Long): String {
+    val (saved, basis) = InferenceCost.costFor(DraftSourceId.SARVAM_CLOUD, onDeviceTokens.toInt())
+    return if (basis == CostBasis.CLOUD_METERED) "≈ \$${"%.4f".format(saved)} saved vs. cloud" else "savings not verified — no Sarvam rate on file"
+}
+
+/** NPU/GPU are a local, accelerated tier; CPU is the honest fallback; CLOUD never ran on this phone at all. */
+@Composable
+private fun BackendPill(backend: InferenceBackend) {
+    val (label, tone) = when (backend) {
+        InferenceBackend.NPU -> "NPU" to StatusTone.GO
+        InferenceBackend.GPU -> "GPU" to StatusTone.GO
+        InferenceBackend.CPU -> "CPU" to StatusTone.WARN
+        InferenceBackend.CLOUD -> "CLOUD" to StatusTone.UNKNOWN
+    }
+    StatusPill(label, tone)
 }
 
 private fun Modifier.padding2(top: androidx.compose.ui.unit.Dp = 0.dp, bottom: androidx.compose.ui.unit.Dp = 0.dp): Modifier =

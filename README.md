@@ -66,7 +66,8 @@ As of 25 September 2026 (the full record is [DISCLOSURE.md](docs/DISCLOSURE.md))
 
 **There are no measured performance results.** Every latency, delivery and
 reliability figure in the design documents is a target until it is recorded
-in `docs/MEASUREMENTS.md`, which does not exist yet.
+in [`docs/MEASUREMENTS.md`](docs/MEASUREMENTS.md) — the file exists as a
+protocol with empty rows, not yet a record.
 
 Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 
@@ -84,6 +85,7 @@ Submitted to the iQOO Hackathon 2026 City Battles (Open Innovation track).
 | [API_VERIFICATION.md](docs/API_VERIFICATION.md) | Official-source API and dependency gate, with every pin explained |
 | [PERMISSIONS.md](docs/PERMISSIONS.md) | Every declared permission, what uses it and when it is requested |
 | [DEVICE_MATRIX.md](docs/DEVICE_MATRIX.md) | The iQOO verification matrix and `./dev probe` protocol |
+| [MEASUREMENTS.md](docs/MEASUREMENTS.md) | Real, recorded device numbers — empty rows until DEVICE_MATRIX.md's protocol fills them |
 | [iqoo-loaner.md](iqoo-loaner.md) | Execution order for the first physical-device session: DEVICE_MATRIX.md's rows reordered into a time-boxed runbook |
 | [DEMO.md](docs/DEMO.md) | Demo script, its device gates, what is cut, and backup evidence |
 | [DISCLOSURE.md](docs/DISCLOSURE.md) | What was verified, where, and what may not be claimed yet |

@@ -4,6 +4,9 @@ import android.app.Application
 import android.util.Log
 import com.cues.app.data.ObservableStore
 import com.cues.app.data.StoreGeneration
+import com.cues.app.devkit.ExternalCallEntry
+import com.cues.app.devkit.ExternalCallerLedger
+import com.cues.app.devkit.ExternalGemmaGate
 import com.cues.app.drafting.GatedLlmSession
 import com.cues.app.drafting.LiteRtLmSession
 import com.cues.app.drafting.ModelDownloader
@@ -26,6 +29,7 @@ import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.DifferentialDrafter
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.GrammarParser
+import com.cues.core.drafting.InferenceOutput
 import com.cues.core.drafting.OnDeviceLlmDrafter
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.ActionArgs
@@ -191,17 +195,118 @@ class CuesApplication : Application() {
      */
     var onDeviceModelUserEnabled: Boolean = false
 
+    /**
+     * The one gated on-device model session, shared by [drafter] (fresh
+     * drafts) and [refinePhraser] (C1: edit phrasing) — one model, one file,
+     * one gate ([onDeviceModelUserEnabled]), asked two narrower questions
+     * rather than duplicated per use.
+     */
+    private val onDeviceLlmSession by lazy {
+        GatedLlmSession(LiteRtLmSession(this, modelFile.path)) { onDeviceModelUserEnabled }
+    }
+
     private val drafter by lazy {
         DifferentialDrafter(
-            first = OnDeviceLlmDrafter(
-                session = GatedLlmSession(LiteRtLmSession(this, modelFile.path)) { onDeviceModelUserEnabled },
-            ),
+            first = OnDeviceLlmDrafter(session = onDeviceLlmSession),
             second = GrammarParser(
                 pairedDeviceProvider = ::pairedDevices,
                 contextsProvider = { store.allContexts() },
                 placesProvider = { store.allPlaces() },
             ),
         )
+    }
+
+    /** C1: model-assisted fallback for edit phrasing the deterministic router doesn't match. */
+    private val refinePhraser by lazy {
+        com.cues.core.assistant.OnDeviceRefinePhraser(session = onDeviceLlmSession)
+    }
+
+    // -------------------------------------------------- developer surface (E)
+
+    /**
+     * Deliberately a separate file from [modelFile]: swapping a BYOM model in
+     * for the developer-facing surface ([CuesGemmaProvider]) can never
+     * silently replace the trusted authoring model, and vice versa. No
+     * default model ships for this path — unlike [modelFile]'s parser
+     * fallback, an absent file here is an honest, disclosed failure (see
+     * [generateForExternalCaller]), never a silent substitution.
+     */
+    private val externalModelFile: File by lazy { File(filesDir, "models/external/model.litertlm") }
+
+    /**
+     * Blank source URL/SHA on purpose: only [com.cues.app.drafting.ModelDownloader.installFromUri]'s
+     * file-picker path is ever offered for this file — "bring your own
+     * model," not "download the verified one" — `canDownload()` naturally
+     * returns false.
+     */
+    val externalModelDownloader by lazy { ModelDownloader(this, externalModelFile, "", "") }
+
+    /** CL-38's third opt-in gate: a model being installed does not mean another app on the phone may reach it. Off by default every launch. */
+    val externalGemmaGate by lazy { ExternalGemmaGate() }
+
+    /** Per-caller token/cost bookkeeping for [externalGemmaGate]'s surface — see [ExternalCallerLedger]'s own doc comment for why this is a sibling to, not a reuse of, [com.cues.core.inference.InferenceLedger]. */
+    val externalCallerLedger by lazy { ExternalCallerLedger() }
+
+    /**
+     * Wholly separate from [drafter]/[onDeviceLlmSession]: never handed to
+     * [OnDeviceLlmDrafter] or [DifferentialDrafter], so nothing an external
+     * caller sends can ever reach cue authoring or `:core`'s trust boundary.
+     */
+    private val externalGemmaSession by lazy {
+        GatedLlmSession(LiteRtLmSession(this, externalModelFile.path)) { externalGemmaGate.enabled }
+    }
+
+    private var cachedExternalModelIdentity: Pair<Long, String>? = null
+
+    /**
+     * File size + a truncated SHA-256 prefix of whichever model currently
+     * backs [externalGemmaSession] — how a caller in [CuesGemmaProvider]
+     * knows whether a Google-provisioned or a tester's own side-loaded model
+     * answered. Hashed once per file (keyed on `lastModified()`), not on
+     * every call.
+     */
+    fun externalModelIdentity(): String {
+        if (!externalModelFile.isFile) return "no BYOM model installed"
+        val mtime = externalModelFile.lastModified()
+        cachedExternalModelIdentity?.let { (cachedMtime, identity) -> if (cachedMtime == mtime) return identity }
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        externalModelFile.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        val hashPrefix = digest.digest().joinToString("") { "%02x".format(it) }.take(12)
+        val identity = "${externalModelFile.length() / 1_000_000}MB-$hashPrefix"
+        cachedExternalModelIdentity = mtime to identity
+        return identity
+    }
+
+    /**
+     * The one entry point [CuesGemmaProvider] calls. Reuses [externalGemmaSession]'s
+     * existing gate/file checks rather than re-implementing them — a denial
+     * here always carries the same honest message [GatedLlmSession]/
+     * [LiteRtLmSession] already produce, logged to [externalGemmaGate] and,
+     * on success, recorded to [externalCallerLedger].
+     */
+    suspend fun generateForExternalCaller(prompt: String, callerPackage: String): Result<InferenceOutput> = try {
+        val output = externalGemmaSession.generate(prompt)
+        externalGemmaGate.logAllowed(callerPackage, clock.nowMillis())
+        externalCallerLedger.record(
+            ExternalCallEntry(
+                atMillis = clock.nowMillis(),
+                callerPackage = callerPackage,
+                backend = output.report.backend,
+                estimatedTokens = output.report.estimatedTokens,
+                latencyMs = output.report.loadMs + output.report.generationMs,
+            ),
+        )
+        Result.success(output)
+    } catch (e: Exception) {
+        externalGemmaGate.logDenied(callerPackage, clock.nowMillis(), e.message ?: "generation failed")
+        Result.failure(e)
     }
 
     /**
@@ -269,6 +374,7 @@ class CuesApplication : Application() {
             // that decides behaviour reads from it.
             receiptLog = store,
             inferenceLedger = store,
+            refinePhraser = refinePhraser,
         )
     }
 
