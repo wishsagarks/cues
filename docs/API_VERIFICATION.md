@@ -13,6 +13,9 @@ This note records the official-source gate for the Cues Brain plan. It is not ev
 - Source: https://github.com/google-ai-edge/LiteRT-LM/blob/main/docs/api/kotlin/getting_started.md
 - Source: https://developers.google.com/edge/litert/next/litert_lm_npu
 - Source: https://maven.google.com/web/index.html#com.google.ai.edge.litertlm:litertlm-android (version/POM history used to find the 0.16.1 pin)
+- **`Conversation` surface, verified with `javap` on the resolved 0.16.1 AAR's runtime jar (26 Sep 2026), for Sprint 8's warm-runtime work:**
+  `sendMessageAsync(prompt: String): Flow<Message>` (a cancellable, coroutine-native alternative to the blocking `sendMessage`), `cancelProcess()`, `getBenchmarkInfo(): BenchmarkInfo` (marked `@ExperimentalApi`), `getTokenCount(): Int`, `isAlive()`. `BenchmarkInfo(initTimeInSecond, timeToFirstTokenInSecond, lastPrefillTokenCount, lastDecodeTokenCount, lastPrefillTokensPerSecond, lastDecodeTokensPerSecond)`. `EngineConfig`/`ConversationConfig` also expose `SamplerConfig(topK, topP, temperature, seed)` and `ResponseFormat.regex(...)`/`.json(...)` for constrained decoding — neither used yet.
+- **A second, narrower metadata incompatibility inside the pinned 0.16.1 release itself:** `BenchmarkInfo`'s own class file carries `kotlin.Metadata(mv=[2,3,0])` (Kotlin 2.3's binary metadata format) even though the rest of this dependency's `kotlin-reflect` requirement matches this project's 2.2.21 (the bullet above). This project's Kotlin compiler cannot read that metadata version and treats the class as having no resolvable members — `benchmark.lastPrefillTokenCount` and even the explicit Java-style `benchmark.getLastPrefillTokenCount()` both fail with "unresolved reference", despite `javap` confirming every getter is an ordinary public JVM method. `app/.../drafting/LocalModelRunner.kt` reads these fields with plain reflection instead. See CLEANUP.md CL-40.
 
 ## AppFunctions
 

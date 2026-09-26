@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                     monitoring = app.monitoring,
                     adapterHealth = { app.adapterSupervisor.health() },
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
-                    runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices(), com.cues.app.BuildConfig.SARVAM_API_KEY) },
+                    runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices(), app.onDeviceLlmSession, com.cues.app.BuildConfig.SARVAM_API_KEY) },
                     modelDownloader = app.modelDownloader,
                     onDeviceModelUserEnabled = app.onDeviceModelUserEnabled,
                     onToggleOnDeviceModel = { app.onDeviceModelUserEnabled = it },
@@ -525,8 +525,16 @@ private fun CuesApp(
     }
 
     fun removeModelNow() {
-        modelDownloader.remove()
-        modelProvisionState = modelDownloader.currentState()
+        // File I/O off the composition/click thread (CLEANUP.md CL-18's
+        // main-thread item). LocalModelRunner re-checks the model file's own
+        // identity before every call, so a warm engine left open across a
+        // removal cannot be mistaken for the removed file on the next draft
+        // — it will simply fail to reload, honestly, the same as any other
+        // missing-model case.
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            modelDownloader.remove()
+            modelProvisionState = modelDownloader.currentState()
+        }
     }
 
     /**
@@ -553,38 +561,49 @@ private fun CuesApp(
     fun draft(text: String) {
         isDrafting = true
         scope.launch {
-            val turn = cueService.converse(conversation, text)
-            assistantTurns = conversation.turns.toList()
-            if (speakReplies) replySpeaker.speak(turn.reply.text)
-            val draftedRoutine = turn.draft
-            when {
-                draftedRoutine != null -> {
-                    missingCapabilities = emptySet()
-                    reviewDraft = draftedRoutine
-                    navController.navigate(CuesRoutes.REVIEW)
-                }
-                turn.reply.args["appQuery"] != null -> {
-                    val query = turn.reply.args.getValue("appQuery")
-                    appSourceText = text
-                    appQuery = query
-                    appCandidates = com.cues.app.runtime.rankInstalledApps(com.cues.app.runtime.installedApps(context), query)
-                }
-                turn.reply.code == ReplyCode.NEEDS_CLARIFICATION -> {
-                    val ids = turn.reply.chips.filterIsInstance<com.cues.core.assistant.ReplyChip.Choice>().map { it.id }.toSet()
-                    val candidates = pairedDevices().filter { it.id in ids }
-                    when {
-                        candidates.isNotEmpty() -> {
-                            deviceSourceText = text
-                            deviceCandidates = candidates
-                        }
-                        cloudAssistOn -> offerCloudAssist(turn.reply.text, text)
-                        else -> notify(turn.reply.text)
+            // Sprint 8 (CLEANUP.md CL-18's main-thread/robustness item): an
+            // exception anywhere below — a model crash, a picker failure —
+            // used to leave isDrafting stuck true, with no way back to a
+            // usable Ask screen short of leaving and reopening it.
+            try {
+                val turn = cueService.converse(conversation, text)
+                assistantTurns = conversation.turns.toList()
+                if (speakReplies) replySpeaker.speak(turn.reply.text)
+                val draftedRoutine = turn.draft
+                when {
+                    draftedRoutine != null -> {
+                        missingCapabilities = emptySet()
+                        reviewDraft = draftedRoutine
+                        navController.navigate(CuesRoutes.REVIEW)
                     }
+                    turn.reply.args["appQuery"] != null -> {
+                        val query = turn.reply.args.getValue("appQuery")
+                        appSourceText = text
+                        appQuery = query
+                        appCandidates = com.cues.app.runtime.rankInstalledApps(com.cues.app.runtime.installedApps(context), query)
+                    }
+                    turn.reply.code == ReplyCode.NEEDS_CLARIFICATION -> {
+                        val ids = turn.reply.chips.filterIsInstance<com.cues.core.assistant.ReplyChip.Choice>().map { it.id }.toSet()
+                        val candidates = pairedDevices().filter { it.id in ids }
+                        when {
+                            candidates.isNotEmpty() -> {
+                                deviceSourceText = text
+                                deviceCandidates = candidates
+                            }
+                            cloudAssistOn -> offerCloudAssist(turn.reply.text, text)
+                            else -> notify(turn.reply.text)
+                        }
+                    }
+                    cloudAssistOn && turn.reply.code == ReplyCode.DRAFT_FAILED -> offerCloudAssist(turn.reply.text, text)
+                    else -> notify(turn.reply.text)
                 }
-                cloudAssistOn && turn.reply.code == ReplyCode.DRAFT_FAILED -> offerCloudAssist(turn.reply.text, text)
-                else -> notify(turn.reply.text)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notify(e.message ?: "Something went wrong drafting that cue.")
+            } finally {
+                isDrafting = false
             }
-            isDrafting = false
         }
     }
 

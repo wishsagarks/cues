@@ -43,6 +43,7 @@ import com.cues.core.signals.AdapterSupervisor
 import com.cues.core.store.JsonFileStore
 import java.io.File
 import java.time.ZoneId
+import kotlinx.coroutines.launch
 
 /**
  * Wiring.
@@ -57,6 +58,17 @@ import java.time.ZoneId
  * session service — is meant to call.
  */
 class CuesApplication : Application() {
+
+    /**
+     * For fire-and-forget cleanup that outlives one Compose call site — a
+     * model toggle turning off, or a low-memory callback — neither of which
+     * has a natural `rememberCoroutineScope()` of its own to run on.
+     * Deliberately not cancelled anywhere: it should live exactly as long
+     * as the process does.
+     */
+    private val appScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
+    )
 
     override fun onCreate() {
         super.onCreate()
@@ -194,15 +206,50 @@ class CuesApplication : Application() {
      * itself is not scoped to one screen.
      */
     var onDeviceModelUserEnabled: Boolean = false
+        set(value) {
+            field = value
+            // Turning the model off is the one moment its warm Engine is
+            // guaranteed to be idle — release it now rather than waiting for
+            // a low-memory callback that might never come before the user
+            // reopens Ask (Sprint 8, LocalModelRunner's own reuse doc).
+            if (!value) releaseOnDeviceModelEngine()
+        }
+
+    /**
+     * The real on-device LiteRT-LM session, kept separate from
+     * [onDeviceLlmSession]'s gate so `:app` can reach [LiteRtLmSession.runner]
+     * directly — to observe [com.cues.app.drafting.RunnerState], pre-warm, or
+     * release it — without going through the gated wrapper.
+     */
+    private val onDeviceLiteRtSession by lazy { LiteRtLmSession(this, modelFile.path) }
+
+    /** The authoring model's own runtime — [com.cues.app.drafting.RunnerState], `warm()`, `release()`. */
+    val onDeviceModelRunner get() = onDeviceLiteRtSession.runner
 
     /**
      * The one gated on-device model session, shared by [drafter] (fresh
-     * drafts) and [refinePhraser] (C1: edit phrasing) — one model, one file,
-     * one gate ([onDeviceModelUserEnabled]), asked two narrower questions
-     * rather than duplicated per use.
+     * drafts), [refinePhraser] (C1: edit phrasing) and [AppBakeOff]'s
+     * on-device row — one model, one file, one gate
+     * ([onDeviceModelUserEnabled]), asked several narrower questions rather
+     * than duplicated per use. Not private, so the bake-off can score the
+     * real gated session (CLEANUP.md: before this, [AppBakeOff]'s model row
+     * always used a default, always-failing session).
      */
-    private val onDeviceLlmSession by lazy {
-        GatedLlmSession(LiteRtLmSession(this, modelFile.path)) { onDeviceModelUserEnabled }
+    val onDeviceLlmSession by lazy {
+        GatedLlmSession(onDeviceLiteRtSession) { onDeviceModelUserEnabled }
+    }
+
+    /**
+     * A live read for [DifferentialDrafter]/[CueService] of whether the
+     * on-device model is actually worth asking — never cached, never
+     * inferred from `drafter.id` (CLEANUP.md CL-18's central bug: that was
+     * always `ON_DEVICE_LLM` regardless of this). `NOT_INSTALLED` and
+     * `INSTALLED_OFF` are distinguished so "GRAMMAR ONLY" can say which.
+     */
+    private fun onDeviceModelAvailability(): com.cues.core.ports.ModelAvailability = when {
+        !modelFile.isFile -> com.cues.core.ports.ModelAvailability.NOT_INSTALLED
+        !onDeviceModelUserEnabled -> com.cues.core.ports.ModelAvailability.INSTALLED_OFF
+        else -> com.cues.core.ports.ModelAvailability.READY
     }
 
     private val drafter by lazy {
@@ -213,7 +260,30 @@ class CuesApplication : Application() {
                 contextsProvider = { store.allContexts() },
                 placesProvider = { store.allPlaces() },
             ),
+            firstAvailability = ::onDeviceModelAvailability,
         )
+    }
+
+    /** Closes the authoring model's warm engine, if one is open. Suspends briefly to take the runner's lock — fine from a settings toggle, never called from a hot path. */
+    private fun releaseOnDeviceModelEngine() {
+        appScope.launch { onDeviceModelRunner.release() }
+    }
+
+    /**
+     * A multi-hundred-MB warm [com.google.ai.edge.litertlm.Engine] is exactly
+     * the kind of native memory OriginOS's low-memory killer would want back
+     * first — release both the authoring and developer-surface engines
+     * rather than wait for a crash to teach us that (CLEANUP.md CL-40,
+     * unverified: no real low-memory event has been observed on a device).
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            appScope.launch {
+                onDeviceModelRunner.release()
+                externalModelRunner.release()
+            }
+        }
     }
 
     /** C1: model-assisted fallback for edit phrasing the deterministic router doesn't match. */
@@ -247,13 +317,18 @@ class CuesApplication : Application() {
     /** Per-caller token/cost bookkeeping for [externalGemmaGate]'s surface — see [ExternalCallerLedger]'s own doc comment for why this is a sibling to, not a reuse of, [com.cues.core.inference.InferenceLedger]. */
     val externalCallerLedger by lazy { ExternalCallerLedger() }
 
+    private val externalLiteRtSession by lazy { LiteRtLmSession(this, externalModelFile.path) }
+
+    /** The developer-surface model's own runtime — a separate warm engine from [onDeviceModelRunner], since it is a separate file (see [externalModelFile]'s own doc comment). */
+    val externalModelRunner get() = externalLiteRtSession.runner
+
     /**
      * Wholly separate from [drafter]/[onDeviceLlmSession]: never handed to
      * [OnDeviceLlmDrafter] or [DifferentialDrafter], so nothing an external
      * caller sends can ever reach cue authoring or `:core`'s trust boundary.
      */
     private val externalGemmaSession by lazy {
-        GatedLlmSession(LiteRtLmSession(this, externalModelFile.path)) { externalGemmaGate.enabled }
+        GatedLlmSession(externalLiteRtSession) { externalGemmaGate.enabled }
     }
 
     private var cachedExternalModelIdentity: Pair<Long, String>? = null
@@ -375,6 +450,13 @@ class CuesApplication : Application() {
             receiptLog = store,
             inferenceLedger = store,
             refinePhraser = refinePhraser,
+            // Cloud assist's own opt-in is Compose session state in
+            // MainActivity (CL-35: off every launch, not a stored
+            // preference), not something CuesApplication has a handle on at
+            // construction time — cloudOptInProbe stays unset (reports
+            // `false`) rather than reaching for a value this class cannot
+            // actually read.
+            modelAvailabilityProbe = com.cues.core.ports.ModelAvailabilityProbe { onDeviceModelAvailability() },
         )
     }
 

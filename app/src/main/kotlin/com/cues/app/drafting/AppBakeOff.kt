@@ -5,6 +5,7 @@ import com.cues.core.corpus.BakeOff
 import com.cues.core.corpus.BakeOffReport
 import com.cues.core.corpus.Corpus
 import com.cues.core.drafting.GrammarParser
+import com.cues.core.drafting.LlmSession
 import com.cues.core.drafting.OnDeviceLlmDrafter
 import com.cues.core.drafting.PairedDevice
 
@@ -18,8 +19,7 @@ import com.cues.core.drafting.PairedDevice
  * (real network credentials) and the LiteRT-LM/Android binding this bake-off
  * hands to [OnDeviceLlmDrafter] below. This is what docs/DEVICE_RUNBOOK.md's
  * step 1 means by "the parser and side-loaded-model bake-offs": it runs from
- * the phone, not the laptop, and today the model row is an honest "not wired
- * up" result rather than a fabricated one.
+ * the phone, not the laptop.
  *
  * CL-35: the Sarvam row is the safe place to score a cloud drafter against
  * the corpus before it is ever offered in the app — this call needs real
@@ -27,7 +27,17 @@ import com.cues.core.drafting.PairedDevice
  * tool, not the shipped runtime path.
  */
 object AppBakeOff {
-    suspend fun run(pairedDevices: List<PairedDevice>, sarvamApiKey: String = ""): BakeOffReport {
+    /**
+     * [onDeviceSession] is [CuesApplication.onDeviceLlmSession] — the same
+     * gated session `drafter` actually uses — passed in rather than
+     * constructed here. Before Sprint 8 this always built its own
+     * default-constructed [OnDeviceLlmDrafter], which meant an
+     * always-throwing [com.cues.core.drafting.UnconfiguredLlmSession]
+     * regardless of whether a real model was installed and turned on:
+     * the model row could never show anything but "not wired up"
+     * (CLEANUP.md CL-18's `AppBakeOff` item).
+     */
+    suspend fun run(pairedDevices: List<PairedDevice>, onDeviceSession: LlmSession, sarvamApiKey: String = ""): BakeOffReport {
         val text = checkNotNull(object {}.javaClass.getResourceAsStream("/corpus/paraphrases.txt")) {
             "corpus/paraphrases.txt missing from resources"
         }.bufferedReader().readText()
@@ -37,7 +47,7 @@ object AppBakeOff {
             SarvamHttpChatSession(SarvamClient(sarvamApiKey))
         }
         return BakeOff.run(
-            listOf(GrammarParser(pairedDevices), OnDeviceLlmDrafter(), SarvamChatDrafter(sarvamSession)),
+            listOf(GrammarParser(pairedDevices), OnDeviceLlmDrafter(session = onDeviceSession), SarvamChatDrafter(sarvamSession)),
             Corpus.parse(text),
         )
     }

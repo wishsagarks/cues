@@ -31,9 +31,25 @@ data class InferenceReport(
     val backend: InferenceBackend,
     val loadMs: Long,
     val generationMs: Long,
-    /** Estimated by splitting the response on whitespace, not the model's own tokenizer. */
+    /**
+     * The model's real prefill+decode count when [tokenCountSource] is
+     * [TokenCountSource.MEASURED] (Sprint 8, from LiteRT-LM 0.16.1's
+     * `Conversation.getBenchmarkInfo()`); the pre-Sprint-8 whitespace-split
+     * guess otherwise, kept as a fallback for a runtime that doesn't expose
+     * benchmark info (e.g. a cloud call).
+     */
     val estimatedTokens: Int,
+    /** Whether [estimatedTokens] (and the fields below) came from the model's own count, or is still the whitespace-split guess. */
+    val tokenCountSource: TokenCountSource = TokenCountSource.ESTIMATED,
+    /** Seconds-to-milliseconds from `BenchmarkInfo.timeToFirstTokenInSecond`. Null when not measured. */
+    val timeToFirstTokenMs: Long? = null,
+    val prefillTokens: Int? = null,
+    val decodeTokens: Int? = null,
+    val decodeTokensPerSecond: Double? = null,
 ) {
     /** Derived, not stored, so this can never silently disagree with [estimatedTokens]/[generationMs]. */
     val tokensPerSecond: Double get() = estimatedTokens * 1_000.0 / generationMs.coerceAtLeast(1)
 }
+
+/** Whether [InferenceReport.estimatedTokens] is the model's own reported count, or a whitespace-split guess. Never shown as the same confidence in the UI (CLEANUP.md CL-18). */
+enum class TokenCountSource { MEASURED, ESTIMATED }

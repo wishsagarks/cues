@@ -1787,3 +1787,110 @@ side-loaded model on the loaner, `docs/MEASUREMENTS.md` records how often
 the model's refine phrasing actually parses versus falls through, and
 `SuggestionNarrator` has a real call site rendering its output on a device
 screen.
+
+---
+
+## CL-40 — Sprint 8, part 1: honest drafter provenance and a warm model runtime, both unverified on a device
+
+**Status:** open · **Raised:** 26 Sep 2026
+
+This sprint's stated goal is that the model's actual role in a draft — which
+drafter ran, whether it agreed with the parser, what backend it used —
+becomes visible and true everywhere it's shown, not just on the one screen
+that happened to construct the winning `DraftResult` (CL-18 already named
+this: "the drafter label is always ON-DEVICE MODEL"). Two pieces landed:
+
+**Provenance (`:core`, fully tested — 363 core tests, all JVM-verifiable):**
+- `DraftTrace`/`DrafterAttempt` (`core/.../drafting/DraftTrace.kt`) record
+  *every* attempt `DifferentialDrafter` makes, not only the one whose output
+  won — an agreeing, disagreeing, invalid or timed-out model attempt now
+  keeps its own `InferenceReport` instead of it being discarded outright.
+- `CueService.Diagnostics` is now `DrafterSetup` (a live
+  `ModelAvailability` read) plus an observable `lastTrace` —
+  `CuesApplication.onDeviceModelAvailability()` reports `NOT_INSTALLED`/
+  `INSTALLED_OFF`/`READY` from the real file and toggle state, and
+  `DifferentialDrafter` skips the model outright (no timeout spent) when it
+  isn't `READY`.
+- `DraftCredit` (`core/.../review/DraftCredit.kt`) is the one place a trace
+  becomes a label ("grammar parser · confirmed by on-device model",
+  "grammar parser · model off", …) — a full verdict × outcome table is
+  tested.
+- `CueService.draftWithCloud` replaces `CuesApplication.tryCloudAssist`'s
+  bypass — a cloud draft is now ledgered and becomes a real conversation
+  `Turn` (verified with a fake cloud drafter, not a real Sarvam call).
+- `:app`'s Now/Ask/Insights/Checks drafter chip reads `DrafterSetup` instead
+  of `drafter.id` — a fresh install with no model shows "GRAMMAR ONLY", not
+  "GEMMA ON-DEVICE".
+
+**Runtime (`app/.../drafting/LocalModelRunner.kt`, WRITTEN AGAINST REAL
+APIs, VERIFIED ON NOTHING — same discipline as `LiteRtLmSession` always
+carried):**
+- One warm `Engine` per model file, keyed on `(path, length, lastModified())`
+  rather than a fresh `Engine`/full model load on every single call —
+  `LiteRtLmSession` is now a thin adapter over it.
+- Real cancellation: `generate()` uses `sendMessageAsync`'s `Flow` overload
+  and calls `Conversation.cancelProcess()` on cancellation, rather than the
+  pre-Sprint-8 `sendMessage()` call that `withTimeoutOrNull` could only
+  discard the result of afterward — the coroutine cancelled, but the native
+  call kept running regardless.
+- Released on model-off (`onDeviceModelUserEnabled`'s setter) and on
+  `Application.onTrimMemory(TRIM_MEMORY_RUNNING_LOW+)`, for both the
+  authoring and developer-surface engines.
+- A shared `Mutex` load gate across every `LocalModelRunner` the process
+  constructs, so the authoring and developer-surface models can never both
+  be mid-load at once.
+- `AppBakeOff` now takes the real gated `onDeviceLlmSession` instead of
+  building its own default, always-throwing `UnconfiguredLlmSession` — its
+  model row can finally report something other than "not wired up".
+
+**A genuine toolchain finding, not a bug in this code:**
+`com.google.ai.edge.litertlm.BenchmarkInfo` — the one API this library
+exposes for real token counts (`Conversation.getBenchmarkInfo()`, itself
+`@ExperimentalApi`) — carries `kotlin.Metadata(mv=[2,3,0])`: it was compiled
+by Kotlin 2.3, newer than this project's pinned 2.2.21 compiler (see
+`docs/API_VERIFICATION.md`'s LiteRT-LM entry for the *other* half of this —
+0.17.0+'s `kotlin-reflect:2.4.0` dependency is a harder, unresolvable version
+of the same problem). Kotlin treats a class whose metadata version it
+cannot read as having no resolvable members at all, even though every
+getter is an ordinary public JVM method (confirmed with `javap`) —
+`benchmark.lastPrefillTokenCount` and even the Java-style
+`benchmark.getLastPrefillTokenCount()` both fail to compile with "unresolved
+reference". `LocalModelRunner.readBenchmarkFields()` works around this with
+plain reflection (`Class.getMethod(...).invoke(...)`), which is not the kind
+of code this project reaches for casually — record the reason a reviewer
+finds this suspicious *is* the reason it's there.
+
+**What is not verified, any of it:**
+1. None of `LocalModelRunner`'s claims — engine reuse across calls, a
+   cancellation actually reaching the native call, `getBenchmarkInfo()`
+   returning a non-null result at all — has run against a real
+   `.litertlm` file or a real device in the environment that wrote it.
+2. The reflection workaround has never actually retrieved a real
+   `BenchmarkInfo` from a real generation call; whether it throws, returns
+   nulls, or works exactly as hoped is unmeasured. If it doesn't work, the
+   `estimatedTokens`/whitespace-split fallback is what ships instead — a
+   worse number, never a crash.
+3. `ModelController`/an `AskViewModel` (the plan's own §7.1) — a single
+   observable `ModelUiState` combining `RunnerState`, `ModelAvailability`
+   and `lastTrace`, and the UI components that render `DraftTrace`
+   visually (`ModelStatusBar`, `DraftPipelineStrip`, `ProvenanceBadge`, the
+   Ask disagreement card) — were not built in this pass. The plumbing above
+   feeds them; today only the plain-text drafter chip and `DiagnosticsScreen`'s
+   `render()` string read the new data.
+4. No streaming preview reaches the UI; `LocalModelRunner.generate()`
+   collects `sendMessageAsync`'s `Flow` internally and returns only the
+   final result — display-only partial text (the plan's `ModelProgress`
+   port) is not wired.
+5. `ExternalGemmaGate` caller approval and rate limiting (CL-38 items 2–3)
+   are not built in this pass.
+6. No on-device measurement exists yet — `docs/MEASUREMENTS.md` has no new
+   rows. Every number this entry describes is a code-level claim, not an
+   observed one.
+
+**Remove when:** a real model, side-loaded on the loaner, drafts through
+`DifferentialDrafter` and the resulting trace, credit, backend and token
+count are read off the Checks screen and recorded in
+`docs/MEASUREMENTS.md`; a real cancellation (a user Cancel or a timeout) is
+observed to actually stop generation rather than merely discard its result;
+and `getBenchmarkInfo()`'s reflection path is confirmed to return real
+numbers rather than silently falling through to the estimate every time.
