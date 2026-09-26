@@ -10,16 +10,24 @@ import android.speech.SpeechRecognizer
 /**
  * A user-gesture-only speech path that never substitutes a network recognizer.
  *
- * Cues creates Android's on-device recognizer directly and requests offline
- * recognition. If the service or its language support is unavailable, this
- * returns an explicit error for the typed-input fallback; it never calls
- * [SpeechRecognizer.createSpeechRecognizer].
+ * Tries on-device recognition with en-IN first; if that locale is unavailable
+ * on the device (ERROR_LANGUAGE_NOT_SUPPORTED / ERROR_LANGUAGE_UNAVAILABLE)
+ * it retries once with the device's default locale before giving up.
  */
 class LocalSpeechInput(private val context: Context) {
 
     private var recognizer: SpeechRecognizer? = null
 
     fun start(onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) {
+        startWithLocale(ENGLISH_INDIA, onTranscript, onUnavailable, fallbackToDefault = true)
+    }
+
+    private fun startWithLocale(
+        locale: String?,
+        onTranscript: (String) -> Unit,
+        onUnavailable: (String) -> Unit,
+        fallbackToDefault: Boolean,
+    ) {
         stop()
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
@@ -54,7 +62,14 @@ class LocalSpeechInput(private val context: Context) {
 
             override fun onError(error: Int) {
                 stop()
-                onUnavailable(errorMessage(error))
+                if (fallbackToDefault &&
+                    (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                        error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)
+                ) {
+                    startWithLocale(null, onTranscript, onUnavailable, fallbackToDefault = false)
+                } else {
+                    onUnavailable(errorMessage(error))
+                }
             }
 
             override fun onReadyForSpeech(params: android.os.Bundle) = Unit
@@ -67,12 +82,11 @@ class LocalSpeechInput(private val context: Context) {
         })
 
         try {
-            activeRecognizer.startListening(
-                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, ENGLISH_INDIA)
-                    .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                    .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false),
-            )
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            if (locale != null) intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
+            activeRecognizer.startListening(intent)
         } catch (error: RuntimeException) {
             stop()
             onUnavailable("Local speech could not start. Type your cue instead.")
@@ -87,7 +101,7 @@ class LocalSpeechInput(private val context: Context) {
     private fun errorMessage(error: Int): String = when (error) {
         SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
         SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
-            "English (India) local speech is unavailable. Type your cue instead."
+            "Local speech is unavailable. Type your cue instead."
 
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
             "Microphone access was not granted. Type your cue instead."
