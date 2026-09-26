@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -560,17 +559,14 @@ private fun CuesApp(
     }
 
     fun draft(text: String) {
-        Log.d("CuesDebug", "draft input=[$text]")
         isDrafting = true
         scope.launch {
             val turn = cueService.converse(conversation, text)
-            Log.d("CuesDebug", "converse code=${turn.reply.code} hasDraft=${turn.draft != null} reply=[${turn.reply.text.take(80)}]")
             assistantTurns = conversation.turns.toList()
             if (speakReplies) replySpeaker.speak(turn.reply.text)
             val draftedRoutine = turn.draft
             when {
                 draftedRoutine != null -> {
-                    Log.d("CuesDebug", "→Review unaccounted=${draftedRoutine.unaccountedClauses} caps=${draftedRoutine.requiredCapabilities}")
                     missingCapabilities = emptySet()
                     reviewDraft = draftedRoutine
                     navController.navigate(CuesRoutes.REVIEW)
@@ -761,7 +757,12 @@ private fun CuesApp(
                 }
 
                 composable(CuesRoutes.REVIEW) {
-                    val routine = reviewDraft
+                    // Snapshot once: reviewDraft is nulled on approve/back to reset
+                    // outer state, but this destination's own composition must keep
+                    // rendering its routine for the pop transition's outgoing frames —
+                    // reading reviewDraft live here re-fires the null-guard mid-transition
+                    // and paints a blank frame before the nav animation finishes.
+                    val routine = remember { reviewDraft }
                     if (routine == null) {
                         navController.popBackStack()
                     } else {
@@ -770,14 +771,19 @@ private fun CuesApp(
                             cueService = cueService,
                             missingCapabilities = missingCapabilities,
                             onApproved = {
+                                navController.navigateToTab(CuesRoutes.NOW)
                                 refresh()
                                 missingCapabilities = emptySet()
                                 reviewDraft = null
-                                navController.popBackStack()
+                                notify("Cue armed — it runs the next time \"${routine.title}\" happens.")
                             },
                             onMissingCapabilities = { missingCapabilities = it },
                             onNotify = ::notify,
-                            onBack = { reviewBackText = routine.sourceText; reviewDraft = null; navController.popBackStack() },
+                            onBack = {
+                                navController.popBackStack()
+                                reviewBackText = routine.sourceText
+                                reviewDraft = null
+                            },
                         )
                     }
                 }
@@ -1024,17 +1030,11 @@ private fun ReviewFlow(
     val review = remember(routine) { cueService.review(routine) }
     val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
 
-    androidx.compose.runtime.SideEffect {
-        Log.d("CuesDebug", "ReviewFlow src=[${routine.sourceText}] unaccounted=${review.normalized.unaccountedClauses} missingCaps=$missingCapabilities valid=${review.validation.isValid}")
-    }
-
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, review) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val caps = cueService.missingCapabilities(review.normalized)
-                Log.d("CuesDebug", "ReviewFlow ON_RESUME missingCaps=$caps")
-                onMissingCapabilities(caps)
+                onMissingCapabilities(cueService.missingCapabilities(review.normalized))
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
