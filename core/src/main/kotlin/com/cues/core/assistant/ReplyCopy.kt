@@ -17,5 +17,6 @@ object ReplyCopy {
         ReplyCode.HANDOFF_TO_SYSTEM_AGENT -> "That is a Jovi task. Cues handles when-and-until behavior."
         ReplyCode.FACT_REMEMBERED -> "Saved to Declared Memory. You can review or delete it at any time."
         ReplyCode.UNSUPPORTED -> "I can only help with your cues and their declared context."
+        ReplyCode.REFINE_MODEL_UNPARSED -> "The on-device model restated that, but not as an edit Cues supports."
     }
 }

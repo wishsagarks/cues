@@ -1,5 +1,6 @@
 package com.cues.core.assistant
 
+import com.cues.core.drafting.DraftTrace
 import com.cues.core.model.Routine
 import com.cues.core.model.Session
 import java.util.UUID
@@ -18,6 +19,14 @@ data class Turn(
     val reply: AssistantReply,
     val draft: Routine? = null,
     val pendingCommand: PendingCommand? = null,
+    /**
+     * Every drafter this turn actually asked, and what each one did — from
+     * whichever [com.cues.core.drafting.DraftResult] produced [draft]. Null
+     * when there was nothing to draft (a control/explain/forecast turn) or
+     * only ever one drafter to ask. See [com.cues.core.review.DraftCredit]
+     * for the one place this becomes displayed text.
+     */
+    val trace: DraftTrace? = null,
 )
 
 data class AssistantReply(
@@ -46,6 +55,16 @@ enum class ReplyCode {
     HANDOFF_TO_SYSTEM_AGENT,
     FACT_REMEMBERED,
     UNSUPPORTED,
+    /**
+     * [com.cues.core.assistant.OnDeviceRefinePhraser] was tried — there was
+     * an active draft and the deterministic router found no match — but the
+     * model's restatement did not parse into any of
+     * [com.cues.core.assistant.RefineGrammarParser]'s closed sentences.
+     * Distinct from [UNSUPPORTED] so the UI (and CLEANUP.md CL-39) can tell
+     * "nothing was tried" apart from "the model was tried and its own words
+     * didn't fit the edit grammar either."
+     */
+    REFINE_MODEL_UNPARSED,
 }
 
 sealed interface ReplyChip {

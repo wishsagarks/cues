@@ -101,6 +101,7 @@ internal fun printReview(result: DraftResult.Drafted) {
     val routine = Normalizer.normalize(result.routine)
 
     println(bold("Review") + dim("  (drafted by ${result.source.name.lowercase().replace('_', ' ')})"))
+    printTrace(result.trace, result.source)
     row("WHEN", ReviewCopy.whenText(routine))
     row("IF", ReviewCopy.ifText(routine))
     row("DO", ReviewCopy.doText(routine))
@@ -131,6 +132,24 @@ internal fun printReview(result: DraftResult.Drafted) {
 
     println(dim("  digest ${Normalizer.digest(routine).take(16)}  ") + dim("approval is bound to this"))
     println()
+}
+
+/**
+ * Prints one line per drafter [trace] actually asked, its verdict, and the
+ * label [com.cues.core.review.DraftCredit] renders from them — the terminal
+ * equivalent of Ask's provenance badge (Sprint 8, CLEANUP.md CL-18). A `null`
+ * trace (a plain [GrammarParser] call, unwrapped) prints nothing, exactly as
+ * before this existed.
+ */
+internal fun printTrace(trace: com.cues.core.drafting.DraftTrace?, draftedBy: com.cues.core.model.DraftSourceId) {
+    if (trace == null) return
+    trace.attempts.forEach { attempt ->
+        val report = attempt.inferenceReport?.let { " [${it.backend}, ${it.loadMs + it.generationMs}ms, ~${it.estimatedTokens}tok]" } ?: ""
+        val reason = attempt.reasonCode?.let { " ($it)" } ?: ""
+        println(dim("  attempt: ${attempt.source.name.lowercase()} → ${attempt.outcome.name.lowercase()}$reason$report"))
+    }
+    println(dim("  verdict: ${trace.verdict.name.lowercase()}"))
+    println(dim("  credit:  ${com.cues.core.review.DraftCredit.credit(trace, draftedBy).label()}"))
 }
 
 internal fun printRehearsal(routine: Routine) {

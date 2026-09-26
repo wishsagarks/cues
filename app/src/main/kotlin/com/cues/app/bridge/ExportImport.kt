@@ -50,9 +50,10 @@ object ExportImport {
                 forecast = forecast,
                 coachSuggestions = Detectors.all(store.ledgerEvents(), now),
                 ledgerEvents = store.ledgerEvents(),
-                primaryDrafter = diagnostics.primaryDrafter.name,
-                lastFallbackReason = diagnostics.lastFallbackReason,
-                lastInferenceReport = diagnostics.lastInferenceReport,
+                primaryDrafter = diagnostics.setup.model.name,
+                lastFallbackReason = diagnostics.lastTrace?.attempts?.firstOrNull { it.reasonCode != null }
+                    ?.let { "${it.source.name.lowercase()}: ${it.reasonCode}" },
+                lastInferenceReport = diagnostics.lastTrace?.attempts?.firstNotNullOfOrNull { it.inferenceReport },
                 generatedAtMillis = now,
             ),
         )

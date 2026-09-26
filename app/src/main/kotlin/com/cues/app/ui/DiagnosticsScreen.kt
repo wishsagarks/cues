@@ -42,6 +42,7 @@ import com.cues.app.runtime.DeviceDiagnostics
 import com.cues.app.runtime.DeviceHealthSnapshot
 import com.cues.app.runtime.ManualObservation
 import com.cues.core.CueService
+import com.cues.core.drafting.DraftTrace
 import com.cues.core.inference.ModelProvisionState
 import java.text.DateFormat
 import java.util.Date
@@ -116,7 +117,7 @@ fun DiagnosticsScreen(
                 canDownload = canDownloadModel,
                 isOnWifi = isOnWifi,
                 npuEligible = npuEligible,
-                lastInferenceReport = cueDiagnostics?.lastInferenceReport,
+                lastInferenceReport = cueDiagnostics?.lastTrace.modelReport(),
                 enabled = onDeviceModelEnabled,
                 onToggleEnabled = onToggleOnDeviceModel,
                 onDownload = onDownloadModel,
@@ -208,18 +209,33 @@ fun DiagnosticsScreen(
     }
 }
 
+/** The model's own last real report, from whichever attempt in [trace] carried one — never eligibility, never a guess. */
+private fun DraftTrace?.modelReport(): com.cues.core.inference.InferenceReport? =
+    this?.attempts?.firstNotNullOfOrNull { it.inferenceReport }
+
 /**
- * Names the drafter that actually runs and, when a model has drafted at
- * least once, which backend loaded it — never a claim about what *would*
- * run, only what already did. See [com.cues.core.inference.InferenceReport].
+ * Names the drafter setup that's actually configured and, when a model has
+ * drafted at least once, which backend loaded it plus every attempt's own
+ * outcome — never a claim about what *would* run, only what already did.
+ * See [com.cues.core.inference.InferenceReport] and CLEANUP.md CL-18.
  */
 private fun CueService.Diagnostics.render(): String = buildString {
-    append(primaryDrafter.name.lowercase().replace('_', ' '))
-    lastInferenceReport?.let { report ->
-        append(" — last ran on ${report.backend.name}")
-        append(", ${report.loadMs}ms load, ~${"%.1f".format(report.tokensPerSecond)} tok/s")
+    append(
+        when (setup.model) {
+            com.cues.core.ports.ModelAvailability.READY -> "model on"
+            com.cues.core.ports.ModelAvailability.INSTALLED_OFF -> "model installed, off"
+            com.cues.core.ports.ModelAvailability.NOT_INSTALLED -> "no model installed"
+        },
+    )
+    lastTrace?.let { trace ->
+        trace.modelReport()?.let { report ->
+            append(" — last ran on ${report.backend.name}")
+            append(", ${report.loadMs}ms load, ~${"%.1f".format(report.tokensPerSecond)} tok/s")
+        }
+        trace.attempts.filter { it.reasonCode != null }.forEach { attempt ->
+            append(" — ${attempt.source.name.lowercase()}: ${attempt.reasonCode}")
+        }
     }
-    lastFallbackReason?.let { append(" — fell back: $it") }
 }
 
 /**

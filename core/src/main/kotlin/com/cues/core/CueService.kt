@@ -19,9 +19,9 @@ import com.cues.core.assistant.UnsupportedRoute
 import com.cues.core.context.SnapshotBuilder
 import com.cues.core.context.PersonalIndex
 import com.cues.core.context.ReferenceResolution
-import com.cues.core.drafting.CompositeDrafter
 import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.DraftResult
+import com.cues.core.drafting.ModelDraftGuard
 import com.cues.core.model.DraftSourceId
 import com.cues.core.drafting.RoutineDrafter
 import com.cues.core.model.Capability
@@ -128,10 +128,24 @@ class CueService(
      * [AssistantIntent.Unsupported] exactly as before this parameter existed.
      */
     private val refinePhraser: OnDeviceRefinePhraser? = null,
+    /**
+     * A live read of whether a model-backed drafter is actually worth
+     * asking right now — `null`, the default, reports [com.cues.core.ports.ModelAvailability.NOT_INSTALLED]
+     * in [diagnostics], which is honest for every caller that predates this
+     * parameter (the CLI, most tests): no model was ever configured for
+     * them. See CLEANUP.md CL-18: "the drafter label is always ON-DEVICE
+     * MODEL" — this is the one place `:app` tells the truth about it.
+     */
+    private val modelAvailabilityProbe: com.cues.core.ports.ModelAvailabilityProbe? = null,
+    /** Whether the caller has opted into cloud assist right now — `null`/absent reports `false`, same discipline as [modelAvailabilityProbe]. */
+    private val cloudOptInProbe: (() -> Boolean)? = null,
 ) {
 
     private val engine = SessionEngine(sessions, executor, clock, attention = attention)
-    private var lastInferenceReport: InferenceReport? = null
+    private val _lastTrace = kotlinx.coroutines.flow.MutableStateFlow<com.cues.core.drafting.DraftTrace?>(null)
+
+    /** The most recent draft's full [com.cues.core.drafting.DraftTrace], updated by every [draft] call and by [refinePhraser]'s own calls. Observable so `:app` never has to re-read a snapshot to notice a change (CLEANUP.md CL-18's "diagnostics is read once per composition"). */
+    val lastTrace: kotlinx.coroutines.flow.StateFlow<com.cues.core.drafting.DraftTrace?> = _lastTrace
 
     init {
         contexts?.let { ContextualStores.contexts = it }
@@ -149,10 +163,81 @@ class CueService(
      * Nothing is persisted yet; a draft is not reviewable until [review] and
      * not armed until [approveAndArm].
      */
-    suspend fun draft(text: String): DraftResult = when (val result = drafter.draft(text).also(::recordInference)) {
-        // A model never gets to assert that it understood a clause.
-        is DraftResult.Drafted -> ClauseAccounting.stamp(text, result)
-        is DraftResult.NeedsClarification, is DraftResult.Failed -> result
+    suspend fun draft(text: String): DraftResult {
+        val result = drafter.draft(text)
+        recordDraftResult(result)
+        return when (result) {
+            // A model never gets to assert that it understood a clause.
+            is DraftResult.Drafted -> ClauseAccounting.stamp(text, result)
+            is DraftResult.NeedsClarification, is DraftResult.Failed -> result
+        }
+    }
+
+    /**
+     * The explicit, opt-in "third opinion" (docs/FDD.md's "Optional cloud
+     * assist" section) — a cloud-backed [RoutineDrafter] the caller only
+     * ever reaches for after the offline pair ([drafter]) has already
+     * disagreed or both failed, and only with cloud assist turned on.
+     *
+     * Runs through the same funnel every other draft does — [ModelDraftGuard],
+     * [ClauseAccounting], the ledger via [recordDraftResult] — so a cloud
+     * draft that reaches [Turn.draft] is exactly as trusted as any other.
+     * Before Sprint 8 this call bypassed `CueService` entirely
+     * (`CuesApplication.tryCloudAssist`): a cloud draft never became a
+     * ledger entry or a conversation [Turn], and the Insights CLOUD row was
+     * always zero regardless of real Sarvam usage (CLEANUP.md CL-18/CL-35).
+     *
+     * Like [draft], nothing is persisted — the caller takes [Turn.draft] to
+     * Review, same as any other proposal.
+     */
+    suspend fun draftWithCloud(conversation: Conversation, text: String, cloud: RoutineDrafter): Turn {
+        val raw = cloud.draft(text)
+        val guarded = if (raw is DraftResult.Drafted && ModelDraftGuard.rejects(raw)) {
+            DraftResult.Failed(
+                raw.source,
+                "Cloud assist produced a cue that did not pass independent validation.",
+                raw.elapsedMillis,
+                raw.inferenceReport,
+                raw.trace,
+            )
+        } else {
+            raw
+        }
+        recordDraftResult(guarded)
+        val turn = when (guarded) {
+            is DraftResult.Drafted -> {
+                val stamped = ClauseAccounting.stamp(text, guarded)
+                Turn(
+                    text,
+                    AssistantIntent.Create(text),
+                    AssistantReply(
+                        ReplyCode.DRAFT_READY,
+                        stamped.inferenceReport?.let { mapOf("backend" to it.backend.name) }.orEmpty(),
+                        ReplySource.SARVAM_CLOUD,
+                    ),
+                    draft = stamped.routine,
+                    trace = stamped.trace,
+                )
+            }
+            is DraftResult.NeedsClarification -> Turn(
+                text,
+                AssistantIntent.Create(text),
+                AssistantReply(ReplyCode.NEEDS_CLARIFICATION, mapOf("question" to guarded.question), ReplySource.SARVAM_CLOUD),
+                trace = guarded.trace,
+            )
+            is DraftResult.Failed -> Turn(
+                text,
+                AssistantIntent.Create(text),
+                AssistantReply(ReplyCode.DRAFT_FAILED, mapOf("reason" to guarded.reason), ReplySource.SARVAM_CLOUD),
+                trace = guarded.trace,
+            )
+        }
+        turn.draft?.let {
+            conversation.currentDraft = it
+            conversation.lastRoutineId = it.id
+        }
+        conversation.turns += turn
+        return turn
     }
 
     /**
@@ -242,6 +327,7 @@ class CueService(
                 result.source.replySource(),
             ),
             draft = result.routine,
+            trace = result.trace,
         )
         is DraftResult.NeedsClarification -> Turn(
             text,
@@ -258,11 +344,13 @@ class CueService(
                 result.source.replySource(),
                 result.deviceCandidates.map { ReplyChip.Choice(it.id, it.label) },
             ),
+            trace = result.trace,
         )
         is DraftResult.Failed -> Turn(
             text,
             intent,
             AssistantReply(ReplyCode.DRAFT_FAILED, mapOf("reason" to result.reason), result.source.replySource()),
+            trace = result.trace,
         )
     }
 
@@ -311,7 +399,13 @@ class CueService(
         val draft = conversation.currentDraft
         if (draft != null && refinePhraser != null) {
             val phrasing = refinePhraser.phrase(text)
-            recordInference(DraftSourceId.ON_DEVICE_LLM, phrasing?.report?.report)
+            phrasing?.report?.report?.let { report ->
+                recordSingleInference(
+                    DraftSourceId.ON_DEVICE_LLM,
+                    report,
+                    if (phrasing.operation != null) com.cues.core.drafting.AttemptOutcome.DRAFTED else com.cues.core.drafting.AttemptOutcome.FAILED,
+                )
+            }
             val operation = phrasing?.operation
             if (operation != null) {
                 val refined = Refiner.apply(draft, operation).routine
@@ -322,6 +416,12 @@ class CueService(
                     draft = refined,
                 )
             }
+            // The model was tried — there was a draft to edit and the
+            // deterministic router found no match — but its restatement
+            // didn't parse into RefineGrammarParser's closed vocabulary, or
+            // the call itself failed. Distinct from UNSUPPORTED below, which
+            // means nothing was ever tried. See CLEANUP.md CL-39.
+            return Turn(text, intent, AssistantReply(ReplyCode.REFINE_MODEL_UNPARSED, answeredFrom = ReplySource.ON_DEVICE_LLM))
         }
         return Turn(text, intent, AssistantReply(ReplyCode.UNSUPPORTED, answeredFrom = ReplySource.PARSER))
     }
@@ -800,73 +900,125 @@ class CueService(
 
     // ---------------------------------------------------------- diagnostics
 
+    /**
+     * How this service is configured to draft, independent of any one
+     * call's outcome — [com.cues.core.ports.ModelAvailability.NOT_INSTALLED]/
+     * [com.cues.core.ports.ModelAvailability.INSTALLED_OFF] must read as
+     * plainly as [com.cues.core.ports.ModelAvailability.READY], never
+     * papered over by a drafter identity that claims a model regardless
+     * (CLEANUP.md CL-18: "the drafter label is always ON-DEVICE MODEL").
+     */
+    data class DrafterSetup(
+        val model: com.cues.core.ports.ModelAvailability,
+        val parser: Boolean = true,
+        val cloudOptIn: Boolean = false,
+    )
+
     data class Diagnostics(
-        /** The drafter this service is configured to try first. */
-        val primaryDrafter: DraftSourceId,
-        /** Why the most recent draft fell back, if it did. Null when nothing has fallen back yet. */
-        val lastFallbackReason: String?,
+        val setup: DrafterSetup,
         /**
-         * What actually ran the local model on the most recent draft that
-         * used one — NPU, GPU or CPU, per [InferenceReport]'s own caveat
-         * about what that claim does and does not cover. Null until a
-         * model-backed draft has run at all, e.g. every draft on a build
-         * with no side-loaded model.
+         * Every drafter the most recent [draft] call actually asked, and
+         * what each one did — `null` before any draft has run, or when
+         * neither the call nor its drafter ever produced a report to trace.
+         * See [com.cues.core.review.DraftCredit] for how this becomes a
+         * label, and [lastTrace] for the observable form of the same value.
          */
-        val lastInferenceReport: InferenceReport?,
+        val lastTrace: com.cues.core.drafting.DraftTrace?,
     )
 
     /**
-     * Names the actual drafting path, for [com.cues.core.drafting.DraftSourceId]'s
+     * Names the actual drafting setup, for [com.cues.core.drafting.DraftSourceId]'s
      * whole reason for existing: a canonical parser must never be presented as
-     * language understanding, on screen or in a slide.
+     * language understanding, on screen or in a slide. A snapshot of
+     * [lastTrace]; prefer collecting that flow directly wherever the caller
+     * can, so the UI updates without re-reading a stale snapshot every frame.
      */
-    fun diagnostics(): Diagnostics {
-        val composite = drafter as? CompositeDrafter
-        return Diagnostics(
-            primaryDrafter = drafter.id,
-            lastFallbackReason = composite?.lastFallbackReason,
-            lastInferenceReport = lastInferenceReport,
+    fun diagnostics(): Diagnostics = Diagnostics(
+        setup = DrafterSetup(
+            model = modelAvailabilityProbe?.current() ?: com.cues.core.ports.ModelAvailability.NOT_INSTALLED,
+            cloudOptIn = cloudOptInProbe?.invoke() ?: false,
+        ),
+        lastTrace = _lastTrace.value,
+    )
+
+    /**
+     * Records whichever [com.cues.core.drafting.DraftTrace] [result] carries
+     * — from [DifferentialDrafter][com.cues.core.drafting.DifferentialDrafter] —
+     * or, for a single, unwrapped drafter that still attached its own
+     * [InferenceReport] (no trace to speak of), synthesizes a one-attempt
+     * trace so the same bookkeeping applies either way. A plain parser draft
+     * with neither carries nothing, exactly as before this existed.
+     */
+    private fun recordDraftResult(result: DraftResult) {
+        val trace = result.trace ?: run {
+            val (report, outcome, elapsedMillis) = when (result) {
+                is DraftResult.Drafted -> Triple(result.inferenceReport, com.cues.core.drafting.AttemptOutcome.DRAFTED, result.elapsedMillis)
+                is DraftResult.NeedsClarification -> Triple(result.inferenceReport, com.cues.core.drafting.AttemptOutcome.CLARIFY, result.elapsedMillis)
+                is DraftResult.Failed -> Triple(result.inferenceReport, com.cues.core.drafting.AttemptOutcome.FAILED, result.elapsedMillis)
+            }
+            report ?: return
+            com.cues.core.drafting.DraftTrace(
+                listOf(com.cues.core.drafting.DrafterAttempt(result.source, outcome, elapsedMillis = elapsedMillis, inferenceReport = report)),
+                com.cues.core.drafting.DraftVerdict.SINGLE,
+            )
+        }
+        recordTrace(trace)
+    }
+
+    /**
+     * The narrower funnel [refinePhraser]'s single, non-differential model
+     * call passes through — recorded as its own one-attempt trace so
+     * Checks' "last run" reflects a refine call too, not only a fresh draft.
+     */
+    private fun recordSingleInference(source: DraftSourceId, report: InferenceReport, outcome: com.cues.core.drafting.AttemptOutcome) {
+        recordTrace(
+            com.cues.core.drafting.DraftTrace(
+                listOf(com.cues.core.drafting.DrafterAttempt(source, outcome, elapsedMillis = 0, inferenceReport = report)),
+                com.cues.core.drafting.DraftVerdict.SINGLE,
+            ),
         )
     }
 
     /**
-     * Keeps [lastInferenceReport] current from whichever [DraftResult]
-     * variant carries one, if any, and — when [inferenceLedger] is wired and
-     * its own opt-in is on — appends one [InferenceLedgerEntry] per call.
-     * This is the one funnel every draft call already passes through, so no
-     * UI call site needs its own bookkeeping.
+     * Updates [lastTrace] and — when [inferenceLedger] is wired and its own
+     * opt-in is on — appends one [InferenceLedgerEntry] per attempt that
+     * carried a report, not only the one whose output was used. Before
+     * Sprint 8 this was the reverse: only a winning model draft was kept at
+     * all, so an agreed, disagreed, invalid or timed-out model attempt left
+     * no record anywhere it ran (CLEANUP.md CL-18/CL-34).
      */
-    private fun recordInference(result: DraftResult) {
-        val report = when (result) {
-            is DraftResult.Drafted -> result.inferenceReport
-            is DraftResult.NeedsClarification -> result.inferenceReport
-            is DraftResult.Failed -> result.inferenceReport
+    private fun recordTrace(trace: com.cues.core.drafting.DraftTrace) {
+        _lastTrace.value = trace
+        trace.attempts.forEach { attempt ->
+            attempt.inferenceReport?.let { report ->
+                appendLedgerEntry(attempt.source, report, attempt.outcome, trace.verdict, trace.promptId)
+            }
         }
-        recordInference(result.source, report)
     }
 
-    /**
-     * The shared funnel both draft calls and [refinePhraser]'s edit calls
-     * pass through — one place ledger bookkeeping happens, regardless of
-     * which kind of model call produced the report.
-     */
-    private fun recordInference(source: DraftSourceId, report: InferenceReport?) {
-        if (report != null) {
-            lastInferenceReport = report
-            inferenceLedger?.takeIf { it.usageTrackingEnabled }?.let { ledger ->
-                val (costUsd, costBasis) = InferenceCost.costFor(source, report.estimatedTokens)
-                ledger.appendInference(
-                    InferenceLedgerEntry(
-                        atMillis = clock.nowMillis(),
-                        source = source,
-                        backend = report.backend,
-                        estimatedTokens = report.estimatedTokens,
-                        latencyMs = report.loadMs + report.generationMs,
-                        costUsd = costUsd,
-                        costBasis = costBasis,
-                    ),
-                )
-            }
+    private fun appendLedgerEntry(
+        source: DraftSourceId,
+        report: InferenceReport,
+        outcome: com.cues.core.drafting.AttemptOutcome,
+        verdict: com.cues.core.drafting.DraftVerdict,
+        promptId: String?,
+    ) {
+        inferenceLedger?.takeIf { it.usageTrackingEnabled }?.let { ledger ->
+            val (costUsd, costBasis) = InferenceCost.costFor(source, report.estimatedTokens)
+            ledger.appendInference(
+                InferenceLedgerEntry(
+                    atMillis = clock.nowMillis(),
+                    source = source,
+                    backend = report.backend,
+                    estimatedTokens = report.estimatedTokens,
+                    latencyMs = report.loadMs + report.generationMs,
+                    costUsd = costUsd,
+                    costBasis = costBasis,
+                    outcome = outcome,
+                    verdict = verdict,
+                    promptId = promptId,
+                ),
+            )
         }
     }
 

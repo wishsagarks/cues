@@ -51,6 +51,7 @@ fun main(args: Array<String>) = runBlocking {
             println("Cues needs to ask")
             println("  ${result.question}")
             result.unsupported.drop(1).forEach { println("  - ${it.explanation}") }
+            printTrace(result.trace, result.source)
             println()
             exitProcess(2)
         }
@@ -58,6 +59,7 @@ fun main(args: Array<String>) = runBlocking {
         is DraftResult.Failed -> {
             println("Could not draft this cue")
             println("  ${result.reason}")
+            printTrace(result.trace, result.source)
             println()
             exitProcess(2)
         }

@@ -156,4 +156,35 @@ class JsonFileStoreTest {
 
         assertEquals(setOf("active", "cleanup-pending"), store.allUnfinished().map { it.id }.toSet())
     }
+
+    @Test
+    fun `a pre-Sprint-8 inference ledger entry with no outcome, verdict or promptId still decodes`() {
+        // Written by hand in the exact shape CL-18/CL-34's InferenceLedgerEntry
+        // had before Sprint 8 added outcome/verdict/promptId — no test double
+        // for "the old format", because the old format is just this file's
+        // own JSON, minus three fields.
+        val ledgerDir = File(root, "ledger/inference").apply { mkdirs() }
+        File(ledgerDir, "1700000000000-legacy.json").writeText(
+            """
+            {
+              "atMillis": 1700000000000,
+              "source": "ON_DEVICE_LLM",
+              "backend": "GPU",
+              "estimatedTokens": 12,
+              "latencyMs": 640,
+              "costUsd": 0.0,
+              "costBasis": "ON_DEVICE_FREE"
+            }
+            """.trimIndent(),
+        )
+
+        val entries = store.inferenceEntries()
+
+        assertEquals(1, entries.size)
+        val entry = entries.single()
+        assertEquals(DraftSourceId.ON_DEVICE_LLM, entry.source)
+        assertNull(entry.outcome, "recorded before this field existed — an honest absence, not a fabricated DRAFTED")
+        assertNull(entry.verdict)
+        assertNull(entry.promptId)
+    }
 }

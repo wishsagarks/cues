@@ -25,10 +25,10 @@ import com.cues.app.ui.components.StatusPill
 import com.cues.app.ui.components.StatusTone
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
+import com.cues.core.drafting.DraftTrace
 import com.cues.core.inference.CostBasis
 import com.cues.core.inference.InferenceBackend
 import com.cues.core.inference.InferenceCost
-import com.cues.core.inference.InferenceReport
 import com.cues.core.insights.InsightsReport
 import com.cues.core.insights.InsightsWindow
 import com.cues.core.insights.SkipFamily
@@ -48,9 +48,13 @@ fun InsightsScreen(
     onWindowChange: (InsightsWindow) -> Unit,
     onToggleLedger: (Boolean) -> Unit,
     drafterLabel: String,
-    lastFallbackReason: String?,
-    /** The real backend a model actually loaded on last time it ran — see [InferenceReport]. `null` renders no badge, never a guess. */
-    lastInferenceReport: InferenceReport? = null,
+    /**
+     * Every drafter the most recent draft actually asked, from
+     * [com.cues.core.CueService.diagnostics]. `null` renders no badge and no
+     * credit line — honest for a fresh install or a build with no model —
+     * never a guessed backend (CLEANUP.md CL-18).
+     */
+    lastTrace: DraftTrace? = null,
     onExportConsole: () -> Unit,
     onFixCapability: () -> Unit,
     onToggleUsageTracking: (Boolean) -> Unit = {},
@@ -273,10 +277,16 @@ fun InsightsScreen(
                         Text("DRAFTING PATH", style = CuesType.labelSmall, color = t.inkSlate)
                         Text(drafterLabel, style = CuesType.bodyMedium, color = t.inkPrimary)
                     }
-                    lastInferenceReport?.let { BackendPill(it.backend) }
+                    val backend = lastTrace?.attempts?.firstNotNullOfOrNull { it.inferenceReport }?.backend
+                    backend?.let { BackendPill(it) }
                 }
-                if (lastFallbackReason != null) {
-                    Text("Fell back: $lastFallbackReason", style = CuesType.labelSmall, color = t.warn)
+                // Every attempt the last draft made, not only the winner —
+                // Sprint 8 replaced the always-null "fell back" line with
+                // this, since a real fallback reason now lives on the trace.
+                lastTrace?.attempts?.forEach { attempt ->
+                    if (attempt.reasonCode != null) {
+                        Text("${attempt.source.name.lowercase()}: ${attempt.reasonCode}", style = CuesType.labelSmall, color = t.warn)
+                    }
                 }
             }
         }

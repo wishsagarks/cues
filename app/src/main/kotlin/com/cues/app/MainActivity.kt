@@ -250,11 +250,18 @@ private fun availableSignalsNow(context: android.content.Context): List<Availabl
     }
 }
 
-private fun DraftSourceId.friendlyLabel(): String = when (this) {
-    DraftSourceId.GRAMMAR_PARSER -> "GRAMMAR PARSER"
-    DraftSourceId.ON_DEVICE_LLM -> "ON-DEVICE MODEL"
-    DraftSourceId.IMPORTED_CARD -> "IMPORTED CARD"
-    DraftSourceId.SARVAM_CLOUD -> "SARVAM (ONLINE)"
+/**
+ * The one truthful drafter-status label, replacing the pre-Sprint-8 version
+ * of this function that read `drafter.id` directly — always "ON-DEVICE
+ * MODEL" the moment a [com.cues.core.drafting.DifferentialDrafter] was
+ * wired in, whether or not a model was installed or turned on
+ * (CLEANUP.md CL-18). [com.cues.core.CueService.DrafterSetup.model] is the
+ * live read this label is honest about instead.
+ */
+private fun com.cues.core.CueService.DrafterSetup.friendlyLabel(): String = when (model) {
+    com.cues.core.ports.ModelAvailability.READY -> "GEMMA ON-DEVICE"
+    com.cues.core.ports.ModelAvailability.INSTALLED_OFF -> "GRAMMAR ONLY (MODEL OFF)"
+    com.cues.core.ports.ModelAvailability.NOT_INSTALLED -> "GRAMMAR ONLY"
 }
 
 @Composable
@@ -616,7 +623,7 @@ private fun CuesApp(
                         phoneName = remember { DeviceIdentity.phoneName() },
                         forecast = forecast,
                         titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
-                        drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
+                        drafterLabel = cueService.diagnostics().setup.friendlyLabel(),
                         onOpenRoutine = { routine -> navController.navigate(CuesRoutes.cueDetail(routine.id)) },
                         onArmPause = { routine ->
                             val result = if (routine.status == RoutineStatus.PAUSED) cueService.resume(routine.id)
@@ -650,9 +657,8 @@ private fun CuesApp(
                         window = insightsWindow,
                         onWindowChange = { insightsWindow = it },
                         onToggleLedger = { store.setSignalOptIn(it) },
-                        drafterLabel = diag.primaryDrafter.friendlyLabel(),
-                        lastFallbackReason = diag.lastFallbackReason,
-                        lastInferenceReport = diag.lastInferenceReport,
+                        drafterLabel = diag.setup.friendlyLabel(),
+                        lastTrace = diag.lastTrace,
                         onExportConsole = {
                             val html = com.cues.app.bridge.ExportImport.buildConsoleHtml(context, cueService, store)
                             val uri = com.cues.app.bridge.ExportImport.writeShareableConsole(context, html)
@@ -667,7 +673,7 @@ private fun CuesApp(
                     AskScreen(
                         isDrafting = isDrafting,
                         onDraft = ::draft,
-                        drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
+                        drafterLabel = cueService.diagnostics().setup.friendlyLabel(),
                         onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
                         onStopVoice = { localSpeechInput.finishAndDeliver() },
                         cloudAssistAvailable = cloudAssistAvailable,

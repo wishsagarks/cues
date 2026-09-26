@@ -15,10 +15,19 @@ enum class ClauseKind { MAPPED, FILLER, UNACCOUNTED }
 
 data class ClauseSpan(val text: String, val range: IntRange, val kind: ClauseKind)
 
+/** Which top-level clause two disagreeing drafts differ on — a closed code, never a sentence built from the routines. */
+enum class DifferingClause { TRIGGER, CONDITIONS, ACTIONS, ENDING, OTHER }
+
+/** One drafter's own validated routine, offered as a side of a [DraftResult.NeedsClarification] disagreement — never the model's prose, always something [com.cues.core.compile.Validator] already accepted. */
+data class DraftCandidate(val source: DraftSourceId, val routine: Routine)
+
 sealed interface DraftResult {
 
     /** The drafter that produced this result, whatever the outcome. */
     val source: DraftSourceId
+
+    /** Every drafter that was actually asked, and what each one did — set only by [DifferentialDrafter]. Null for a single-drafter result. */
+    val trace: DraftTrace?
 
     /**
      * A routine was produced. It is not yet approved, not yet validated and
@@ -42,6 +51,7 @@ sealed interface DraftResult {
         val elapsedMillis: Long = 0,
         /** Set only by a drafter backed by a local model — null for the parser. */
         val inferenceReport: InferenceReport? = null,
+        override val trace: DraftTrace? = null,
     ) : DraftResult
 
     /** The request was understood well enough to know a question is needed. */
@@ -51,6 +61,14 @@ sealed interface DraftResult {
         val about: String,
         /** Paired-device choices when [about] is `trigger.device`. */
         val deviceCandidates: List<PairedDevice> = emptyList(),
+        /**
+         * Both sides of a disagreement, when [about] is `draft.disagreement` —
+         * each already independently validated. The UI renders both rather
+         * than the drafter's own prose about the difference; [differingClause]
+         * says which top-level clause to highlight.
+         */
+        val candidates: List<DraftCandidate> = emptyList(),
+        val differingClause: DifferingClause? = null,
         /**
          * The app name text named an "open X" request, when [about] is
          * `action.app`. Never a package name — the parser has no installed-app
@@ -72,6 +90,7 @@ sealed interface DraftResult {
         val clauses: List<ClauseSpan> = emptyList(),
         val elapsedMillis: Long = 0,
         val inferenceReport: InferenceReport? = null,
+        override val trace: DraftTrace? = null,
     ) : DraftResult
 
     /** Nothing usable came back. */
@@ -80,6 +99,7 @@ sealed interface DraftResult {
         val reason: String,
         val elapsedMillis: Long = 0,
         val inferenceReport: InferenceReport? = null,
+        override val trace: DraftTrace? = null,
     ) : DraftResult
 }
 

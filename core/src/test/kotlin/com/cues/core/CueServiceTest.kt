@@ -341,9 +341,12 @@ class CueServiceTest {
     }
 
     @Test
-    fun `diagnostics names the configured drafter`() {
-        assertEquals(DraftSourceId.GRAMMAR_PARSER, service.diagnostics().primaryDrafter)
-        assertNull(service.diagnostics().lastFallbackReason, "a plain drafter never reports a fallback")
+    fun `diagnostics honestly reports no model when none is configured`() {
+        // No ModelAvailabilityProbe was wired for this fixture's CueService —
+        // NOT_INSTALLED is the honest default, never a claim that a model is
+        // ready just because a drafter happens to be present (CLEANUP.md CL-18).
+        assertEquals(com.cues.core.ports.ModelAvailability.NOT_INSTALLED, service.diagnostics().setup.model)
+        assertNull(service.diagnostics().lastTrace, "a plain grammar-parser draft carries no trace")
     }
 
     private fun millisAt(hour: Int, minute: Int): Long {

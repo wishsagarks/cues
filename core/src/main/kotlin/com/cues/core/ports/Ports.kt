@@ -257,3 +257,31 @@ sealed interface SpeechResult {
     data object Unavailable : SpeechResult
     data class Failed(val reason: String) : SpeechResult
 }
+
+/**
+ * Whether a model-backed drafter can actually be asked right now — never
+ * whether it *would* answer well, only whether it should be tried at all.
+ *
+ * Exists so [com.cues.core.drafting.DifferentialDrafter] can skip a model
+ * attempt outright — recorded as [com.cues.core.drafting.AttemptOutcome.SKIPPED_UNAVAILABLE],
+ * costing no timeout — instead of asking it, letting it throw or hang, and
+ * only then discovering it was never installed or was switched off. Also the
+ * one source of truth `:app` renders as "GRAMMAR ONLY" vs "GEMMA ON-DEVICE"
+ * (CLEANUP.md: "every draft names the drafter that produced it" — including
+ * naming when there wasn't one to ask).
+ */
+enum class ModelAvailability {
+    /** No model file is present at all. */
+    NOT_INSTALLED,
+
+    /** A model file exists, but the user has not turned drafting on. */
+    INSTALLED_OFF,
+
+    /** Installed and enabled — safe to attempt. */
+    READY,
+}
+
+/** A live read of [ModelAvailability], the same "ask now, never cache" discipline as [CapabilityProvider]. */
+fun interface ModelAvailabilityProbe {
+    fun current(): ModelAvailability
+}
