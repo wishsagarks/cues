@@ -135,8 +135,8 @@ fun DiagnosticsScreen(
 
         Spacer(Modifier.height(20.dp))
         ManualCheck(
-            title = "Jovi mic or assist gesture",
-            instruction = "Try the phone's microphone and assist gesture. Record whether Jovi prevented Cues from receiving the intended user gesture.",
+            title = "System assist gesture",
+            instruction = "Try the phone's microphone and assist gesture. Record whether the system assistant (Google Assistant on this device) prevented Cues from receiving the intended user gesture.",
             observation = diagnostics.joviMicOrAssist,
             onRecord = {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)

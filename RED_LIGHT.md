@@ -5,13 +5,13 @@ phone only, with the laptop reachable through Office Kit. Green Light is both
 devices, and covers the opening sprint, mentor rounds, the overnight window and
 demo polish.
 
-The constraint is real and worth planning around rather than fighting. Two
-routes are prepared. One of them gets deleted once the other is proven — see
-CL-01 in [CLEANUP.md](CLEANUP.md).
+The constraint is real and worth planning around rather than fighting.
+Office Kit route confirmed working on the loaner, 26 Sep 2026 — see CL-01
+(closed) in [CLEANUP.md](CLEANUP.md).
 
 ---
 
-## Route A — Office Kit drives the laptop (primary)
+## Office Kit drives the laptop
 
 The laptop keeps compiling; the phone becomes the keyboard and screen. Office
 Kit mirrors the laptop, forwards input, shares a clipboard and moves files
@@ -47,31 +47,6 @@ without deploying at all.
 **Office Kit usage is 10% of the rubric**, read off HackTracker device
 telemetry rather than self-reported. Working this way is not a compliance
 exercise; it is how the hours get spent anyway.
-
----
-
-## Route B — Termux on the phone (fallback, unproven)
-
-Gradle and the Android SDK running natively on the iQOO, no laptop involved.
-
-**This has not been tested on this hardware.** It is written down so that a
-failure of Route A on Saturday afternoon is an inconvenience rather than a
-disaster. Try it during the opening Green Light window, not at the moment it is
-needed.
-
-```sh
-pkg install openjdk-21 gradle git
-# The Android SDK command-line tools need aarch64 builds; the standard
-# x86 build-tools binaries will not run. This is the step most likely to fail.
-```
-
-What would work even if the SDK does not: `:core` is pure Kotlin/JVM with no
-Android dependency at all. `./dev t` and `./dev d` need nothing but a JDK and
-Gradle, so the entire decision core stays workable on the phone under Termux
-regardless of whether an APK can be built there.
-
-That is not an accident of the design. It is the reason `:core` has no Android
-types in it.
 
 ---
 

@@ -58,17 +58,24 @@ loop live. Method and pass conditions are in
 | M9 | **QR between devices** | Show a Cue Card QR on the loaner and scan it on a second phone, and the other way round. Repeat with text share. Try one scan with a device missing from the receiver. | The card reimports to the receiver's own device id. The missing entity is refused by name. Nothing arrives armed | Text share remains the supported path, and QR is disclosed as unverified | CL-21 |
 | M10 | **Developer Gemma surface reachable from outside the app** | In Diagnostics, install a BYOM model under "Developer surface" and flip "Expose to other apps" on. Then, from a shell on the loaner (or over `adb w`): `adb shell content call --uri content://com.cues.android.debug.gemma --method generate --extra prompt:s:"Draft one sentence"` — confirm the exact `--extra` flag syntax against the installed platform-tools version first, it varies across releases. Repeat once with the switch off, and once from a second real installed app if time allows (see CLEANUP.md CL-38's own remove-when). | The on switch returns a real Bundle with `text`/`backend`/`estimatedTokens`/`modelIdentity`, the off switch returns `error` instead, and the Diagnostics "Recent callers" list shows both attempts with the right allowed/denied label | The provider's own error message names why (no model installed, surface off, or a crash) — record it here rather than guessing | CL-38 |
 
+## Device context (all rows below)
+
+**Device:** iQOO I2501 · **OS:** OriginOS 6 (Android 16, SDK 36) · **SoC:** SM8850 (QTI, board: canoe) · **Build:** `BP2A.250605.031.A3_V000L1` · **App commit:** d3fceef · **Probe:** `evidence/probe-20260926T060004Z-10BFBN2C30001KN.txt`
+
+Note: CLEANUP.md and sprint docs consistently assumed *OriginOS 7 on Android 15*. Device is actually **OriginOS 6 on Android 16**. Every "OriginOS 7" assumption in CL-06, CL-14, CL-15, CL-23 etc. should be read as OriginOS 6 going forward.
+
 ## Results
 
 | ID | Date | Result | Observed value | Evidence | Caveat |
 |---|---|---|---|---|---|
-| M1 | | Not run | | | |
+| Build | 2026-09-26 | Pass | `./dev b` succeeded (3s cached); APK installed and launched on I2501 serial 10BFBN2C30001KN; no crash, no fatal in logcat. Closes CL-04 and CL-14 for this device. | probe-20260926T060004Z | targetSdk 36 matches device SDK 36. Edge-to-edge behaviour to be observed under normal use. |
+| M1 | 2026-09-26 | Limited | Game mode packages: `com.vivo.game`, `com.vivo.gamecube`. Power/ultra-saver: `com.bbk.SuperPowerSave`, `com.iqoo.powersaving`, `com.vivo.devicepower`. Eye protection: package not identified from `pm list packages` — needs manual Settings navigation. Jovi: **not present**; `ACTION_ASSIST` resolves to `com.google.android.googlequicksearchbox` (Google Assistant). | probe-20260926T060004Z | Eye protection package TBD. Utility bindings stay unscoped until confirmed. |
 | M2 | | Not run | | | |
 | M3 | | Not run | | | |
 | M4 | | Not run | | | |
 | M5 | | Not run | | | |
 | M6 | | Not run | | | |
-| M7 | | Not run | | | |
+| M7 | 2026-09-26 | Limited | `ACTION_ASSIST` → `com.google.android.googlequicksearchbox/.GoogleAppImplicitActionAssistGatewayInternal` (Google Assistant). No Jovi package on device. Handoff button label fixed to "Open assistant" (was "Open Jovi") in this session. AppFunctions rows not yet run. | probe-20260926T060004Z | AppFunctions half of M7 still requires `adb shell cmd app_function` run. |
 | M8 | | Not run | | | |
 | M9 | | Not run | | | |
 | M10 | | Not run | | | |

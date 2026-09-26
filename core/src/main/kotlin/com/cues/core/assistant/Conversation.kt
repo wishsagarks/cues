@@ -51,10 +51,10 @@ enum class ReplyCode {
 sealed interface ReplyChip {
     data class Choice(val id: String, val label: String) : ReplyChip
     data class Confirm(val commandId: String, val label: String) : ReplyChip
-    data class Handoff(val agent: SystemAgent = SystemAgent.JOVI, val label: String = "Open Jovi") : ReplyChip
+    data class Handoff(val agent: SystemAgent = SystemAgent.JOVI, val label: String = "Open assistant") : ReplyChip
 }
 
-enum class SystemAgent { JOVI }
+enum class SystemAgent { JOVI, GOOGLE_ASSISTANT, SYSTEM }
 
 data class PendingCommand(
     val id: String = "command-${UUID.randomUUID()}",

@@ -14,23 +14,13 @@ commit that resolved it.
 
 ---
 
-## CL-01 — Termux on-device build route
+## ~~CL-01 — Termux on-device build route~~
 
-**Status:** open · **Raised:** 22 Sep 2026
+**Status:** ~~open~~ **closed** · **Raised:** 22 Sep 2026 · **Closed:** 26 Sep 2026
 
-`RED_LIGHT.md` documents two ways to compile during Red Light: Office Kit
-driving the laptop (primary) and Gradle running natively on the phone under
-Termux (fallback). Only one of them is needed.
-
-The Termux route has never been tried on this hardware. It is written down
-because discovering on Saturday afternoon that the Office Kit route does not
-work, with no alternative prepared, would cost more than the hour it takes to
-document a fallback now.
-
-**Remove when:** the Office Kit route is confirmed working on the loaner during
-Saturday's opening Green Light window. Delete the Termux section and this
-entry. If Office Kit turns out not to work, delete the *other* section instead
-and promote Termux.
+Office Kit route confirmed working on the loaner (iQOO I2501, OriginOS 6 / Android 16).
+APK installed and app launched with no crash. Termux section deleted from `RED_LIGHT.md`
+in this commit.
 
 ---
 
@@ -166,19 +156,27 @@ software.
 
 ## CL-06 — Device and OS assumptions
 
-**Status:** open · **Raised:** 22 Sep 2026
+**Status:** open · **Raised:** 22 Sep 2026 · **Updated:** 26 Sep 2026
 
 Assumed without verification: that the loaner runs OriginOS 7 on Android 15 or
 later; that `AutomaticZenRule` behaves as documented there; that exact alarms
 can be scheduled; that manifest-declared Bluetooth and power receivers actually
 deliver while the app is backgrounded under the OEM battery policy.
 
+**Confirmed 26 Sep 2026 (probe):** Loaner is iQOO I2501, **OriginOS 6** (not 7)
+on **Android 16 / SDK 36** (not Android 15 as assumed). Build fingerprint:
+`BP2A.250605.031.A3_V000L1`. SoC: SM8850. Every reference to "OriginOS 7" in
+the sprint docs and CLEANUP entries should be read as OriginOS 6. The app
+installed and launched cleanly (Build gate — see DEVICE_MATRIX.md).
+`ACCESS_NOTIFICATION_POLICY` and `USE_EXACT_ALARM` are both already granted by
+the system. Still to run: R1 (Bluetooth receiver), R2 (AutomaticZenRule), R3
+(exact alarm with screen off), R8 (at-time callback).
+
 The FDD is explicit that a receiver declaration is not proof of delivery. None
 of this is knowable from a container.
 
-**Remove when:** each is tested on the loaner and the result recorded — as a
-working implementation, or as a documented limitation. A limitation that is
-written down is closed; one that is quietly hoped about is not.
+**Remove when:** R1, R2, R3 and R8 are run on the loaner and each result
+recorded — as a working implementation, or as a documented limitation.
 
 ---
 
@@ -866,12 +864,18 @@ the iQOO loaner; and CL-04's original "every version below is a considered
 guess, the first build on the laptop confirms them" now applies to this new
 set of versions too, not the old ones.
 
-**Remove when:** M7 records what the handoff resolves to on the loaner, and
-the card's label matches that result ("Jovi" only if the probe resolves to
-Jovi, otherwise "system assistant"). The AppFunctions half retires
-separately: `adb shell cmd app_function list-app-functions` on the loaner
-shows all four functions, and `adb shell cmd app_function execute-app-function`
-actually runs `draftCue` and produces a real reviewable draft in the app.
+**Update 26 Sep 2026:** `./dev probe` on the loaner confirms `ACTION_ASSIST`
+resolves to `com.google.android.googlequicksearchbox` (Google Assistant). No
+Jovi package is installed on this device. `ReplyChip.Handoff` default label
+changed from `"Open Jovi"` to `"Open assistant"` in `Conversation.kt`;
+`SystemAgent` enum extended with `GOOGLE_ASSISTANT`/`SYSTEM`; Diagnostics
+screen updated to say "system assistant" instead of "Jovi". Handoff half of
+M7: **Pass** (limited — label now correct; the card opens Google Assistant).
+
+**Remove when:** The AppFunctions half retires separately: `adb shell cmd
+app_function list-app-functions` on the loaner shows all four functions, and
+`adb shell cmd app_function execute-app-function` actually runs `draftCue` and
+produces a real reviewable draft in the app.
 
 ---
 

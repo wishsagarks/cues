@@ -1,0 +1,219 @@
+# Cues device probe
+taken_utc: 2026-09-26T06:00:04Z
+commit: d3fceef
+serial: 10BFBN2C30001KN
+cues_package: com.cues.android.debug
+note: read-only probe; raw command output, no pass/fail judgement
+
+## Device and OS
+ro.product.manufacturer=vivo
+ro.product.model=I2501
+ro.product.device=I2501
+ro.build.fingerprint=iQOO/I2501i/I2501:16/BP2A.250605.031.A3_V000L1/compiler260812100432:user/release-keys
+ro.build.version.release=16
+ro.build.version.sdk=36
+ro.build.version.security_patch=2026-08-01
+ro.soc.manufacturer=QTI
+ro.soc.model=SM8850
+ro.board.platform=canoe
+
+$ adb shell getprop | grep -iE 'vivo|origin|iqoo|funtouch'
+[gsm.vivo.confinfo0]: [0]
+[gsm.vivo.confinfo1]: [0]
+[gsm.vivo.countrycode]: [in]
+[init.svc.media.vivocodec]: [running]
+[init.svc.vivo-bbkts-aidl_hal]: [running]
+[init.svc.vivo-configstore-hal-1-0]: [running]
+[init.svc.vivo-fingerprint-sh]: [stopped]
+[init.svc.vivo-nfc-sh]: [stopped]
+[init.svc.vivo-sensorfactory-aidl]: [running]
+[init.svc.vivo-vdtf-service]: [running]
+[init.svc.vivo-vperf-hal-1-0]: [running]
+[init.svc.vivo_bsp_boottime]: [stopped]
+[init.svc.vivo_bsp_boottime_dmesglog]: [stopped]
+[init.svc.vivo_daemon]: [running]
+[init.svc.vivo_em_float]: [stopped]
+[init.svc.vivo_em_svr]: [stopped]
+[init.svc.vivo_em_svr_init]: [stopped]
+[init.svc.vivo_em_svr_late_init]: [stopped]
+[init.svc.vivo_em_tf]: [stopped]
+[init.svc.vivo_nrt_service]: [running]
+[init.svc.vivoasem-hal-1]: [running]
+[init.svc.vivoatcmd-hal-1]: [stopped]
+[init.svc.vivobpf-hal-1]: [running]
+[init.svc.vivocameraserver]: [running]
+[init.svc.vivoem-hal-1]: [running]
+[nfc.vivo.cmd_reset_nci]: [no]
+[nfc.vivo.isrebootphone]: [no]
+[nfc.vivo.rfconf.syntax.error]: [no]
+[persist.radio.vivo.defmdtype]: [0]
+[persist.radio.vivo.dsda_support]: [true]
+[persist.radio.vivo.dualfiveg]: [true]
+[persist.radio.vivo.elev_sensor]: [true]
+[persist.radio.vivo.esim_internal_switch]: [1]
+[persist.radio.vivo.fiveg]: [true]
+[persist.radio.vivo.iccuppercase]: [1]
+[persist.radio.vivo.mcc]: [404]
+[persist.radio.vivo.modemtype]: [0]
+[persist.radio.vivo.smartanswer]: [1]
+[persist.sys.dcdiming.en.vivo]: [0]
+[persist.sys.supportvivosync]: [1]
+[persist.sys.vivo.face.assistant]: [0]
+[persist.sys.vivo.face.multi]: [2]
+[persist.sys.vivo.face.privacy.brightness.adjustment]: [0]
+[persist.sys.vivo.face.securecamera]: [0]
+[persist.sys.vivo.face.unlock.convenience.scheme]: [0]
+[persist.sys.vivo.face.unlock.strong]: [0]
+[persist.sys.vivo.face.unlock.support4hidletimeout]: [0]
+[persist.sys.vivo.face.wallpaper.brightness.adjustment]: [0]
+[persist.sys.vivo.otaPostinstallMaxDuration]: [600]
+[persist.sys.vivo.platform_info]: [7/3]
+[persist.sys.vivo.product.cust]: [IN]
+[persist.sys.vivo.product.cust.preinstall]: [IN]
+[persist.sys.vivo.qtilowlatencyleveldl]: [1]
+[persist.sys.vivo.qtilowlatencylevelul]: [1]
+[persist.sys.vivo.support.double.lra]: [1]
+[persist.sys.vivo.wlan.log.trigger.flag]: [0]
+[persist.sys.vivo_smartshot.capture]: [false]
+[persist.sys.vivofirewall]: [1]
+[persist.sys.vivolog.logtype]: [297227]
+[persist.sys.vivolog.state]: [off]
+
+## Radios (network isolation for the offline demo)
+airplane_mode_on=0
+wifi_on=1
+bluetooth_on=0
+
+## Cues install and grants
+
+$ adb shell dumpsys package com.cues.android.debug | grep -iE 'versionName|versionCode|targetSdk'
+    versionCode=1 minSdk=29 targetSdk=36
+    versionName=0.1.0
+
+$ adb shell dumpsys package com.cues.android.debug | grep -iE 'permission\.[A-Z_]+: granted='
+      android.permission.ACCESS_NOTIFICATION_POLICY: granted=true
+      android.permission.FOREGROUND_SERVICE: granted=true
+      android.permission.RECEIVE_BOOT_COMPLETED: granted=true
+      android.permission.FOREGROUND_SERVICE_SPECIAL_USE: granted=true
+      com.android.alarm.permission.SET_ALARM: granted=true
+      android.permission.INTERNET: granted=true
+      android.permission.USE_EXACT_ALARM: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+        android.permission.READ_CALENDAR: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.POST_NOTIFICATIONS: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.BLUETOOTH_CONNECT: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.CAMERA: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.RECORD_AUDIO: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+
+$ adb shell appops get com.cues.android.debug SCHEDULE_EXACT_ALARM
+No operations.
+Default mode: default
+
+$ adb shell settings get secure enabled_notification_policy_access_packages
+null
+
+$ adb shell am get-standby-bucket com.cues.android.debug
+10
+
+$ adb shell dumpsys deviceidle whitelist | grep -iE 'cues'
+
+## Accessibility (utility bindings)
+
+$ adb shell settings get secure accessibility_enabled
+1
+
+$ adb shell settings get secure enabled_accessibility_services
+com.reskill.hacktracker/com.reskill.hacktracker.services.HackTrackerAccessibilityService
+
+## System assistant (what the Jovi handoff button actually opens)
+
+$ adb shell settings get secure assistant
+com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService
+
+$ adb shell cmd package resolve-activity --brief -a android.intent.action.ASSIST
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+com.google.android.googlequicksearchbox/.GoogleAppImplicitActionAssistGatewayInternal
+
+## OEM package discovery
+
+$ adb shell pm list packages | grep -iE 'vivo|iqoo|jovi|bbk|origin'
+package:com.vivo.upnpserver
+package:com.vivo.nightpearl
+package:com.vivo.musicmixcard
+package:com.vivo.networkimprove
+package:com.vivo.devicepower
+package:com.vivo.audiofx
+package:com.vivo.safecenter
+package:com.android.bbk.lockscreen3
+package:com.vivo.sps
+package:com.vivo.livewallpaper.box
+package:com.vivo.globaldragdrop
+package:com.vivo.share
+package:com.vivo.appstore
+package:com.vivo.monochromeicons
+package:com.vivo.accessibilityenhance
+package:com.vivo.ai.aie
+package:com.vivo.share.overlay
+package:com.vivo.myeuiccoverlayapp
+package:com.vivo.smartmultiwindow
+package:com.vivo.pie
+package:com.vivo.vivo3rdalgoservice
+package:com.vivo.setupwizard
+package:com.vivo.fingerprint
+package:com.vivo.notes
+package:com.bbk.account
+package:com.vivo.weather
+package:com.vivo.ai.intellicore
+package:com.google.android.networkstack.overlay.vivo
+package:com.vivo.android.connectivity.common.resources.overlay
+package:com.vivo.floatingball
+package:com.vivo.vibrator4d
+package:com.vivo.backuprestore
+package:com.vivo.nps.overlay
+package:com.vivo.minscreen
+package:com.android.bbklog
+package:com.vivo.faceui
+package:com.vivo.calculator
+package:com.vivo.exhealth
+package:com.vivo.epm
+package:com.vivo.systemuiplugin
+package:com.vivo.unionpay
+package:com.vivo.privacylauncher
+package:com.iqoo.website
+package:com.vivo.theme.effect
+package:com.vivo.pem
+package:com.vivo.gamecube
+package:com.vivo.connbase
+package:com.vivo.abe
+package:com.vivo.magazine
+package:com.vivo.connbase.sysui
+package:com.vivo.android.wifi.manufacturer.resources.overlay
+package:com.vivo.simplelauncher
+package:com.bbk.cloud
+package:com.vivo.pushservice
+package:com.vivo.smartoffice
+package:com.vivo.vms
+package:com.yozo.vivo.office.overlay
+package:android.overlay.vivoresrro
+package:com.vivo.screenagent
+package:com.vivo.gamelib
+
+## LiteRT-LM GPU native libraries and side-loaded model
+
+$ adb shell ls -l /vendor/lib64/libOpenCL.so /system/vendor/lib64/libOpenCL.so /vendor/lib64/libvndksupport.so /system/lib64/libvndksupport.so
+ls: /vendor/lib64/libvndksupport.so: No such file or directory
+-rw-r--r-- 1 root root 51432 2009-01-01 05:30 /system/lib64/libvndksupport.so
+-rw-r--r-- 1 root root 87904 2009-01-01 05:30 /system/vendor/lib64/libOpenCL.so
+-rw-r--r-- 1 root root 87904 2009-01-01 05:30 /vendor/lib64/libOpenCL.so
+
+$ adb shell run-as com.cues.android.debug ls -l files/models
+ls: files/models: No such file or directory
+
+## Cues-owned state right now (zen rules, alarms, services)
+
+$ adb shell dumpsys notification | grep -iE 'com\.cues'
+      AppSettings: com.cues.android.debug (10345) importance=NONE userSet=false moreNotificationsEnabled=false isShowHeadsUp=true isShowKeyguard=true keyguardDetailsType=3
+
+$ adb shell dumpsys alarm | grep -iE 'com\.cues'
+
+$ adb shell dumpsys activity services com.cues.android.debug | grep -iE 'ServiceRecord|isForeground'
