@@ -64,6 +64,7 @@ fun AskScreen(
     onDraft: (String) -> Unit,
     drafterLabel: String,
     onStartVoice: (onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) -> Unit,
+    onStopVoice: () -> Unit = {},
     cloudAssistAvailable: Boolean = false,
     cloudAssistEnabled: Boolean = false,
     onToggleCloudAssist: () -> Unit = {},
@@ -167,29 +168,35 @@ fun AskScreen(
             }
         }
 
-        if (assistantTurns.isNotEmpty()) {
-            item {
-                SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
-                        if (cloudAssistEnabled) {
-                            TextButton(onClick = {
-                                cloudReadbackText = null
-                                onTranslateReadback(
-                                    assistantTurns.last().reply.text,
-                                    { translated -> cloudReadbackText = translated },
-                                    { message -> speechMessage = message },
-                                )
-                            }) {
-                                Text("Translate & speak (Sarvam, online)")
-                            }
-                            cloudReadbackText?.let { translated ->
-                                Text(
-                                    "Translated via Sarvam (online): $translated",
-                                    style = CuesType.labelSmall,
-                                    color = t.inkSlate,
-                                )
-                            }
+        item {
+            Text(
+                "RECENT",
+                style = CuesType.labelSmall,
+                color = t.inkSlate,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+            )
+        }
+        item {
+            SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
+                    if (cloudAssistEnabled && assistantTurns.isNotEmpty()) {
+                        TextButton(onClick = {
+                            cloudReadbackText = null
+                            onTranslateReadback(
+                                assistantTurns.last().reply.text,
+                                { translated -> cloudReadbackText = translated },
+                                { message -> speechMessage = message },
+                            )
+                        }) {
+                            Text("Translate & speak (Sarvam, online)")
+                        }
+                        cloudReadbackText?.let { translated ->
+                            Text(
+                                "Translated via Sarvam (online): $translated",
+                                style = CuesType.labelSmall,
+                                color = t.inkSlate,
+                            )
                         }
                     }
                 }
@@ -221,18 +228,31 @@ fun AskScreen(
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                com.cues.app.ui.components.GhostButton(
-                    text = if (isListening) "Listening…" else "Speak",
-                    enabled = !isListening && !isCloudListening && !isDrafting,
-                    onClick = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            startVoice()
-                        } else {
-                            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
+                if (isListening) {
+                    com.cues.app.ui.components.GhostButton(
+                        text = "Stop",
+                        enabled = true,
+                        onClick = {
+                            isListening = false
+                            speechMessage = null
+                            onStopVoice()
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    com.cues.app.ui.components.GhostButton(
+                        text = "Speak",
+                        enabled = !isCloudListening && !isDrafting,
+                        onClick = {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                startVoice()
+                            } else {
+                                microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 KineticButton(
                     text = "Ask Cues",
                     onClick = submitDraft,
