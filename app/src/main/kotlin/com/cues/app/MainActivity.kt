@@ -340,6 +340,14 @@ private fun CuesApp(
     // here and read once by the pushed destination, exactly as the redesign
     // plan's route comments describe.
     var reviewDraft by remember { mutableStateOf<Routine?>(null) }
+    // Kept alongside reviewDraft, not folded into it, the same
+    // "snapshot once" reasoning that comment further down already applies
+    // to reviewDraft itself: this is Turn.trace/DraftResult.trace for
+    // whichever draft is about to be reviewed, so ReviewScreenV2's header
+    // can say "confirmed by on-device model" rather than only "grammar
+    // parser". Set at every call site that sets reviewDraft; null wherever
+    // the draft has no trace to show (an import, a coach edit).
+    var reviewDraftTrace by remember { mutableStateOf<com.cues.core.drafting.DraftTrace?>(null) }
     var importResult by remember { mutableStateOf<com.cues.core.imports.TimetableExtractionResult?>(null) }
     var cueCardShareRoutine by remember { mutableStateOf<Routine?>(null) }
 
@@ -551,6 +559,7 @@ private fun CuesApp(
             is com.cues.core.drafting.DraftResult.Drafted -> {
                 missingCapabilities = emptySet()
                 reviewDraft = result.routine
+                reviewDraftTrace = result.trace
                 navController.navigate(CuesRoutes.REVIEW)
             }
             else -> notify(fallbackMessage)
@@ -574,6 +583,7 @@ private fun CuesApp(
                     draftedRoutine != null -> {
                         missingCapabilities = emptySet()
                         reviewDraft = draftedRoutine
+                        reviewDraftTrace = turn.trace
                         navController.navigate(CuesRoutes.REVIEW)
                     }
                     turn.reply.args["appQuery"] != null -> {
@@ -775,6 +785,7 @@ private fun CuesApp(
                     // reading reviewDraft live here re-fires the null-guard mid-transition
                     // and paints a blank frame before the nav animation finishes.
                     val routine = remember { reviewDraft }
+                    val trace = remember { reviewDraftTrace }
                     if (routine == null) {
                         navController.popBackStack()
                     } else {
@@ -782,11 +793,13 @@ private fun CuesApp(
                             routine = routine,
                             cueService = cueService,
                             missingCapabilities = missingCapabilities,
+                            trace = trace,
                             onApproved = {
                                 navController.navigateToTab(CuesRoutes.NOW)
                                 refresh()
                                 missingCapabilities = emptySet()
                                 reviewDraft = null
+                                reviewDraftTrace = null
                                 notify("Cue armed — it runs the next time \"${routine.title}\" happens.")
                             },
                             onMissingCapabilities = { missingCapabilities = it },
@@ -795,6 +808,7 @@ private fun CuesApp(
                                 navController.popBackStack()
                                 reviewBackText = routine.sourceText
                                 reviewDraft = null
+                                reviewDraftTrace = null
                             },
                         )
                     }
@@ -851,7 +865,7 @@ private fun CuesApp(
                             onPauseUntil = { epochMillis -> cueService.pauseUntil(routine.id, epochMillis); refresh() },
                             onClearPatch = { cueService.clearPatch(routine.id); refresh() },
                             onShareAsCard = { cueCardShareRoutine = routine; navController.navigate(CuesRoutes.CUE_CARD_SHARE) },
-                            onReview = { reviewDraft = routine; navController.navigate(CuesRoutes.REVIEW) }.takeIf {
+                            onReview = { reviewDraft = routine; reviewDraftTrace = null; navController.navigate(CuesRoutes.REVIEW) }.takeIf {
                                 routine.status != RoutineStatus.ARMED && routine.status != RoutineStatus.PAUSED
                             },
                         )
@@ -999,6 +1013,7 @@ private fun CuesApp(
                             when (val result = com.cues.core.share.CueCards.reimport(payload, pairedDevices(), store.allContexts(), store.allPlaces())) {
                                 is com.cues.core.share.ReimportResult.Ready -> {
                                     reviewDraft = result.routine
+                                    reviewDraftTrace = null
                                     navController.navigate(CuesRoutes.REVIEW)
                                 }
                                 is com.cues.core.share.ReimportResult.MissingEntity ->
@@ -1039,6 +1054,7 @@ private fun ReviewFlow(
     onMissingCapabilities: (Set<Capability>) -> Unit,
     onNotify: (String) -> Unit,
     onBack: () -> Unit,
+    trace: com.cues.core.drafting.DraftTrace? = null,
 ) {
     val review = remember(routine) { cueService.review(routine) }
     val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
@@ -1059,6 +1075,7 @@ private fun ReviewFlow(
         review = review,
         rehearsal = rehearsal,
         missingCapabilities = missingCapabilities,
+        trace = trace,
         onApprove = {
             when (val result = cueService.approveAndArm(review.normalized)) {
                 is ArmResult.Ok -> onApproved()

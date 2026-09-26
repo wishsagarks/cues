@@ -40,10 +40,12 @@ import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.approval.Approvals
 import com.cues.core.compile.Severity
+import com.cues.core.drafting.DraftTrace
 import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.rehearsal.RehearsalRow
 import com.cues.core.registry.ActionRegistry
+import com.cues.core.review.DraftCredit
 import com.cues.core.review.ReviewCopy
 
 /**
@@ -63,6 +65,16 @@ fun ReviewScreenV2(
     onApprove: () -> Unit,
     onBack: () -> Unit,
     onCapabilitiesChanged: () -> Unit = {},
+    /**
+     * Every drafter this routine's own draft call actually asked — from
+     * `Turn.trace`/`DraftResult.trace` — so the header can say "confirmed
+     * by on-device model" or "model off" instead of only naming the winner.
+     * `null` for a routine with no trace to show (an import, a coach edit,
+     * or a build with no model configured at all) — the header then falls
+     * back to naming [Routine.draftedBy] alone, exactly as before this
+     * parameter existed.
+     */
+    trace: DraftTrace? = null,
 ) {
     val t = cuesTokens
     BackHandler(onBack = onBack)
@@ -82,7 +94,7 @@ fun ReviewScreenV2(
         ) {
             Text("REVIEW", style = CuesType.headline, color = t.inkPrimary)
             Text(
-                "drafted by ${routine.draftedBy?.name?.lowercase()?.replace('_', ' ') ?: "unknown"}",
+                routine.draftedBy?.let { DraftCredit.credit(trace, it).label() } ?: "drafted by unknown",
                 style = CuesType.labelSmall,
                 color = t.inkSlate,
             )

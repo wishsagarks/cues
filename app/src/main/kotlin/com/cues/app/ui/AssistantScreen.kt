@@ -19,6 +19,7 @@ import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.assistant.PendingCommand
 import com.cues.core.assistant.ReplyChip
 import com.cues.core.assistant.Turn
+import com.cues.core.review.DraftCredit
 
 /** Chat-style history of the current conversation, embedded in AskScreen. */
 @Composable
@@ -66,6 +67,21 @@ fun AssistantHistory(
                         color = t.inkSlate,
                         modifier = Modifier.padding(top = 4.dp),
                     )
+                    // Sprint 8: when this turn's own draft carries a trace —
+                    // every drafter it actually asked, not only the one that
+                    // answered — show the same credit label Review shows,
+                    // so "confirmed by on-device model" or "model off" is
+                    // visible here too, not only after opening Review.
+                    turn.trace?.let { trace ->
+                        turn.draft?.draftedBy?.let { draftedBy ->
+                            Text(
+                                DraftCredit.credit(trace, draftedBy).label(),
+                                style = CuesType.labelSmall,
+                                color = t.inkSlate,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
                     if (turn.reply.chips.isNotEmpty()) {
                         Row(modifier = Modifier.padding(top = 4.dp)) {
                             turn.reply.chips.forEach { chip ->
