@@ -1,17 +1,29 @@
 package com.cues.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeveloperBoard
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -19,12 +31,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.DeviceDiagnostics
+import com.cues.app.runtime.DeviceHealthSnapshot
 import com.cues.app.runtime.ManualObservation
 import com.cues.core.CueService
 import com.cues.core.inference.ModelProvisionState
@@ -35,6 +50,7 @@ import java.util.Date
 @Composable
 fun DiagnosticsScreen(
     diagnostics: DeviceDiagnostics,
+    deviceHealth: DeviceHealthSnapshot? = null,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onRecordJoviMicOrAssist: (ManualObservation) -> Unit,
@@ -84,6 +100,11 @@ fun DiagnosticsScreen(
         Spacer(Modifier.height(16.dp))
 
         DiagnosticCard("Phone", diagnostics.os)
+        deviceHealth?.let {
+            Spacer(Modifier.height(8.dp))
+            DeviceHealthCard(it)
+            Spacer(Modifier.height(8.dp))
+        }
         DiagnosticCard("On-device speech", diagnostics.onDeviceSpeech)
         DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
         cueDiagnostics?.let { DiagnosticCard("Drafting path", it.render()) }
@@ -199,6 +220,121 @@ private fun CueService.Diagnostics.render(): String = buildString {
         append(", ${report.loadMs}ms load, ~${"%.1f".format(report.tokensPerSecond)} tok/s")
     }
     lastFallbackReason?.let { append(" — fell back: $it") }
+}
+
+/**
+ * The "basic symbols" group: battery health, this process's CPU share, GPU
+ * and the sensor inventory, each an icon + a one-line honest reading — never
+ * a fabricated system-wide number where Android exposes none (see
+ * [com.cues.app.runtime.DeviceHealthReadings]).
+ */
+@Composable
+private fun DeviceHealthCard(health: DeviceHealthSnapshot) {
+    Surface(
+        color = cuesColors.bg300,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("DEVICE HEALTH", style = MaterialTheme.typography.labelMedium, color = cuesColors.ink200)
+
+            Text(
+                "BATTERY",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            ) {
+                HealthTile(
+                    Icons.Filled.HealthAndSafety,
+                    "Health",
+                    health.batteryHealth,
+                    Modifier.weight(1f).fillMaxHeight(),
+                )
+                HealthTile(
+                    Icons.Filled.Thermostat,
+                    "Temperature",
+                    health.batteryTempC?.let { "%.1f°C".format(it) } ?: "Not reported",
+                    Modifier.weight(1f).fillMaxHeight(),
+                )
+            }
+
+            Text(
+                "PERFORMANCE",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 14.dp, bottom = 6.dp),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            ) {
+                HealthTile(
+                    Icons.Filled.Memory,
+                    "CPU · own process",
+                    buildString {
+                        append("${health.cpuCoreCount} core(s)")
+                        health.cpuUsagePercent?.let { append(", %.1f%% avg".format(it)) }
+                    },
+                    Modifier.weight(1f).fillMaxHeight(),
+                )
+                HealthTile(Icons.Filled.DeveloperBoard, "GPU", health.gpuNote, Modifier.weight(1f).fillMaxHeight())
+            }
+
+            Text(
+                "SENSORS",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 14.dp, bottom = 6.dp),
+            )
+            if (health.sensorGroups.isEmpty()) {
+                Text(
+                    "No sensor list reported by this phone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cuesColors.ink200,
+                )
+            } else {
+                health.sensorGroups.chunked(2).forEach { rowGroups ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    ) {
+                        rowGroups.forEach { group ->
+                            HealthTile(Icons.Filled.Sensors, group.label, "${group.count}", Modifier.weight(1f))
+                        }
+                        if (rowGroups.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthTile(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(cuesColors.bg200, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = cuesColors.ink200, modifier = Modifier.size(16.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
 }
 
 @Composable

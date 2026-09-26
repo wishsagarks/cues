@@ -11,14 +11,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.PowerOff
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.AdapterStatus
@@ -51,16 +58,22 @@ import com.cues.app.ui.components.label
 import com.cues.app.ui.components.tone
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
+import com.cues.core.model.ContextSnapshot
 import com.cues.core.model.ContextValue
 import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
 import com.cues.core.model.Session
 import com.cues.core.model.SessionState
+import com.cues.core.model.UnknownReason
 import com.cues.core.registry.ActionRegistry
 import com.cues.core.registry.ActionRisk
 import com.cues.core.review.ForecastItem
 import com.cues.core.review.ForecastStatus
 import com.cues.core.review.ReviewCopy
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
 
 /**
  * The Now cockpit (redesign plan §3.1). Everything on this screen is
@@ -71,7 +84,9 @@ import com.cues.core.review.ReviewCopy
 fun NowScreen(
     routines: List<Routine>,
     liveSessions: List<Session>,
-    signalGates: List<SignalGate>,
+    snapshot: ContextSnapshot,
+    chipset: String,
+    phoneName: String,
     forecast: List<ForecastItem>,
     titleFor: (String) -> String,
     drafterLabel: String,
@@ -114,11 +129,11 @@ fun NowScreen(
         }
 
         item {
-            RuntimeContractPanel(drafterLabel)
+            DeviceSnapshotCard(snapshot, chipset, phoneName, onFixCapability = onGrantCapability)
         }
 
-        if (signalGates.isNotEmpty()) {
-            item { SignalGateAnalytics(signalGates, onFix = onGrantCapability) }
+        item {
+            RuntimeContractPanel(drafterLabel)
         }
 
         if (forecast.isNotEmpty()) {
@@ -172,94 +187,144 @@ private fun RuntimeContractPanel(drafterLabel: String) {
     }
 }
 
+/**
+ * The device snapshot (redesign plan follow-up): what used to be the "SIGNAL
+ * GATES" checklist is now the first thing rendered on Now — a single,
+ * well-composed card carrying phone identity, the live clock and the four
+ * signals a cue can actually condition on (Wi-Fi, Bluetooth, battery,
+ * charging). Unknown stays unknown here too: a tile whose value is
+ * [ContextValue.Unknown] never quietly reads as "off", it shows the reason
+ * and, when it's a fixable permission gap, a tap to Checks.
+ */
 @Composable
-private fun SignalGateAnalytics(gates: List<SignalGate>, onFix: () -> Unit) {
+private fun DeviceSnapshotCard(
+    snapshot: ContextSnapshot,
+    chipset: String,
+    phoneName: String,
+    onFixCapability: () -> Unit,
+) {
     val t = cuesTokens
-    val known = gates.count { it.isKnown }
-    val attention = gates.size - known
-    val stateColor = if (attention == 0) t.go else t.warn
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val zone = remember(snapshot.zoneId) {
+        runCatching { ZoneId.of(snapshot.zoneId) }.getOrElse { ZoneId.systemDefault() }
+    }
+    val instant = remember(nowMillis) { Instant.ofEpochMilli(nowMillis) }
 
-    SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+    SlabCard(tier = SlabTier.TWO, modifier = Modifier.fillMaxWidth()) {
         Row(
-            verticalAlignment = Alignment.Bottom,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column {
-                Text("SIGNAL GATES", style = CuesType.title, color = t.inkPrimary)
-                Text(
-                    "$known of ${gates.size} known",
-                    style = CuesType.labelSmall,
-                    color = stateColor,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
+            Column(Modifier.weight(1f)) {
+                Text(phoneName, style = CuesType.title, color = t.inkPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(chipset, style = CuesType.labelSmall, color = t.inkSlate, modifier = Modifier.padding(top = 2.dp))
             }
-            Text(
-                if (attention == 0) "ALL CLEAR" else "$attention NEED ATTENTION",
-                style = CuesType.labelSmall,
-                color = stateColor,
+            Column(horizontalAlignment = Alignment.End) {
+                Text(TIME_FORMAT.withZone(zone).format(instant), style = CuesType.headline, color = t.inkPrimary)
+                Text(DATE_FORMAT.withZone(zone).format(instant), style = CuesType.labelSmall, color = t.inkSlate)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            val wifi = snapshot.wifi
+            SignalTile(
+                icon = if ((wifi as? ContextValue.Known)?.value?.connected == true) Icons.Filled.Wifi else Icons.Filled.WifiOff,
+                label = "WI-FI",
+                value = when (wifi) {
+                    is ContextValue.Known -> if (wifi.value.connected) wifi.value.networkLabel ?: "Connected" else "Disconnected"
+                    is ContextValue.Unknown -> unknownReasonLabel(wifi.reason)
+                },
+                fixable = (wifi as? ContextValue.Unknown)?.reason == UnknownReason.PERMISSION_DENIED,
+                onFixCapability = onFixCapability,
+                modifier = Modifier.weight(1f),
+            )
+            val bluetooth = snapshot.connectedDeviceIds
+            SignalTile(
+                icon = Icons.Filled.Bluetooth,
+                label = "BLUETOOTH",
+                value = when (bluetooth) {
+                    is ContextValue.Known -> if (bluetooth.value.isEmpty()) "None connected" else "${bluetooth.value.size} connected"
+                    is ContextValue.Unknown -> unknownReasonLabel(bluetooth.reason)
+                },
+                fixable = (bluetooth as? ContextValue.Unknown)?.reason == UnknownReason.PERMISSION_DENIED,
+                onFixCapability = onFixCapability,
+                modifier = Modifier.weight(1f),
             )
         }
-        LinearProgressIndicator(
-            progress = { known.toFloat() / gates.size.coerceAtLeast(1) },
-            color = stateColor,
-            trackColor = t.island,
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        )
-        Column(Modifier.padding(top = 8.dp)) {
-            gates.forEachIndexed { index, gate ->
-                SignalGateRow(gate, onFix)
-                if (index < gates.lastIndex) {
-                    HorizontalDivider(color = t.hairline, thickness = 1.dp)
-                }
-            }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            val battery = snapshot.batteryPercent
+            val charging = snapshot.charging
+            val isCharging = (charging as? ContextValue.Known)?.value == true
+            SignalTile(
+                icon = if (isCharging) Icons.Filled.BatteryChargingFull else Icons.Filled.BatteryFull,
+                label = "BATTERY",
+                value = when (battery) {
+                    is ContextValue.Known -> "${battery.value}%"
+                    is ContextValue.Unknown -> unknownReasonLabel(battery.reason)
+                },
+                fixable = (battery as? ContextValue.Unknown)?.reason == UnknownReason.PERMISSION_DENIED,
+                onFixCapability = onFixCapability,
+                modifier = Modifier.weight(1f),
+            )
+            SignalTile(
+                icon = if (isCharging) Icons.Filled.BatteryChargingFull else Icons.Filled.PowerOff,
+                label = "CHARGING",
+                value = when (charging) {
+                    is ContextValue.Known -> if (charging.value) "Plugged in" else "On battery"
+                    is ContextValue.Unknown -> unknownReasonLabel(charging.reason)
+                },
+                fixable = (charging as? ContextValue.Unknown)?.reason == UnknownReason.PERMISSION_DENIED,
+                onFixCapability = onFixCapability,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
 @Composable
-private fun SignalGateRow(gate: SignalGate, onFix: () -> Unit) {
+private fun SignalTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    fixable: Boolean,
+    onFixCapability: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val t = cuesTokens
-    val unknown = gate.value as? ContextValue.Unknown
-    val valueText = when (val value = gate.value) {
-        is ContextValue.Known -> value.value
-        is ContextValue.Unknown -> unknownReasonLabel(value.reason)
-    }
-    val stateColor = if (unknown == null) t.go else t.warn
-    val canFix = unknown?.reason == com.cues.core.model.UnknownReason.PERMISSION_DENIED
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .then(if (canFix) Modifier.clickable { onFix() } else Modifier),
+    Column(
+        modifier = modifier
+            .background(t.island, com.cues.app.ui.theme.CuesShape.card)
+            .then(if (fixable) Modifier.clickable { onFixCapability() } else Modifier)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Box(Modifier.size(7.dp).background(stateColor, CircleShape))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = t.inkSecondary, modifier = Modifier.size(16.dp))
+            Text(label, style = CuesType.labelSmall, color = t.inkSlate, modifier = Modifier.padding(start = 6.dp))
+        }
         Text(
-            gate.label,
+            value,
             style = CuesType.bodyMedium,
-            color = t.inkPrimary,
-            modifier = Modifier.padding(start = 10.dp).weight(0.9f),
-        )
-        Text(
-            valueText,
-            style = CuesType.labelSmall,
-            color = if (unknown == null) t.inkSecondary else t.warn,
+            color = if (fixable) t.warn else t.inkPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1.1f),
+            modifier = Modifier.padding(top = 4.dp),
         )
-        if (canFix) {
-            Text(
-                "Grant",
-                style = CuesType.labelSmall,
-                color = t.doYellow,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+        if (fixable) {
+            Text("Grant →", style = CuesType.labelSmall, color = t.doYellow, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
+
+private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
 @Composable
 private fun LiveSessionHero(routine: Routine, session: Session, onManualStop: () -> Unit) {
@@ -370,15 +435,10 @@ private fun CueSlabCard(routine: Routine, activeSession: Session?, onClick: () -
     }
 }
 
-/** One row of the Signal Gates grid — a live [ContextValue] with a human label. */
-data class SignalGate(val label: String, val value: ContextValue<String>) {
-    val isKnown: Boolean get() = value is ContextValue.Known
-}
-
-private fun unknownReasonLabel(reason: com.cues.core.model.UnknownReason): String = when (reason) {
-    com.cues.core.model.UnknownReason.PERMISSION_DENIED -> "permission denied"
-    com.cues.core.model.UnknownReason.ADAPTER_UNAVAILABLE -> "unavailable"
-    com.cues.core.model.UnknownReason.NEVER_OBSERVED -> "never observed"
-    com.cues.core.model.UnknownReason.STALE -> "stale"
-    com.cues.core.model.UnknownReason.REDACTED_BY_OS -> "redacted by OS"
+private fun unknownReasonLabel(reason: UnknownReason): String = when (reason) {
+    UnknownReason.PERMISSION_DENIED -> "permission denied"
+    UnknownReason.ADAPTER_UNAVAILABLE -> "unavailable"
+    UnknownReason.NEVER_OBSERVED -> "never observed"
+    UnknownReason.STALE -> "stale"
+    UnknownReason.REDACTED_BY_OS -> "redacted by OS"
 }

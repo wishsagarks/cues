@@ -57,8 +57,8 @@ import com.cues.app.ui.components.CuesTopBar
 import com.cues.app.ui.insights.InsightsScreen
 import com.cues.app.ui.nav.CuesRoutes
 import com.cues.app.ui.nav.tabTitle
+import com.cues.app.runtime.DeviceIdentity
 import com.cues.app.ui.now.NowScreen
-import com.cues.app.ui.now.SignalGate
 import com.cues.app.ui.theme.CuesTheme
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.app.ui.workbench.WorkbenchScreen
@@ -248,21 +248,6 @@ private fun availableSignalsNow(context: android.content.Context): List<Availabl
             }
         }
     }
-}
-
-/** Maps a live [com.cues.core.model.ContextSnapshot] into the Now cockpit's signal-gate tiles — honest UNKNOWNs included. */
-private fun signalGatesFrom(snapshot: com.cues.core.model.ContextSnapshot): List<SignalGate> = listOf(
-    SignalGate("Bluetooth", snapshot.connectedDeviceIds.mapKnown { ids -> if (ids.isEmpty()) "none connected" else "${ids.size} connected" }),
-    SignalGate("Clock", snapshot.localTime.mapKnown { it.toString() }),
-    SignalGate("Calendar", snapshot.calendarBusy.mapKnown { if (it) "busy" else "free" }),
-    SignalGate("Charging", snapshot.charging.mapKnown { if (it) "plugged in" else "unplugged" }),
-    SignalGate("Wi-Fi", snapshot.wifi.mapKnown { if (it.connected) "connected" else "disconnected" }),
-    SignalGate("Battery", snapshot.batteryPercent.mapKnown { "$it%" }),
-)
-
-private fun <T> ContextValue<T>.mapKnown(format: (T) -> String): ContextValue<String> = when (this) {
-    is ContextValue.Known -> ContextValue.Known(format(value), source, observedAtMillis)
-    is ContextValue.Unknown -> this
 }
 
 private fun DraftSourceId.friendlyLabel(): String = when (this) {
@@ -626,7 +611,9 @@ private fun CuesApp(
                     NowScreen(
                         routines = routines,
                         liveSessions = liveSessions,
-                        signalGates = remember(snapshot) { signalGatesFrom(snapshot) },
+                        snapshot = snapshot,
+                        chipset = remember { DeviceIdentity.chipset() },
+                        phoneName = remember { DeviceIdentity.phoneName() },
                         forecast = forecast,
                         titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
                         drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
@@ -849,6 +836,7 @@ private fun CuesApp(
                 composable(CuesRoutes.CHECKS) {
                     DiagnosticsScreen(
                         diagnostics = diagnostics,
+                        deviceHealth = remember { com.cues.app.runtime.DeviceHealthReadings.current(context) },
                         isRefreshing = isDiagnosticsRefreshing,
                         onRefresh = {
                             isDiagnosticsRefreshing = true
