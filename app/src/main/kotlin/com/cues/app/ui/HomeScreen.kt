@@ -177,8 +177,14 @@ fun HomeScreen(
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                cuesColors.bg200.copy(alpha = 0.72f),
+                                // A restrained, iQOO-like performance wash:
+                                // bright at the entry edge, then falling back
+                                // into Cues' readable surface rather than
+                                // turning the whole hero into a neon banner.
+                                Color(0xFF00E5FF).copy(alpha = 0.22f),
+                                cuesColors.go.copy(alpha = 0.18f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                cuesColors.bg200.copy(alpha = 0.84f),
                                 cuesColors.bg200,
                             ),
                         ),

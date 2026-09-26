@@ -53,11 +53,13 @@ object BakeOff {
             runtime = when (drafter.id) {
                 DraftSourceId.GRAMMAR_PARSER -> "kotlin"
                 DraftSourceId.SARVAM_CLOUD -> "cloud"
+                DraftSourceId.EXTERNAL_GEMMA_CALL, DraftSourceId.SYSTEM_AGENT_CALL -> "on-device-hub"
                 else -> "on-device"
             },
             backend = when (drafter.id) {
                 DraftSourceId.GRAMMAR_PARSER -> "grammar"
                 DraftSourceId.SARVAM_CLOUD -> "sarvam-105b"
+                DraftSourceId.EXTERNAL_GEMMA_CALL, DraftSourceId.SYSTEM_AGENT_CALL -> "local-gemma-hub"
                 else -> "llm"
             },
             networkOn = drafter.id == DraftSourceId.SARVAM_CLOUD,

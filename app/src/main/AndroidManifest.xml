@@ -75,6 +75,12 @@
     -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
 
+    <!-- A caller must declare this normal permission before it can even reach
+         the separately consented local-Gemma ContentProvider. -->
+    <permission
+        android:name="${applicationId}.permission.ASK_LOCAL_GEMMA"
+        android:protectionLevel="normal" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -258,16 +264,16 @@
         <!--
           CL-38: the developer-facing local Gemma surface — a call-only
           provider (see app/.../devkit/CuesGemmaProvider.kt), not a data
-          provider; every cursor/mutation method it inherits refuses. No
-          <uses-permission> gates it because ContentProvider.call() needs
-          none; the only protection is CuesApplication.externalGemmaGate's
-          in-memory, off-by-default toggle plus its own caller-package log —
-          disclosed as a real limitation, not hidden, in CLEANUP.md CL-38.
+          provider; every cursor/mutation method it inherits refuses. A normal
+          permission filters callers before they reach it; the application
+          then validates persistent package-plus-signing-digest consent and
+          applies its own rate limit. See CLEANUP.md CL-38 for device proof.
         -->
         <provider
             android:name=".devkit.CuesGemmaProvider"
             android:authorities="${applicationId}.gemma"
-            android:exported="true" />
+            android:exported="true"
+            android:permission="${applicationId}.permission.ASK_LOCAL_GEMMA" />
 
         <!--
           "Cues: iQOO utility bindings" (Task 16). Off by default; the user

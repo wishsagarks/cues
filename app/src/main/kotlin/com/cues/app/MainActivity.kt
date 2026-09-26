@@ -189,8 +189,10 @@ class MainActivity : ComponentActivity() {
                     modelDownloader = app.modelDownloader,
                     onDeviceModelUserEnabled = app.onDeviceModelUserEnabled,
                     onToggleOnDeviceModel = { app.onDeviceModelUserEnabled = it },
+                    probeNpu = app::probeNpu,
                     externalModelDownloader = app.externalModelDownloader,
                     externalGemmaGate = app.externalGemmaGate,
+                    approveExternalCaller = app::approveExternalCaller,
                     externalModelIdentity = app::externalModelIdentity,
                     localSpeechInput = localSpeechInput,
                     pairedDevices = app::pairedDevices,
@@ -277,8 +279,10 @@ private fun CuesApp(
     modelDownloader: com.cues.app.drafting.ModelDownloader,
     onDeviceModelUserEnabled: Boolean = false,
     onToggleOnDeviceModel: (Boolean) -> Unit = {},
+    probeNpu: (suspend (String) -> com.cues.core.drafting.InferenceOutput)? = null,
     externalModelDownloader: com.cues.app.drafting.ModelDownloader,
     externalGemmaGate: com.cues.app.devkit.ExternalGemmaGate,
+    approveExternalCaller: (String) -> Unit,
     externalModelIdentity: () -> String,
     localSpeechInput: LocalSpeechInput,
     pairedDevices: () -> List<PairedDevice>,
@@ -303,6 +307,8 @@ private fun CuesApp(
     var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
     var isBakingOff by remember { mutableStateOf(false) }
     var bakeOffReport by remember { mutableStateOf<String?>(null) }
+    var isProbingNpu by remember { mutableStateOf(false) }
+    var npuProbeResult by remember { mutableStateOf<String?>(null) }
     // CL-36: the "Cues Brain" download tile's state. Re-read from disk on
     // first composition — this covers both a manual adb-push side-load
     // (docs/DEVICE_MATRIX.md M2) and a download this same process already
@@ -512,6 +518,29 @@ private fun CuesApp(
         scope.launch {
             bakeOffReport = runBakeOff().render()
             isBakingOff = false
+        }
+    }
+
+    /**
+     * Checks screen's "Test NPU on this chip anyway" button — the one place
+     * this app ever calls [com.cues.app.drafting.LiteRtLmSession.probeNpuOnce]
+     * (via [probeNpu]). A real attempt, timed the same way a real draft
+     * would be; [npuProbeResult] renders whatever it actually returns or
+     * threw, never a guess at what it "should" do on this chip.
+     */
+    fun probeNpuNow() {
+        val probe = probeNpu ?: return
+        isProbingNpu = true
+        npuProbeResult = null
+        scope.launch {
+            npuProbeResult = try {
+                val output = probe("Say hello in one short sentence.")
+                val report = output.report
+                "NPU loaded — ${report.loadMs}ms load, ${report.generationMs}ms generate, ${"%.1f".format(report.tokensPerSecond)} tok/s"
+            } catch (e: Exception) {
+                "NPU attempt failed: ${e.message ?: e::class.simpleName}"
+            }
+            isProbingNpu = false
         }
     }
 
@@ -748,6 +777,7 @@ private fun CuesApp(
                 composable(CuesRoutes.RECEIPTS) {
                     ReceiptScreen(
                         loadReceipts = { store.raw.receipts() },
+                        loadReceiptRecords = { store.receiptRecords() },
                         onBack = {},
                         onSpeak = replySpeaker::speak,
                     )
@@ -903,6 +933,13 @@ private fun CuesApp(
                         externalModelIdentity = externalModelIdentity(),
                         onChooseExternalModel = { externalModelPicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
                         recentExternalCalls = externalGemmaGate.recentCalls(),
+                        approvedExternalCallers = externalGemmaGate.approvedCallers(),
+                        onApproveExternalCaller = approveExternalCaller,
+                        onRevokeExternalCaller = externalGemmaGate::revoke,
+                        inferenceEntries = store.inferenceEntries(),
+                        isProbingNpu = isProbingNpu,
+                        npuProbeResult = npuProbeResult,
+                        onProbeNpu = probeNpu?.let { ::probeNpuNow },
                     )
                 }
 

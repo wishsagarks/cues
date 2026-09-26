@@ -91,6 +91,12 @@ enum class DraftSourceId {
      * appears downstream of approval. See CLEANUP.md CL-35.
      */
     SARVAM_CLOUD,
+
+    /** A bounded completion supplied to another installed app through Cues' local-model hub. */
+    EXTERNAL_GEMMA_CALL,
+
+    /** A bounded completion requested by the platform system-agent surface. */
+    SYSTEM_AGENT_CALL,
 }
 
 @Serializable

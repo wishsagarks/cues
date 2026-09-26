@@ -556,6 +556,9 @@ class CueService(
         // exhaustive `when` is exactly what caught every other drafter
         // provenance gap in this file.
         DraftSourceId.IMPORTED_CARD -> ReplySource.ROUTINE_STORE
+        // Hub calls do not draft routines and must never reach converse();
+        // retain a safe, non-model reply if a future caller misroutes one.
+        DraftSourceId.EXTERNAL_GEMMA_CALL, DraftSourceId.SYSTEM_AGENT_CALL -> ReplySource.ROUTINE_STORE
     }
 
     /** Normalizes and validates without changing status. Safe to call repeatedly while editing. */

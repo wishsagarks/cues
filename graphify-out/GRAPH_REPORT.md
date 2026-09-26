@@ -1,16 +1,16 @@
-# Graph Report - iqoo+  (2026-09-25)
+# Graph Report - iqoo+  (2026-09-26)
 
 ## Corpus Check
-- 236 files · ~236,733 words
+- 273 files · ~269,601 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3062 nodes · 7190 edges · 172 communities (137 shown, 31 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 189 edges (avg confidence: 0.85)
+- 3475 nodes · 8030 edges · 209 communities (164 shown, 41 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 220 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `89a79b25`
+- Built from commit: `a724b30d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -24,27 +24,27 @@
 - Condition
 - Session
 - RecordingExecutor
-- CueService.kt
+- Routine
 - ActionSpec
 - EndCondition
 - CueService
 - CuesAccessibilityService
 - GrammarParserTest
-- CalendarConditionKit
+- CalendarKit.kt
 - ActionOutcome
 - TimetableExtractorTest
 - CapabilityProvider
 - ActionId
-- TriggerEvent
-- CoachState
+- ActionRegistry
+- DetectorsTest
 - InferenceReport
 - MainActivity.kt
-- CuesTokens.kt
+- CuesType
 - ReviewScreenV2.kt
 - GrammarParser
 - InsightsTest
-- SessionEngine
-- DeviceDiagnosticsRepository
+- CuesApplication
+- DiagnosticsScreen.kt
 - Badges.kt
 - CueCard.kt
 - NowScreen.kt
@@ -53,29 +53,29 @@
 - TriggerKit
 - SignalRegistry
 - UtilityId
-- InsightsMain.kt
+- ArmResult
 - AssistantIntent
-- Ports.kt
+- Patch
 - Finding
 - DraftResult
-- UtilityBinding
+- Ports.kt
 - CueServiceTest
 - Cleanup register
 - Task List
-- PatchBayEditors.kt
-- Suggestion
-- Routine
-- Context.kt
+- PairedDevice
+- Detectors
+- Rehearsal
+- RecognitionListener
 - ReplyCode
 - OwnedResource
 - NamedContext
-- ReceiptKind
-- PlaceTransitionKit
+- ContextSnapshot
+- PlaceSupport
 - CuesAppFunctionService.kt
 - SessionService
 - LocalTimeOfDay
 - Functional Design Document
-- OnDeviceLlmDrafter.kt
+- InferenceOutput
 - AudioOutputAdapter.kt
 - README.md
 - ContextValue
@@ -84,37 +84,37 @@
 - Session order
 - Receipt.kt
 - SkipFamily
-- PatchSentenceTest
+- Truth
 - EvaluatorTest
 - DoKind
 - IfKind
-- InContextKit
-- CuesApplication
+- DifferentialDrafter
+- SarvamChatDrafter.kt
 - MainActivity
 - Main.kt
 - Normalizer
 - Insights.kt
 - EventKind
 - Place
-- WifiConnectionKit
-- RoutineStatus
-- Contexts
+- WifiKits.kt
+- ClauseAccountingTest.kt
+- DraftTrace
 - JsonFileStoreTest
-- SarvamClient
+- SpeechResult
 - Sprints 4 and 5: The cue meets the phone, then earns its claims
 - AskScreen.kt
-- ForecastItem
-- WifiAdapter.kt
+- ReviewCopy
+- .run
 - ActionArgs
-- CleanupObligation
-- forecastToday
+- SessionWindowTest
+- NowNextWidget.kt
 - TimetableExtractor.kt
 - LedgerEvent
 - SignalKitTest
-- BatteryThresholdKit
+- ApprovalsTest
 - NormalizerTest
 - ReceiptRecordTest
-- UtilityRestoreTest
+- CuesGemmaProvider
 - Platform API verification — 24 September 2026
 - Capability
 - Product Requirements Specification
@@ -122,16 +122,16 @@
 - UnknownRemedyTest
 - ReviewCopyLinesTest
 - dev
-- AssistantIntent.kt
-- PatchBayScreen.kt
+- CompositeDrafter
+- ExternalGemmaGate
 - test_sarvam.py
-- PairedDevice
-- ConditionKit
-- Turn
-- RehearsalTest
-- RearmPolicy
-- TimeAdapter
-- ExportImport.kt
+- RoutineStatus
+- BatteryThresholdKit
+- DraftSourceId
+- ActionExecutor
+- ReviewCopyTest
+- Context.kt
+- forecastToday
 - RefineOperation
 - Cues
 - Phase 1 idea submission
@@ -146,135 +146,172 @@
 - QrCode.kt
 - OnImageSavedCallback
 - BroadcastReceiver
-- AndroidCapabilityProvider
-- MonitoringRepository
-- NavBars.kt
-- IntentRouterTest
+- Fact
+- InferenceBackend
+- PlanDraft
+- CueService.kt
 - Working in this repository
 - Working in this repository
-- CalendarKitTest
+- UnknownReason
 - Demo script (Task 20)
 - GateReadoutTest
 - Conversation.kt
-- ReplySource
+- InsightsMain.kt
 - SuggestionKind
 - BluetoothReceiver.kt
 - Release gate: verification and disclosure (Task 20)
-- CueTileService.kt
+- ActionRegistryTest
 - CuesMotion.kt
 - ReplySpeaker
 - Working in this repository
 - TimetableOcr.kt
 - ScreenTile
 - BluetoothCoverage
-- ForecastStatus
+- PersonalIndex
 - iQOO device verification matrix (Task 19)
 - Permissions
 - Sprint 3: Offline authoring, review and approval
 - Sprint 6: Contextual, declared
-- StopSessionReceiver.kt
+- AmbientBandClassifier
 - Developer setup
 - Theme.kt
 - ActionExecutor
-- DetectorsTest
+- CoachPolicy
 - OriginOS 7 experience pass
-- Building during Red Light
+- SarvamReadback
 - Cues Brain execution checklist
 - DragAndDrop.kt
-- InsightsBenchmarkTest
+- Measured results
+- SnapshotBuilder
+- MacroValidatorTest
+- UtilityCatalogTest
+- Suggestion
+- DeviceIdentity
+- Corpus
 - gradlew
+- Fixtures
+- GemmaCallProtocol.kt
+- PatchSentenceTest
+- Workstreams
+- Remedy
+- Contexts
+- EngineResult
+- Day
+- StatusChip
+- UtilityRestoreTest
+- SarvamClient
+- PatchSentence.kt
+- UiMacro
+- UiStep
+- AndroidCapabilityProvider
+- GraceScheduler
+- ReplySource
+- HubPolicyTest
+- FaceDownClassifierTest
+- ModelCatalog
+- FaceDownClassifier
+- AtTimeEndKit
+- .captureScreenText
+- CueTileService.kt
+- ClauseAccounting
+- AppShortcuts.kt
+- .performPlayback
+- .draftWithCloud
+- UtilityMechanism
+- InsightsBenchmarkTest
+- ModelCatalogTest
 
 ## God Nodes (most connected - your core abstractions)
 1. `Routine` - 162 edges
-2. `JsonFileStore` - 127 edges
+2. `JsonFileStore` - 135 edges
 3. `Trigger` - 121 edges
 4. `Condition` - 117 edges
-5. `TriggerEvent` - 90 edges
-6. `CueService` - 87 edges
-7. `Session` - 81 edges
-8. `GrammarParser` - 80 edges
+5. `CueService` - 96 edges
+6. `TriggerEvent` - 90 edges
+7. `GrammarParser` - 82 edges
+8. `Session` - 81 edges
 9. `ReasonCode` - 75 edges
-10. `Reason` - 50 edges
+10. `CuesApplication` - 56 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `CuesApplication` --calls--> `OnDeviceRefinePhraser`  [EXTRACTED]
+  app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/assistant/OnDeviceRefinePhraser.kt
 - `CuesApplication` --calls--> `CueService`  [EXTRACTED]
   app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/CueService.kt
 - `CuesApplication` --calls--> `DifferentialDrafter`  [EXTRACTED]
   app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/drafting/DifferentialDrafter.kt
 - `CuesApplication` --calls--> `GrammarParser`  [EXTRACTED]
   app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/drafting/GrammarParser.kt
-- `CuesApplication` --calls--> `AdapterSupervisor`  [EXTRACTED]
-  app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/signals/AdapterSupervisor.kt
-- `CuesApplication` --calls--> `JsonFileStore`  [EXTRACTED]
-  app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/store/JsonFileStore.kt
+- `CuesApplication` --calls--> `OnDeviceLlmDrafter`  [EXTRACTED]
+  app/src/main/kotlin/com/cues/app/CuesApplication.kt → core/src/main/kotlin/com/cues/core/drafting/OnDeviceLlmDrafter.kt
 
 ## Import Cycles
 - None detected.
 
-## Communities (172 total, 31 thin omitted)
+## Communities (209 total, 41 thin omitted)
 
 ### Community 0 - "Trigger"
-Cohesion: 0.06
-Nodes (15): AudioOutput, BluetoothConnection, Charging, Manual, PlaceTransition, Trigger, WifiConnection, BluetoothKit (+7 more)
+Cohesion: 0.05
+Nodes (17): TriggerEvent, AudioOutput, BluetoothConnection, Charging, Manual, PlaceTransition, Trigger, WifiConnection (+9 more)
 
 ### Community 1 - "ListenerHealth"
-Cohesion: 0.14
-Nodes (7): ListenerHealth, SignalAdapter, AdapterSupervisor, FakeSignalAdapter, AdapterSupervisorTest, FakeAdapter, com
+Cohesion: 0.09
+Nodes (11): WifiAdapter, NetworkCallback, ConnectivityManager, ListenerHealth, SignalAdapter, AdapterSupervisor, FakeSignalAdapter, AdapterSupervisorTest (+3 more)
 
 ### Community 2 - "ReasonCode"
 Cohesion: 0.04
 Nodes (54): ReasonCode, AUDIO_KIND_MISMATCH, AUDIO_OUTPUT_ACTIVE, AUDIO_OUTPUT_CHANGED, AUDIO_OUTPUT_INACTIVE, AUDIO_OUTPUT_UNKNOWN, BATTERY_AS_REQUIRED, BATTERY_NOT_AS_REQUIRED (+46 more)
 
 ### Community 3 - "PatchSentence"
-Cohesion: 0.19
-Nodes (11): Inexpressible, KClass, No, PatchResult, PatchSelection, PatchSentence, Phrase, Sentence (+3 more)
+Cohesion: 0.34
+Nodes (5): No, PatchSentence, Phrase, Until, Yes
 
 ### Community 4 - "JsonFileStore"
-Cohesion: 0.09
-Nodes (3): JsonFileStore, T, UsageLedgerTest
+Cohesion: 0.08
+Nodes (4): InferenceLedgerEntry, JsonFileStore, T, UsageLedgerTest
 
 ### Community 5 - "WhenKind"
 Cohesion: 0.08
 Nodes (20): DoSelection, IfSelection, UntilExtra, UntilExtraKind, AT_TIME, HALF_HOUR, HOUR, WhenKind (+12 more)
 
 ### Community 6 - "Condition"
-Cohesion: 0.08
-Nodes (19): AtPlace, AudioOutputActive, BatteryAtLeast, BatteryBelow, CalendarBusy, CalendarNotBusy, ChargingState, Condition (+11 more)
+Cohesion: 0.05
+Nodes (24): Reason, AtPlace, AudioOutputActive, BatteryAtLeast, BatteryBelow, CalendarBusy, CalendarNotBusy, ChargingState (+16 more)
 
 ### Community 7 - "Session"
-Cohesion: 0.08
-Nodes (5): Session, SessionStore, ScratchStore, ApprovalsTest, InMemorySessionStore
+Cohesion: 0.10
+Nodes (6): CleanupObligation, Session, SessionStore, ScratchStore, isLive(), InMemorySessionStore
 
 ### Community 8 - "RecordingExecutor"
 Cohesion: 0.12
-Nodes (4): ActionExecutor, RecordingExecutor, ToggleAttention, SessionEngineTest
+Nodes (5): SessionEngine, ActionExecutor, RecordingExecutor, ToggleAttention, SessionEngineTest
 
-### Community 9 - "CueService.kt"
-Cohesion: 0.07
-Nodes (16): Refiner, Result, FloatArray, NeedsClarification, NeedsConfirmation, NotFound, PersonalIndex, ReferenceResolution (+8 more)
+### Community 9 - "Routine"
+Cohesion: 0.09
+Nodes (11): CueCardShareScreen(), Refiner, Result, Routine, Embedder, FloatArray, RoutineStore, EmbeddingPersonalIndexTest (+3 more)
 
 ### Community 10 - "ActionSpec"
-Cohesion: 0.07
-Nodes (4): ActionSpec, CleanupPolicy, ValidatorTest, ActionRegistryTest
+Cohesion: 0.09
+Nodes (5): FixturesForCli, ActionSpec, CleanupPolicy, RearmPolicy, ValidatorTest
 
 ### Community 11 - "EndCondition"
-Cohesion: 0.09
-Nodes (22): AtTime, Day, FRI, MON, SAT, SUN, THU, TUE (+14 more)
+Cohesion: 0.17
+Nodes (9): AtTime, Duration, EndCondition, ManualStop, TriggerReversed, DurationEndKit, KClass, ManualStopKit (+1 more)
 
 ### Community 12 - "CueService"
-Cohesion: 0.12
-Nodes (4): CueService, Diagnostics, com, InsightsServiceTest
+Cohesion: 0.15
+Nodes (5): CueService, Diagnostics, DrafterSetup, com, kotlinx
 
 ### Community 13 - "CuesAccessibilityService"
-Cohesion: 0.06
-Nodes (24): AccessibilityEvent, AccessibilityNodeInfo, AccessibilityService, Blocked, CuesAccessibilityService, StateFlow, MacroRunOutcome, Refused (+16 more)
+Cohesion: 0.18
+Nodes (5): AccessibilityEvent, AccessibilityNodeInfo, AccessibilityService, CuesAccessibilityService, StateFlow
 
 ### Community 14 - "GrammarParserTest"
-Cohesion: 0.13
+Cohesion: 0.12
 Nodes (4): corpusText(), object@L349, GrammarParserTest, parser()
 
-### Community 15 - "CalendarConditionKit"
-Cohesion: 0.19
+### Community 15 - "CalendarKit.kt"
+Cohesion: 0.20
 Nodes (5): CalendarBusyKit, CalendarConditionKit, CalendarNotBusyKit, C, KClass
 
 ### Community 16 - "ActionOutcome"
@@ -282,152 +319,152 @@ Cohesion: 0.17
 Nodes (4): AndroidActionExecutor, ActionExecutor, Uri, ActionOutcome
 
 ### Community 18 - "CapabilityProvider"
-Cohesion: 0.14
-Nodes (10): Conversation, ChatMain, FactReference, CapabilityProvider, ConversationTest, FakeModelDrafter, InferenceReportPlumbingTest, RoutineDrafter (+2 more)
+Cohesion: 0.12
+Nodes (12): Conversation, FactReference, CapabilityProvider, ConversationTest, FakeModelDrafter, InferenceReportPlumbingTest, RoutineDrafter, RoutineDrafter (+4 more)
 
 ### Community 19 - "ActionId"
-Cohesion: 0.07
-Nodes (25): FixtureExecutor, ActionExecutor, ActionId, ADD_CALENDAR_EVENT, COMPOSE_MESSAGE, MEDIA_CONTROL, NOTIFY_RESULT, OPEN_APP (+17 more)
+Cohesion: 0.10
+Nodes (17): FixtureExecutor, ActionExecutor, ActionId, ADD_CALENDAR_EVENT, COMPOSE_MESSAGE, MEDIA_CONTROL, NOTIFY_RESULT, OPEN_APP (+9 more)
 
-### Community 20 - "TriggerEvent"
-Cohesion: 0.06
-Nodes (31): Severity, ERROR, WARNING, chargingWord(), contains(), Decision, describe(), Evaluator (+23 more)
-
-### Community 21 - "CoachState"
-Cohesion: 0.27
-Nodes (3): CoachState, CoachStateStore, InMemoryCoachState
+### Community 20 - "ActionRegistry"
+Cohesion: 0.18
+Nodes (8): ActionDefinition, ActionRegistry, ArgResult, Invalid, Presence, NEEDS_USER, UNATTENDED_OK, Valid
 
 ### Community 22 - "InferenceReport"
-Cohesion: 0.20
-Nodes (10): ConsoleHtml, ConsoleMain, CuesExporter, InferenceBackend, CPU, GPU, NPU, InferenceReport (+2 more)
+Cohesion: 0.22
+Nodes (12): ConsoleHtml, ConsoleMain, CuesExporter, InferenceReport, ForecastItem, ForecastStatus, CANNOT_TELL, NOT_TODAY (+4 more)
 
 ### Community 23 - "MainActivity.kt"
-Cohesion: 0.14
-Nodes (19): availableSignalsNow(), CuesApp(), friendlyLabel(), com, mapKnown(), navigateToTab(), ReviewFlow(), signalGatesFrom() (+11 more)
+Cohesion: 0.17
+Nodes (19): availableSignalsNow(), CuesApp(), friendlyLabel(), com, navigateToTab(), ReviewFlow(), CuesBottomNav(), CuesTopBar() (+11 more)
 
-### Community 24 - "CuesTokens.kt"
-Cohesion: 0.22
-Nodes (10): ClauseBlock(), ClauseRow(), ClauseKind, Modifier, CuesColorTokens, CuesPalette, Color, CuesType (+2 more)
+### Community 24 - "CuesType"
+Cohesion: 0.33
+Nodes (7): ClauseBlock(), ClauseRow(), ClauseKind, Modifier, CuesType, variableFont(), Font
 
 ### Community 25 - "ReviewScreenV2.kt"
-Cohesion: 0.15
-Nodes (23): cuesGridBackground(), Color, Modifier, SlabCard(), SlabTier, ONE, THREE, TWO (+15 more)
+Cohesion: 0.13
+Nodes (30): cuesGridBackground(), Color, Modifier, SlabCard(), SlabTier, ONE, THREE, TWO (+22 more)
 
 ### Community 26 - "GrammarParser"
-Cohesion: 0.17
-Nodes (10): main(), object@L9, AmbiguousDevice, GrammarParser, IntRange, RoutineDrafter, ResolvedApp, ResolvedTrigger (+2 more)
+Cohesion: 0.14
+Nodes (9): AmbiguousDevice, GrammarParser, IntRange, RoutineDrafter, ResolvedApp, ResolvedTrigger, TriggerParse, TemplatesTest (+1 more)
 
 ### Community 27 - "InsightsTest"
 Cohesion: 0.24
 Nodes (3): LedgerView, ActionRecord, InsightsTest
 
-### Community 28 - "SessionEngine"
-Cohesion: 0.17
-Nodes (9): Ended, EngineResult, ExitCancelled, ExitScheduled, Ignored, isLive(), SessionEngine, Skipped (+1 more)
+### Community 28 - "CuesApplication"
+Cohesion: 0.10
+Nodes (10): CuesApplication, com, Result, StateFlow, StoreGeneration, ExternalCallEntry, ExternalCallerLedger, AndroidDeviceAttention (+2 more)
 
-### Community 29 - "DeviceDiagnosticsRepository"
-Cohesion: 0.18
-Nodes (13): DeviceDiagnostics, DeviceDiagnosticsRepository, RecognitionSupportCallback, ManualObservation, ISSUE_OBSERVED, NO_ISSUE_OBSERVED, NOT_CHECKED, DiagnosticCard() (+5 more)
+### Community 29 - "DiagnosticsScreen.kt"
+Cohesion: 0.07
+Nodes (36): Uri, ModelDownloader, DeviceDiagnostics, DeviceDiagnosticsRepository, RecognitionSupportCallback, ManualObservation, ISSUE_OBSERVED, NO_ISSUE_OBSERVED (+28 more)
 
 ### Community 30 - "Badges.kt"
-Cohesion: 0.14
-Nodes (23): ClauseBadge(), clauseColors(), ClauseKind, DO, IF, RESTORE, UNTIL, WHEN (+15 more)
+Cohesion: 0.10
+Nodes (29): ClauseBadge(), clauseColors(), ClauseKind, DO, IF, RESTORE, UNTIL, WHEN (+21 more)
 
 ### Community 31 - "CueCard.kt"
-Cohesion: 0.21
-Nodes (13): CardDecodeResult, CueCard, CueCards, T, Malformed, Missing, MissingEntity, Ok (+5 more)
+Cohesion: 0.18
+Nodes (14): CardMain, CardDecodeResult, CueCard, CueCards, T, Malformed, Missing, MissingEntity (+6 more)
 
 ### Community 32 - "NowScreen.kt"
-Cohesion: 0.22
-Nodes (21): clickableNoIndicationPublic(), CountdownRing(), EmptyState(), FilterChipRow(), formatCountdown(), androidx, Color, Composable (+13 more)
+Cohesion: 0.20
+Nodes (23): clickableNoIndicationPublic(), CountdownRing(), EmptyState(), FilterChipRow(), FixedSegmentedControl(), formatCountdown(), androidx, Color (+15 more)
 
 ### Community 33 - "SessionState"
-Cohesion: 0.09
-Nodes (22): EndReason, COVERAGE_GAP, DEADLINE_REACHED, MANUAL_STOP, RECONCILED_EXPIRED, ROUTINE_PAUSED, START_FAILED, TRIGGER_REVERSED (+14 more)
+Cohesion: 0.20
+Nodes (10): SessionState, ACTIVE, CANCELLED, CLEANUP_PENDING, COMPLETED, ENDING, EXIT_PENDING, FAILED (+2 more)
 
 ### Community 34 - "DESIGN_SYSTEM.md"
 Cohesion: 0.05
 Nodes (37): 1. Monospaced Clause Badges, 2. Routine Slab Cards, 3. Buttons & Mechanical Triggers, 4. Origin Dynamic Islands & Capsules, 5. Input Fields & Syntax Builders, 6. Lists & Log Feeds, Accent Glow & Neon Halos, Brand & Style (+29 more)
 
 ### Community 35 - "TriggerKit"
-Cohesion: 0.17
-Nodes (6): EndKit, com, E, KClass, T, TriggerKit
+Cohesion: 0.12
+Nodes (8): ConditionKit, EndKit, C, com, E, KClass, T, TriggerKit
 
 ### Community 36 - "SignalRegistry"
-Cohesion: 0.19
+Cohesion: 0.18
 Nodes (5): C, com, E, T, SignalRegistry
 
 ### Community 37 - "UtilityId"
-Cohesion: 0.10
-Nodes (15): UtilityBindingScreen(), UtilityId, EYE_PROTECTION, GAME_MODE, ULTRA_SAVER, UtilityState, OFF, ON (+7 more)
+Cohesion: 0.18
+Nodes (10): UtilityBindingScreen(), UtilityId, EYE_PROTECTION, GAME_MODE, ULTRA_SAVER, UtilityState, OFF, ON (+2 more)
 
-### Community 38 - "InsightsMain.kt"
-Cohesion: 0.10
-Nodes (20): Approvals, ArmResult, Blocked, DeleteResult, Invalid, T, MissingCapabilities, NotApproved (+12 more)
+### Community 38 - "ArmResult"
+Cohesion: 0.14
+Nodes (11): Approvals, ArmResult, Blocked, DeleteResult, Invalid, T, MissingCapabilities, NotApproved (+3 more)
 
 ### Community 39 - "AssistantIntent"
 Cohesion: 0.20
-Nodes (10): AssistantIntent, Capabilities, Control, Create, Explain, Forecast, ListCues, Refine (+2 more)
+Nodes (12): AssistantIntent, Capabilities, Control, Create, Explain, Forecast, ListCues, Refine (+4 more)
 
-### Community 40 - "Ports.kt"
-Cohesion: 0.14
+### Community 40 - "Patch"
+Cohesion: 0.17
 Nodes (11): describe(), DetailRow(), RoutineDetailScreen(), TemporaryPatchCard(), tomorrowMorningMillis(), Patch, PatchKind, SkipOccurrence (+3 more)
 
 ### Community 41 - "Finding"
-Cohesion: 0.24
-Nodes (4): Finding, ValidationResult, Validator, SignalText
+Cohesion: 0.17
+Nodes (8): Finding, Severity, ERROR, WARNING, ValidationResult, Validator, KClass, SignalText
 
 ### Community 42 - "DraftResult"
-Cohesion: 0.06
-Nodes (30): ClauseAccounting, IntRange, CompositeDrafter, RoutineDrafter, DifferentialDrafter, RoutineDrafter, ClauseSpan, Drafted (+22 more)
+Cohesion: 0.09
+Nodes (19): RoutineDrafter, ClauseKind, FILLER, MAPPED, UNACCOUNTED, ClauseSpan, DifferingClause, ACTIONS (+11 more)
+
+### Community 43 - "Ports.kt"
+Cohesion: 0.17
+Nodes (3): UtilityBinding, MacroStore, UtilityBindingStore
 
 ### Community 44 - "CueServiceTest"
 Cohesion: 0.17
 Nodes (3): CueServiceTest, RoutineDrafter, RoutineDrafter
 
 ### Community 45 - "Cleanup register"
-Cohesion: 0.06
-Nodes (36): CL-01 — Termux on-device build route, CL-02 — Android runtime written against real APIs, verified on none of them, CL-03 — Two drafting paths at equal weight, CL-04 — Unverified Android dependency versions, CL-05 — Pre-event code and what the documents claim, CL-06 — Device and OS assumptions, CL-07 — Named Wi-Fi requires a device decision, CL-08 — Pre-event signal framework disclosure (+28 more)
+Cohesion: 0.05
+Nodes (42): ~~CL-01 — Termux on-device build route~~, CL-02 — Android runtime written against real APIs, verified on none of them, CL-03 — Two drafting paths at equal weight, CL-04 — Unverified Android dependency versions, CL-05 — Pre-event code and what the documents claim, CL-06 — Device and OS assumptions, CL-07 — Named Wi-Fi requires a device decision, CL-08 — Pre-event signal framework disclosure (+34 more)
 
 ### Community 46 - "Task List"
 Cohesion: 0.06
 Nodes (31): Architecture Decisions, Checkpoint: Brain and Camera, Checkpoint: Bridge, Checkpoint: Coach, Checkpoint: Conversation, Checkpoint: Ecosystem, Checkpoint: Typed Actions, Definition of Complete (+23 more)
 
-### Community 47 - "PatchBayEditors.kt"
-Cohesion: 0.26
-Nodes (17): DayToggleRow(), EnumChipRow(), androidx, IntRange, Modifier, T, NumberStepper(), PatchTextField() (+9 more)
-
-### Community 48 - "Suggestion"
-Cohesion: 0.41
-Nodes (7): Detection, Detectors, EvidenceLine, NoPattern, NotEnoughData, Suggest, Suggestion
-
-### Community 49 - "Routine"
+### Community 47 - "PairedDevice"
 Cohesion: 0.15
-Nodes (7): CueCardShareScreen(), Routine, MutableClock, Rehearsal, RehearsalRow, PermissionCheckCopy, ReviewCopy
+Nodes (27): CuesShape, DayToggleRow(), EnumChipRow(), androidx, IntRange, Modifier, T, NumberStepper() (+19 more)
 
-### Community 50 - "Context.kt"
-Cohesion: 0.17
-Nodes (4): android, ByteArray, LocalSpeechInput, RecognitionListener
+### Community 48 - "Detectors"
+Cohesion: 0.38
+Nodes (6): Detection, Detectors, EvidenceLine, NoPattern, NotEnoughData, Suggest
+
+### Community 49 - "Rehearsal"
+Cohesion: 0.39
+Nodes (3): MutableClock, Rehearsal, RehearsalRow
+
+### Community 50 - "RecognitionListener"
+Cohesion: 0.16
+Nodes (5): android, ByteArray, LocalSpeechInput, RecognitionListener, SpeechRecognizer
 
 ### Community 51 - "ReplyCode"
 Cohesion: 0.11
-Nodes (16): ReplyCode, CAPABILITIES, CONFIRM_COMMAND, CUES_LIST, DRAFT_FAILED, DRAFT_READY, DRAFT_REFINED, EXPLANATION (+8 more)
+Nodes (17): ReplyCode, CAPABILITIES, CONFIRM_COMMAND, CUES_LIST, DRAFT_FAILED, DRAFT_READY, DRAFT_REFINED, EXPLANATION (+9 more)
 
 ### Community 52 - "OwnedResource"
-Cohesion: 0.14
+Cohesion: 0.18
 Nodes (8): OwnedResource, DND_CONTRIBUTION, FOCUS_TIMER, PINNED_NOTE, RINGER_MODE, UTILITY_CONTRIBUTION, ActionExecutor, ActionExecutor
 
 ### Community 53 - "NamedContext"
-Cohesion: 0.16
-Nodes (4): CliContexts, NamedContext, NamedContextStore, EmptyContexts
+Cohesion: 0.15
+Nodes (5): CliContexts, NamedContext, NamedContextStore, ContextualStores, EmptyContexts
 
-### Community 54 - "ReceiptKind"
+### Community 54 - "ContextSnapshot"
 Cohesion: 0.14
-Nodes (13): EventProvenance, MANUAL, PHYSICAL, REHEARSAL, ReceiptKind, ENDED, EXIT_CANCELLED, EXIT_SCHEDULED (+5 more)
+Nodes (18): LegacyReceiptCard(), ReceiptScreen(), StructuredReceiptCard(), ContextSnapshot, EventProvenance, MANUAL, PHYSICAL, REHEARSAL (+10 more)
 
 ### Community 56 - "CuesAppFunctionService.kt"
-Cohesion: 0.14
-Nodes (14): BaseCuesAppFunctionService, CurrentContextResult, DraftCueParams, DraftCueResult, ForecastItemResult, ForecastTodayResult, StartCueParams, StartCueResult (+6 more)
+Cohesion: 0.13
+Nodes (15): AskLocalGemmaParams, AskLocalGemmaResult, BaseCuesAppFunctionService, CurrentContextResult, DraftCueParams, DraftCueResult, ForecastItemResult, ForecastTodayResult (+7 more)
 
 ### Community 57 - "SessionService"
 Cohesion: 0.22
@@ -441,17 +478,21 @@ Nodes (3): Comparable, LocalTimeOfDay, SnapshotBuilderTest
 Cohesion: 0.09
 Nodes (22): Action registry, Architecture, Cues Brain additions (Sprint 7), DND ownership, Event and context adapters, Expected state at a deadline (stretch), Functional Design Document, Implementation order (+14 more)
 
-### Community 60 - "OnDeviceLlmDrafter.kt"
-Cohesion: 0.23
-Nodes (7): LiteRtLmSession, FakeLlmSession, InferenceOutput, RoutineDrafter, LlmSession, OnDeviceLlmDrafter, UnconfiguredLlmSession
+### Community 60 - "InferenceOutput"
+Cohesion: 0.14
+Nodes (11): GatedLlmSession, LiteRtLmSession, OnDeviceRefinePhraser, RefinePhrasing, OllamaLlmSession, FakeLlmSession, InferenceOutput, LlmSession (+3 more)
 
 ### Community 61 - "AudioOutputAdapter.kt"
-Cohesion: 0.20
-Nodes (9): AudioOutputAdapter, AudioDeviceCallback, Context, AudioDeviceInfo, AudioManager, AudioKind, ANY, BLUETOOTH (+1 more)
+Cohesion: 0.31
+Nodes (5): AudioOutputAdapter, AudioDeviceCallback, Context, AudioDeviceInfo, AudioManager
+
+### Community 62 - "README.md"
+Cohesion: 0.21
+Nodes (4): Sprint 5 device runbook, Building during Red Light, Office Kit drives the laptop, What does not depend on either route
 
 ### Community 63 - "ContextValue"
-Cohesion: 0.05
-Nodes (41): CalendarReadings, Context, Context, Readings, Context, WifiReadings, SnapshotBuilder, GrantCapability (+33 more)
+Cohesion: 0.19
+Nodes (9): CalendarReadings, Context, Context, Readings, UnreadableInputs, ContextValue, Known, T (+1 more)
 
 ### Community 64 - "KineticButton"
 Cohesion: 0.28
@@ -466,12 +507,16 @@ Cohesion: 0.12
 Nodes (17): 0. Connect and baseline — ~10 min, 10. M9 — QR between devices — ~10 min, needs the second phone, 1. Hero loop gate — ~30–45 min, do this before anything else, 2. M8 — screen-off pending action — ~10 min, same setup as above, 3. M1 — package discovery — ~5 min, cheap, read-only, 4. M7 — AppFunctions + Jovi handoff — ~15 min, do early while there's time to fix, 5. M2 — NPU backend + drafting latency — ~20 min if a model is staged, else ~5 min to confirm the fallback, 6. M6 — accessibility utility binding — ~15 min (+9 more)
 
 ### Community 67 - "Receipt.kt"
-Cohesion: 0.30
-Nodes (6): friendly(), Receipt, Receipts, timerMinutes(), triggerNoun(), unownedCaveat()
+Cohesion: 0.28
+Nodes (7): Decision, friendly(), Receipt, Receipts, timerMinutes(), triggerNoun(), unownedCaveat()
 
 ### Community 68 - "SkipFamily"
 Cohesion: 0.12
 Nodes (16): SkipFamily, ALREADY_RUNNING, AUDIO, BATTERY, CALENDAR, CHARGING, CONTEXT, DAY (+8 more)
+
+### Community 69 - "Truth"
+Cohesion: 0.16
+Nodes (10): Evaluator, FreshnessPolicy, conjoin(), Truth, MATCH, NO_MATCH, UNKNOWN, RehearsalReport (+2 more)
 
 ### Community 71 - "DoKind"
 Cohesion: 0.17
@@ -481,49 +526,45 @@ Nodes (12): DoKind, ALARM, CALENDAR_EVENT, COMPOSE_MESSAGE, FOCUS_TIMER, MEDIA, 
 Cohesion: 0.17
 Nodes (12): IfKind, AT_PLACE, AUDIO_ACTIVE, BATTERY_AT_LEAST, BATTERY_BELOW, CALENDAR_BUSY, CALENDAR_FREE, CHARGING (+4 more)
 
-### Community 74 - "CuesApplication"
-Cohesion: 0.12
-Nodes (13): CuesApplication, StateFlow, StoreGeneration, FakeSarvamChatSession, RoutineDrafter, SarvamChatDrafter, SarvamChatSession, SarvamHttpChatSession (+5 more)
+### Community 73 - "DifferentialDrafter"
+Cohesion: 0.21
+Nodes (8): DifferentialDrafter, DifferentialDrafterTest, RoutineDrafter, RoutineDrafter, RoutineDrafter, RoutineDrafter, RoutineDrafter, RoutineDrafter
+
+### Community 74 - "SarvamChatDrafter.kt"
+Cohesion: 0.23
+Nodes (6): FakeSarvamChatSession, RoutineDrafter, SarvamChatDrafter, SarvamChatSession, SarvamHttpChatSession, UnconfiguredSarvamChatSession
 
 ### Community 75 - "MainActivity"
-Cohesion: 0.22
-Nodes (5): android, MainActivity, AppShortcuts, Context, CuesTheme()
+Cohesion: 0.27
+Nodes (5): android, Bundle, MainActivity, CuesTheme(), ComponentActivity
 
 ### Community 76 - "Main.kt"
-Cohesion: 0.27
-Nodes (10): bold(), dim(), FixturesForCli, main(), printCorpus(), object@L148, printRehearsal(), printReview() (+2 more)
-
-### Community 77 - "Normalizer"
-Cohesion: 0.11
-Nodes (6): Normalizer, ClauseKind, FILLER, MAPPED, UNACCOUNTED, TemplatesTest
+Cohesion: 0.35
+Nodes (11): main(), bold(), dim(), com, main(), printCorpus(), object@L168, printRehearsal() (+3 more)
 
 ### Community 78 - "Insights.kt"
-Cohesion: 0.12
-Nodes (17): BlockCause, BlockedGroup, CleanupLedger, Coverage, ExpiredWaitingForYou, InsightCounts, Insights, NeedsCapabilities (+9 more)
+Cohesion: 0.10
+Nodes (21): BlockCause, BlockedGroup, CleanupLedger, Coverage, ExpiredWaitingForYou, InferenceLedgerView, InferenceUsage, InsightCounts (+13 more)
 
 ### Community 79 - "EventKind"
 Cohesion: 0.11
-Nodes (18): Context, Intent, TimeTriggerReceiver, EventKind, AUDIO_OUTPUT_ADDED, AUDIO_OUTPUT_REMOVED, BLUETOOTH_CONNECTED, BLUETOOTH_DISCONNECTED (+10 more)
+Nodes (18): Context, Intent, PowerReceiver, EventKind, AUDIO_OUTPUT_ADDED, AUDIO_OUTPUT_REMOVED, BLUETOOTH_CONNECTED, BLUETOOTH_DISCONNECTED (+10 more)
 
 ### Community 80 - "Place"
 Cohesion: 0.20
 Nodes (3): Place, PlaceStore, EmptyPlaces
 
-### Community 81 - "WifiConnectionKit"
+### Community 81 - "WifiKits.kt"
 Cohesion: 0.13
-Nodes (5): describe(), KClass, semanticForm(), WifiConnectedKit, WifiConnectionKit
+Nodes (13): chargingWord(), contains(), describe(), freshened(), full(), T, DeviceTransition, CONNECTED (+5 more)
 
-### Community 82 - "RoutineStatus"
-Cohesion: 0.17
-Nodes (8): RoutineStatus, ARMED, DISABLED, DRAFT, INVALID, PAUSED, REVIEWABLE, ClauseAccountingTest
+### Community 83 - "DraftTrace"
+Cohesion: 0.07
+Nodes (28): AttemptOutcome, CANCELLED, CLARIFY, DRAFTED, FAILED, INVALID, SKIPPED_UNAVAILABLE, TIMED_OUT (+20 more)
 
-### Community 83 - "Contexts"
-Cohesion: 0.16
-Nodes (3): Contexts, ContextualKitsTest, Places
-
-### Community 85 - "SarvamClient"
-Cohesion: 0.06
-Nodes (25): AppBakeOff, object@L27, ByteArray, SarvamClient, Transcript, Translation, ByteArray, SarvamReadback (+17 more)
+### Community 85 - "SpeechResult"
+Cohesion: 0.21
+Nodes (9): ByteArray, SarvamSpeechInput, Failed, NoMatch, PermissionDenied, Recognized, SpeechInput, SpeechResult (+1 more)
 
 ### Community 86 - "Sprints 4 and 5: The cue meets the phone, then earns its claims"
 Cohesion: 0.17
@@ -533,41 +574,33 @@ Nodes (12): Exit criteria (end of event), Gate at hour 23, Not in these sprints,
 Cohesion: 0.18
 Nodes (18): InstalledApp, installedApps(), Context, rankInstalledApps(), AdapterStatus, AskScreen(), Modifier, AssistantHistory() (+10 more)
 
-### Community 88 - "ForecastItem"
-Cohesion: 0.24
-Nodes (12): Modifier, StatusChip(), Tone, AMBER, GO, STOP, toTone(), ForecastCard() (+4 more)
-
-### Community 89 - "WifiAdapter.kt"
-Cohesion: 0.29
-Nodes (4): WifiAdapter, NetworkCallback, ConnectivityManager, Network
+### Community 89 - ".run"
+Cohesion: 0.14
+Nodes (10): AppBakeOff, object@L41, main(), object@L9, BakeOff, BakeOffReport, BakeOffRow, RoutineDrafter (+2 more)
 
 ### Community 90 - "ActionArgs"
 Cohesion: 0.12
 Nodes (15): ActionArgs, Alarm, CalendarEvent, ComposeMessage, Dnd, FocusTimer, MediaControl, None (+7 more)
 
-### Community 92 - "forecastToday"
-Cohesion: 0.25
-Nodes (8): Context, LiveSnapshot, Context, NowNextWidget, AppWidgetManager, AppWidgetProvider, forecastToday(), IntArray
+### Community 92 - "NowNextWidget.kt"
+Cohesion: 0.44
+Nodes (5): Context, NowNextWidget, AppWidgetManager, AppWidgetProvider, IntArray
 
 ### Community 93 - "TimetableExtractor.kt"
 Cohesion: 0.28
 Nodes (6): ImportEntryCard(), ImportReviewScreen(), fullName(), TimetableEntry, TimetableExtractionResult, TimetableExtractor
 
 ### Community 94 - "LedgerEvent"
-Cohesion: 0.15
+Cohesion: 0.17
 Nodes (10): LearningSettings(), CoachMain, ActionBlocked, CoverageGap, LedgerEvent, ManualStart, PatchCreated, SessionEnded (+2 more)
 
-### Community 96 - "BatteryThresholdKit"
-Cohesion: 0.13
-Nodes (4): BatteryAtLeastKit, BatteryBelowKit, BatteryThresholdKit, C
-
-### Community 99 - "UtilityRestoreTest"
-Cohesion: 0.27
-Nodes (3): ActionExecutor, StatelessUtilityExecutor, UtilityRestoreTest
+### Community 99 - "CuesGemmaProvider"
+Cohesion: 0.24
+Nodes (5): CuesGemmaProvider, Bundle, Uri, ContentProvider, ContentValues
 
 ### Community 100 - "Platform API verification — 24 September 2026"
-Cohesion: 0.18
-Nodes (10): AppFunctions, Camera and offline text recognition, Cue Cards and QR, Dependency policy, Desk Bridge and the Cue Console, LiteRT-LM and Qualcomm NPU, Live Updates, Platform API verification — 24 September 2026 (+2 more)
+Cohesion: 0.14
+Nodes (13): AppFunctions, Camera and offline text recognition, Cue Cards and QR, Dependency policy, Desk Bridge and the Cue Console, Gemma model distribution (on-device "brain" download), LiteRT-LM and Qualcomm NPU, Live Updates (+5 more)
 
 ### Community 101 - "Capability"
 Cohesion: 0.11
@@ -585,29 +618,41 @@ Nodes (11): FactKind, DATE, DAYS, DEVICE_ALIAS, PLACE_ALIAS, TEXT, FactSource, C
 Cohesion: 0.36
 Nodes (11): dev script, filt(), info(), need_adb(), need_sdk(), ok(), red(), sdk_dir() (+3 more)
 
-### Community 107 - "AssistantIntent.kt"
-Cohesion: 0.22
-Nodes (8): ControlKind, PAUSE, RESUME, SKIP_TODAY, STOP, UnsupportedRoute, NONE, SYSTEM_AGENT
+### Community 107 - "CompositeDrafter"
+Cohesion: 0.33
+Nodes (6): CompositeDrafter, RoutineDrafter, CompositeDrafterTest, RoutineDrafter, parser(), StubDrafter
 
-### Community 108 - "PatchBayScreen.kt"
-Cohesion: 0.13
-Nodes (19): Chip(), ChipGrid(), androidx, com, Modifier, T, PatchBayScreen(), Text2() (+11 more)
+### Community 108 - "ExternalGemmaGate"
+Cohesion: 0.08
+Nodes (22): ExternalCallLogEntry, ExternalGemmaGate, Allowed, Denied, HubDecision, HubPolicy, ThermalStatus, CRITICAL (+14 more)
 
-### Community 110 - "PairedDevice"
-Cohesion: 0.15
-Nodes (3): CardMain, PairedDevice, CueCardTest
+### Community 110 - "RoutineStatus"
+Cohesion: 0.11
+Nodes (8): RoutineStatus, ARMED, DISABLED, DRAFT, INVALID, PAUSED, REVIEWABLE, CueCardTest
 
-### Community 113 - "RehearsalTest"
-Cohesion: 0.12
-Nodes (3): ActionExecutor, RehearsalTest, ActionExecutor
+### Community 111 - "BatteryThresholdKit"
+Cohesion: 0.24
+Nodes (3): BatteryAtLeastKit, BatteryThresholdKit, C
 
-### Community 116 - "ExportImport.kt"
-Cohesion: 0.46
-Nodes (4): ExportImport, Context, Intent, Uri
+### Community 112 - "DraftSourceId"
+Cohesion: 0.07
+Nodes (19): ModelDraftGuard, InferenceCost, CostBasis, CLOUD_METERED, ON_DEVICE_FREE, UNVERIFIED, DraftSourceId, EXTERNAL_GEMMA_CALL (+11 more)
+
+### Community 113 - "ActionExecutor"
+Cohesion: 0.11
+Nodes (4): ActionExecutor, ActionExecutor, RehearsalTest, ActionExecutor
+
+### Community 115 - "Context.kt"
+Cohesion: 0.17
+Nodes (4): AlarmManager, MonitoringRepository, TimeAdapter, NotificationManager
+
+### Community 116 - "forecastToday"
+Cohesion: 0.42
+Nodes (5): ExportImport, Context, Intent, Uri, forecastToday()
 
 ### Community 117 - "RefineOperation"
-Cohesion: 0.20
-Nodes (10): AddAction, AddCondition, AddDays, RefineOperation, RemoveAction, RemoveCondition, RemoveDays, ReplaceTrigger (+2 more)
+Cohesion: 0.15
+Nodes (11): AddAction, AddCondition, AddDays, RefineOperation, RemoveAction, RemoveCondition, RemoveDays, ReplaceTrigger (+3 more)
 
 ### Community 118 - "Cues"
 Cohesion: 0.29
@@ -630,16 +675,16 @@ Cohesion: 0.10
 Nodes (20): Any, AudioTransition, ADDED, REMOVED, MediaCommand, NEXT, PAUSE, PLAY (+12 more)
 
 ### Community 123 - "InsightsScreen.kt"
-Cohesion: 0.29
-Nodes (12): clickable2(), InsightsScreen(), items2(), KpiTile(), androidx, Modifier, T, padding2() (+4 more)
+Cohesion: 0.33
+Nodes (12): BackendPill(), clickable2(), costLine(), InsightsScreen(), items2(), KpiTile(), androidx, Modifier (+4 more)
 
 ### Community 124 - "JsonFileStore.kt"
 Cohesion: 0.13
-Nodes (8): ObservableStore, UsageLedger, Fact, FactStore, com, MacroStore, ReceiptLog, ReceiptSink
+Nodes (8): ObservableStore, CoachState, CoachStateStore, UsageLedger, InferenceLedger, com, ReceiptLog, ReceiptSink
 
 ### Community 125 - "AndroidActionExecutor.kt"
-Cohesion: 0.14
-Nodes (12): AlarmManager, PendingIntent, ActionState, BLOCKED, COMPENSATED, COMPENSATION_FAILED, FAILED, IN_PROGRESS (+4 more)
+Cohesion: 0.09
+Nodes (22): PendingIntent, ActionState, BLOCKED, COMPENSATED, COMPENSATION_FAILED, FAILED, IN_PROGRESS, NOT_STARTED (+14 more)
 
 ### Community 127 - "OnImageSavedCallback"
 Cohesion: 0.32
@@ -654,12 +699,24 @@ Cohesion: 0.32
 Nodes (5): ImageCapture, ImageCaptureException, OnImageSavedCallback, TimetableCaptureScreen(), OnImageSavedCallback
 
 ### Community 130 - "BroadcastReceiver"
-Cohesion: 0.14
-Nodes (14): BroadcastReceiver, android, BootReceiver, Context, Intent, DeadlineReceiver, Context, Intent (+6 more)
+Cohesion: 0.11
+Nodes (17): BroadcastReceiver, android, BootReceiver, Context, Intent, DeadlineReceiver, Context, Intent (+9 more)
 
-### Community 133 - "NavBars.kt"
-Cohesion: 0.46
-Nodes (7): CuesBottomNav(), CuesTopBar(), Composable, ImageVector, Modifier, TabItem(), TabSpec
+### Community 131 - "Fact"
+Cohesion: 0.27
+Nodes (3): MemoryScreen(), Fact, FactStore
+
+### Community 132 - "InferenceBackend"
+Cohesion: 0.11
+Nodes (20): BenchmarkFields, Cold, Failed, FileKey, Generating, com, Result, StateFlow (+12 more)
+
+### Community 133 - "PlanDraft"
+Cohesion: 0.15
+Nodes (10): Else, OnSignal, OnStepEnd, OnTimeout, PlanDraft, PlanStep, PlanTransition, PlanValidator (+2 more)
+
+### Community 134 - "CueService.kt"
+Cohesion: 0.12
+Nodes (10): ControlKind, PAUSE, RESUME, SKIP_TODAY, STOP, UnsupportedRoute, NONE, SYSTEM_AGENT (+2 more)
 
 ### Community 135 - "Working in this repository"
 Cohesion: 0.33
@@ -669,17 +726,21 @@ Nodes (6): Claims, Commands, graphify, Rules that are not style preferences, Two
 Cohesion: 0.33
 Nodes (6): Claims, Commands, graphify, Rules that are not style preferences, Two modules, and the line between them, Working in this repository
 
+### Community 137 - "UnknownReason"
+Cohesion: 0.13
+Nodes (8): T, UnknownReason, ADAPTER_UNAVAILABLE, NEVER_OBSERVED, PERMISSION_DENIED, REDACTED_BY_OS, STALE, CalendarKitTest
+
 ### Community 138 - "Demo script (Task 20)"
 Cohesion: 0.33
 Nodes (6): Backup evidence, Before the demo (setup, not part of the story), Cut from the live demo until their rows pass, Demo script (Task 20), Ground rules, Live script (phone)
 
 ### Community 140 - "Conversation.kt"
-Cohesion: 0.15
-Nodes (11): Applied, Choice, CommandResult, Confirm, Handoff, MissingTarget, PendingCommand, Rejected (+3 more)
+Cohesion: 0.13
+Nodes (13): Applied, Choice, CommandResult, Confirm, Handoff, MissingTarget, PendingCommand, Rejected (+5 more)
 
-### Community 141 - "ReplySource"
-Cohesion: 0.25
-Nodes (7): ReplySource, FORECAST, ON_DEVICE_LLM, PARSER, RECEIPTS, ROUTINE_STORE, SARVAM_CLOUD
+### Community 141 - "InsightsMain.kt"
+Cohesion: 0.20
+Nodes (11): ChatMain, at(), connect(), hm(), main(), print(), remedyText(), run() (+3 more)
 
 ### Community 142 - "SuggestionKind"
 Cohesion: 0.29
@@ -705,13 +766,13 @@ Nodes (6): Claims, Commands, graphify, Rules that are not style preferences, Two
 Cohesion: 0.60
 Nodes (3): Context, Uri, TimetableOcr
 
-### Community 152 - "ForecastStatus"
-Cohesion: 0.40
-Nodes (5): ForecastStatus, CANNOT_TELL, NOT_TODAY, SKIPPED_BY_PATCH, WILL_ARM
+### Community 152 - "PersonalIndex"
+Cohesion: 0.33
+Nodes (7): FloatArray, NeedsClarification, NeedsConfirmation, NotFound, PersonalIndex, ReferenceResolution, Resolved
 
 ### Community 153 - "iQOO device verification matrix (Task 19)"
-Cohesion: 0.40
-Nodes (5): Hero loop gate (carried from Sprint 4/5), How to record a result, iQOO device verification matrix (Task 19), Results, Task 19 rows
+Cohesion: 0.33
+Nodes (6): Device context (all rows below), Hero loop gate (carried from Sprint 4/5), How to record a result, iQOO device verification matrix (Task 19), Results, Task 19 rows
 
 ### Community 154 - "Permissions"
 Cohesion: 0.40
@@ -725,13 +786,13 @@ Nodes (5): Exit criteria, Not in this sprint, Sprint 3: Offline authoring, revie
 Cohesion: 0.40
 Nodes (4): Cut order, Enhancement pass (24 Sep 2026), Risk register, Sprint 6: Contextual, declared
 
-### Community 157 - "StopSessionReceiver.kt"
-Cohesion: 0.60
-Nodes (3): Context, Intent, StopSessionReceiver
+### Community 157 - "AmbientBandClassifier"
+Cohesion: 0.14
+Nodes (10): AmbientBandClassifier, Band, BRIGHT, DARK, DIM, UNKNOWN, Reading, State (+2 more)
 
 ### Community 158 - "Developer setup"
-Cohesion: 0.50
-Nodes (3): Agent skills, Developer setup, Toolchain
+Cohesion: 0.40
+Nodes (4): Agent skills, Developer setup, Optional: Gemma-backed drafting without a phone, Toolchain
 
 ### Community 159 - "Theme.kt"
 Cohesion: 0.50
@@ -745,9 +806,9 @@ Nodes (3): ActionExecutor, ActionExecutor, com
 Cohesion: 0.50
 Nodes (3): Delivery checklist, Design contract, OriginOS 7 experience pass
 
-### Community 163 - "Building during Red Light"
-Cohesion: 0.50
-Nodes (4): Building during Red Light, Route A — Office Kit drives the laptop (primary), Route B — Termux on the phone (fallback, unproven), What does not depend on either route
+### Community 163 - "SarvamReadback"
+Cohesion: 0.48
+Nodes (3): ByteArray, SarvamReadback, MediaPlayer
 
 ### Community 164 - "Cues Brain execution checklist"
 Cohesion: 0.50
@@ -757,29 +818,113 @@ Nodes (3): Checkpoint — Typed actions, detail (24 Sep 2026), Cues Brain execut
 Cohesion: 0.83
 Nodes (3): dragAndDropTextSource(), Modifier, View
 
+### Community 166 - "Measured results"
+Cohesion: 0.29
+Nodes (6): Developer Gemma surface (CLEANUP.md CL-38, `docs/DEVICE_MATRIX.md` M10), How to record a result, Measured results, Model provisioning (CLEANUP.md CL-36), Office Kit transport (CLEANUP.md CL-22, `docs/DEVICE_MATRIX.md` M4), On-device inference (CLEANUP.md CL-18, `docs/DEVICE_MATRIX.md` M2)
+
+### Community 167 - "SnapshotBuilder"
+Cohesion: 0.13
+Nodes (8): Context, WifiReadings, SnapshotBuilder, WifiState, AudioKind, ANY, BLUETOOTH, WIRED
+
+### Community 172 - "Corpus"
+Cohesion: 0.16
+Nodes (7): CaseResult, Corpus, CorpusCase, CorpusReport, BakeOffTest, RoutineDrafter, RoutineDrafter
+
 ### Community 173 - "gradlew"
 Cohesion: 0.83
 Nodes (3): gradlew script, die(), warn()
 
+### Community 178 - "Fixtures"
+Cohesion: 0.13
+Nodes (12): ContextSource, AUDIO_MANAGER, BATTERY_MANAGER, BLUETOOTH_ADAPTER, CALENDAR_PROVIDER, LOCATION_MANAGER, REHEARSAL, SYSTEM_CLOCK (+4 more)
+
+### Community 181 - "Workstreams"
+Cohesion: 0.12
+Nodes (16): Acceptance matrix, Boundaries, Delivery order and cut line, Outcome, Required decisions before W2/W3/W5 implementation, Sprint 9 — Visible Intelligence, Sarvam, and Declared Sensing, Verification cadence, W0 — Integrate and stabilize Sprint 8 (+8 more)
+
+### Community 182 - "Remedy"
+Cohesion: 0.19
+Nodes (11): GrantCapability, KeepCuesRunning, OsWithholds, Radio, BLUETOOTH, LOCATION, WIFI, Remedy (+3 more)
+
+### Community 183 - "Contexts"
+Cohesion: 0.16
+Nodes (3): Contexts, ContextualKitsTest, Places
+
+### Community 184 - "EngineResult"
+Cohesion: 0.21
+Nodes (7): Ended, EngineResult, ExitCancelled, ExitScheduled, Ignored, Skipped, Started
+
+### Community 185 - "Day"
+Cohesion: 0.19
+Nodes (11): Day, FRI, MON, SAT, SUN, THU, TUE, WED (+3 more)
+
+### Community 186 - "StatusChip"
+Cohesion: 0.24
+Nodes (11): Modifier, StatusChip(), Tone, AMBER, GO, STOP, toTone(), ForecastCard() (+3 more)
+
+### Community 187 - "UtilityRestoreTest"
+Cohesion: 0.31
+Nodes (3): ActionExecutor, StatelessUtilityExecutor, UtilityRestoreTest
+
+### Community 188 - "SarvamClient"
+Cohesion: 0.33
+Nodes (4): ByteArray, SarvamClient, Transcript, Translation
+
+### Community 189 - "PatchSentence.kt"
+Cohesion: 0.27
+Nodes (5): Inexpressible, KClass, PatchResult, Sentence, SignalReadback
+
+### Community 191 - "UiStep"
+Cohesion: 0.22
+Nodes (8): Click, Scroll, ScrollDirection, BACKWARD, FORWARD, SetText, UiExpectation, UiStep
+
+### Community 193 - "GraceScheduler"
+Cohesion: 0.57
+Nodes (3): GraceScheduler, Context, PendingIntent
+
+### Community 194 - "ReplySource"
+Cohesion: 0.25
+Nodes (7): ReplySource, FORECAST, ON_DEVICE_LLM, PARSER, RECEIPTS, ROUTINE_STORE, SARVAM_CLOUD
+
+### Community 197 - "ModelCatalog"
+Cohesion: 0.38
+Nodes (5): ModelArtifact, ModelCatalog, ModelExecution, NPU_SOC_SPECIFIC, PORTABLE
+
+### Community 198 - "FaceDownClassifier"
+Cohesion: 0.48
+Nodes (3): FaceDownClassifier, Reading, State
+
+### Community 200 - ".captureScreenText"
+Cohesion: 0.53
+Nodes (4): Refused, ScreenCapture, Success, Unavailable
+
+### Community 204 - ".performPlayback"
+Cohesion: 0.70
+Nodes (3): Blocked, MacroRunOutcome, Succeeded
+
+### Community 206 - "UtilityMechanism"
+Cohesion: 0.50
+Nodes (4): UtilityMechanism, ACCESSIBILITY_BINDING, PUBLIC_INTENT, SETTINGS_PANEL
+
 ## Knowledge Gaps
-- **654 isolated node(s):** `object@L27`, `Unavailable`, `Succeeded`, `NOT_CHECKED`, `NO_ISSUE_OBSERVED` (+649 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 944 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **31 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **749 isolated node(s):** `GemmaCallProtocol`, `object@L41`, `Cold`, `Unavailable`, `Succeeded` (+744 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1076 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **41 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Routine` connect `Routine` to `ListenerHealth`, `JsonFileStore`, `RecordingExecutor`, `CueService.kt`, `ActionSpec`, `Conversation.kt`, `CueService`, `TriggerEvent`, `InferenceReport`, `MainActivity.kt`, `CuesTokens.kt`, `ReviewScreenV2.kt`, `GrammarParser`, `InsightsTest`, `SessionEngine`, `CueCard.kt`, `NowScreen.kt`, `SignalRegistry`, `InsightsMain.kt`, `Ports.kt`, `Finding`, `DraftResult`, `Suggestion`, `ReceiptKind`, `AudioOutputAdapter.kt`, `SimMain.kt`, `Receipt.kt`, `MainActivity`, `Main.kt`, `Normalizer`, `Insights.kt`, `AskScreen.kt`, `WifiAdapter.kt`, `forecastToday`, `SignalKitTest`, `UtilityRestoreTest`, `Capability`, `TimeAdapter`, `Routine.kt`, `JsonFileStore.kt`, `AndroidActionExecutor.kt`?**
-  _High betweenness centrality (0.136) - this node is a cross-community bridge._
-- **Why does `JsonFileStore` connect `JsonFileStore` to `Session`, `CueService.kt`, `CueService`, `CuesAccessibilityService`, `CapabilityProvider`, `CoachState`, `InsightsMain.kt`, `Ports.kt`, `UtilityBinding`, `CueServiceTest`, `Routine`, `NamedContext`, `SimMain.kt`, `CuesApplication`, `Place`, `JsonFileStoreTest`, `CleanupObligation`, `ReceiptRecordTest`, `UtilityRestoreTest`, `JsonFileStore.kt`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
-- **Why does `PairedDevice` connect `PairedDevice` to `SimMain.kt`, `PatchSentence`, `WhenKind`, `InsightsMain.kt`, `CuesApplication`, `DraftResult`, `PatchBayScreen.kt`, `Main.kt`, `Normalizer`, `PatchBayEditors.kt`, `GrammarParserTest`, `CapabilityProvider`, `RoutineStatus`, `MainActivity.kt`, `SarvamClient`, `InferenceReport`, `AskScreen.kt`, `CueCard.kt`?**
-  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **Why does `Routine` connect `Routine` to `Trigger`, `ListenerHealth`, `JsonFileStore`, `CueService.kt`, `Session`, `RecordingExecutor`, `ActionSpec`, `Conversation.kt`, `CueService`, `ActionRegistry`, `InferenceReport`, `MainActivity.kt`, `CuesType`, `ReviewScreenV2.kt`, `PersonalIndex`, `GrammarParser`, `InsightsTest`, `CueCard.kt`, `NowScreen.kt`, `SignalRegistry`, `ArmResult`, `Patch`, `Finding`, `Suggestion`, `DraftResult`, `Ports.kt`, `Rehearsal`, `ContextSnapshot`, `EngineResult`, `UtilityRestoreTest`, `AudioOutputAdapter.kt`, `SimMain.kt`, `Receipt.kt`, `Truth`, `AppShortcuts.kt`, `Main.kt`, `Normalizer`, `Insights.kt`, `WifiKits.kt`, `AskScreen.kt`, `ReviewCopy`, `.run`, `SignalKitTest`, `Capability`, `DraftSourceId`, `Context.kt`, `forecastToday`, `Routine.kt`, `JsonFileStore.kt`?**
+  _High betweenness centrality (0.097) - this node is a cross-community bridge._
+- **Why does `CuesApplication` connect `CuesApplication` to `ListenerHealth`, `BroadcastReceiver`, `JsonFileStore`, `CueService`, `InsightsMain.kt`, `BluetoothReceiver.kt`, `ActionOutcome`, `GrammarParser`, `DiagnosticsScreen.kt`, `UtilityId`, `DraftResult`, `CuesAppFunctionService.kt`, `InferenceOutput`, `SarvamClient`, `AudioOutputAdapter.kt`, `AndroidCapabilityProvider`, `DifferentialDrafter`, `SarvamChatDrafter.kt`, `AppShortcuts.kt`, `CueTileService.kt`, `EventKind`, `.run`, `NowNextWidget.kt`, `CuesGemmaProvider`, `ExternalGemmaGate`, `DraftSourceId`, `Context.kt`, `JsonFileStore.kt`?**
+  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+- **Why does `JsonFileStore` connect `JsonFileStore` to `Fact`, `Session`, `Routine`, `InsightsMain.kt`, `CapabilityProvider`, `GrammarParser`, `CuesApplication`, `Patch`, `Ports.kt`, `CueServiceTest`, `NamedContext`, `UtilityRestoreTest`, `UiMacro`, `SimMain.kt`, `Place`, `JsonFileStoreTest`, `SessionWindowTest`, `ReceiptRecordTest`, `JsonFileStore.kt`?**
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `Routine` (e.g. with `.parse()` and `.heroRoutine()`) actually correct?**
   _`Routine` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 15 inferred relationships involving `TriggerEvent` (e.g. with `connect()` and `run()`) actually correct?**
-  _`TriggerEvent` has 15 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `object@L27`, `Unavailable`, `Succeeded` to the rest of the system?**
-  _654 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `GemmaCallProtocol`, `object@L41`, `Cold` to the rest of the system?**
+  _749 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Trigger` be split into smaller, more focused modules?**
-  _Cohesion score 0.0632996632996633 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.04985994397759104 - nodes in this community are weakly interconnected._
+- **Should `ListenerHealth` be split into smaller, more focused modules?**
+  _Cohesion score 0.09269162210338681 - nodes in this community are weakly interconnected._

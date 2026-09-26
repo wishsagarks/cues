@@ -1,7 +1,6 @@
 package com.cues.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -17,9 +16,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.Button
@@ -44,6 +43,9 @@ import com.cues.app.runtime.ManualObservation
 import com.cues.core.CueService
 import com.cues.core.drafting.DraftTrace
 import com.cues.core.inference.ModelProvisionState
+import com.cues.core.inference.InferenceLedgerEntry
+import com.cues.core.inference.InferenceBackend
+import com.cues.core.model.DraftSourceId
 import java.text.DateFormat
 import java.util.Date
 
@@ -76,6 +78,13 @@ fun DiagnosticsScreen(
     externalModelIdentity: String = "no BYOM model installed",
     onChooseExternalModel: (() -> Unit)? = null,
     recentExternalCalls: List<com.cues.app.devkit.ExternalCallLogEntry> = emptyList(),
+    approvedExternalCallers: Set<String> = emptySet(),
+    onApproveExternalCaller: ((String) -> Unit)? = null,
+    onRevokeExternalCaller: ((String) -> Unit)? = null,
+    inferenceEntries: List<InferenceLedgerEntry> = emptyList(),
+    isProbingNpu: Boolean = false,
+    npuProbeResult: String? = null,
+    onProbeNpu: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -103,12 +112,24 @@ fun DiagnosticsScreen(
         DiagnosticCard("Phone", diagnostics.os)
         deviceHealth?.let {
             Spacer(Modifier.height(8.dp))
-            DeviceHealthCard(it)
+            DeviceHealthCard(
+                it,
+                npuEligible = npuEligible,
+                lastInferenceReport = cueDiagnostics?.lastInferenceReport,
+                isProbingNpu = isProbingNpu,
+                npuProbeResult = npuProbeResult,
+                onProbeNpu = onProbeNpu,
+            )
             Spacer(Modifier.height(8.dp))
         }
         DiagnosticCard("On-device speech", diagnostics.onDeviceSpeech)
         DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
         cueDiagnostics?.let { DiagnosticCard("Drafting path", it.render()) }
+
+        if (inferenceEntries.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            GovernedIntelligenceCard(inferenceEntries)
+        }
 
         if (onDownloadModel != null) {
             Spacer(Modifier.height(8.dp))
@@ -135,6 +156,9 @@ fun DiagnosticsScreen(
                 modelIdentity = externalModelIdentity,
                 onChooseModel = onChooseExternalModel,
                 recentCalls = recentExternalCalls,
+                approvedCallers = approvedExternalCallers,
+                onApproveCaller = onApproveExternalCaller,
+                onRevokeCaller = onRevokeExternalCaller,
             )
         }
 
@@ -214,6 +238,49 @@ private fun DraftTrace?.modelReport(): com.cues.core.inference.InferenceReport? 
     this?.attempts?.firstNotNullOfOrNull { it.inferenceReport }
 
 /**
+ * The product thesis in live data: models may propose or complete bounded
+ * local requests, while the approved runtime remains deterministic. This
+ * does not infer a backend from the phone model; every count comes from the
+ * existing opt-in inference ledger.
+ */
+@Composable
+private fun GovernedIntelligenceCard(entries: List<InferenceLedgerEntry>) {
+    val local = entries.filter { it.backend != InferenceBackend.CLOUD }
+    val hub = entries.filter { it.source == DraftSourceId.EXTERNAL_GEMMA_CALL || it.source == DraftSourceId.SYSTEM_AGENT_CALL }
+    val callers = hub.mapNotNull { it.callerPackage }.distinct()
+    val latest = entries.maxByOrNull { it.atMillis }
+    Surface(
+        color = cuesColors.bg300,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Governed intelligence", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text(
+                "Models propose; approved cues execute deterministically. Runtime model calls: 0 by design.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "${local.size} local calls · ${hub.size} hub calls · ${callers.size} external callers",
+                style = MaterialTheme.typography.labelSmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            latest?.let {
+                Text(
+                    "Latest: ${it.source.name.replace('_', ' ')} on ${it.backend.name} · ${"%.1f".format(it.estimatedTokens * 1_000.0 / it.latencyMs.coerceAtLeast(1))} tok/s",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
  * Names the drafter setup that's actually configured and, when a model has
  * drafted at least once, which backend loaded it plus every attempt's own
  * outcome — never a claim about what *would* run, only what already did.
@@ -239,13 +306,27 @@ private fun CueService.Diagnostics.render(): String = buildString {
 }
 
 /**
- * The "basic symbols" group: battery health, this process's CPU share, GPU
- * and the sensor inventory, each an icon + a one-line honest reading — never
- * a fabricated system-wide number where Android exposes none (see
- * [com.cues.app.runtime.DeviceHealthReadings]).
+ * The "basic symbols" group: battery health, this process's CPU share, the
+ * on-device NPU, and the sensor inventory, each an icon + a one-line honest
+ * reading — never a fabricated system-wide number where Android exposes none
+ * (see [com.cues.app.runtime.DeviceHealthReadings]).
+ *
+ * There's no root-free API for NPU *utilization* either, but unlike GPU,
+ * Cues already has two real, non-root readings for it: [npuEligible] (the
+ * published SoC allow-list check behind [ModelBrainCard]'s own eligibility
+ * line) and, once a draft has actually run, [lastInferenceReport] — the same
+ * [InferenceReport] that never claims NPU accelerated anything beyond what a
+ * real run's own `backend` says (CL-18).
  */
 @Composable
-private fun DeviceHealthCard(health: DeviceHealthSnapshot) {
+private fun DeviceHealthCard(
+    health: DeviceHealthSnapshot,
+    npuEligible: Boolean,
+    lastInferenceReport: com.cues.core.inference.InferenceReport?,
+    isProbingNpu: Boolean = false,
+    npuProbeResult: String? = null,
+    onProbeNpu: (() -> Unit)? = null,
+) {
     Surface(
         color = cuesColors.bg300,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
@@ -297,7 +378,34 @@ private fun DeviceHealthCard(health: DeviceHealthSnapshot) {
                     },
                     Modifier.weight(1f).fillMaxHeight(),
                 )
-                HealthTile(Icons.Filled.DeveloperBoard, "GPU", health.gpuNote, Modifier.weight(1f).fillMaxHeight())
+                HealthTile(
+                    Icons.Filled.Psychology,
+                    "NPU",
+                    npuReading(health.npuHardwareFamily, npuEligible, lastInferenceReport),
+                    Modifier.weight(1f).fillMaxHeight(),
+                )
+            }
+            if (onProbeNpu != null) {
+                OutlinedButton(
+                    onClick = onProbeNpu,
+                    enabled = !isProbingNpu,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) { Text(if (isProbingNpu) "Testing NPU…" else "Test NPU on this chip anyway") }
+                Text(
+                    "Forces a real attempt on this exact chip, bypassing the allow-list above. " +
+                        "May fail safely, or may crash if the native NPU dispatch layer can't run on this Hexagon version.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                npuProbeResult?.let { result ->
+                    Text(
+                        result,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (result.startsWith("NPU loaded")) cuesColors.go else cuesColors.amber,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
             }
 
             Text(
@@ -540,6 +648,9 @@ private fun DeveloperSurfaceCard(
     modelIdentity: String,
     onChooseModel: (() -> Unit)?,
     recentCalls: List<com.cues.app.devkit.ExternalCallLogEntry>,
+    approvedCallers: Set<String>,
+    onApproveCaller: ((String) -> Unit)?,
+    onRevokeCaller: ((String) -> Unit)?,
 ) {
     val haptics = LocalHapticFeedback.current
     Surface(
@@ -595,7 +706,21 @@ private fun DeveloperSurfaceCard(
                         color = if (call.allowed) cuesColors.ink200 else cuesColors.amber,
                         modifier = Modifier.padding(top = 4.dp),
                     )
+                    if (!call.allowed && call.callerPackage != "unknown" && call.reason?.startsWith("Consent required") == true) {
+                        OutlinedButton(
+                            onClick = { onApproveCaller?.invoke(call.callerPackage) },
+                            enabled = onApproveCaller != null,
+                            modifier = Modifier.padding(top = 3.dp),
+                        ) { Text("Allow ${call.callerPackage}") }
+                    }
                 }
+            }
+            approvedCallers.forEach { caller ->
+                OutlinedButton(
+                    onClick = { onRevokeCaller?.invoke(caller) },
+                    enabled = onRevokeCaller != null,
+                    modifier = Modifier.padding(top = 4.dp),
+                ) { Text("Revoke $caller") }
             }
         }
     }
@@ -605,6 +730,40 @@ private fun DeveloperSurfaceCard(
 private fun eligibilityLine(npuEligible: Boolean): String =
     if (npuEligible) "Eligible for: NPU, GPU, CPU (this SoC is on the published table)"
     else "Eligible for: GPU, CPU (this SoC has no published NPU build)"
+
+/**
+ * The Device Health tile's NPU reading — two separate, honestly-labelled
+ * facts, never merged into one claim:
+ *
+ * 1. [npuHardwareFamily] — does this chipset's own family ship an NPU at
+ *    all (Qualcomm Hexagon, MediaTek APU, ...), per
+ *    [com.cues.app.runtime.DeviceIdentity.npuHardwareFamily]. A documented
+ *    hardware fact, independent of anything Cues ships.
+ * 2. Whether Cues' own on-device model is confirmed for *this exact* chip
+ *    ([npuEligible], the same allow-list [eligibilityLine] reads) and, only
+ *    once a draft has actually run, the real measured numbers from
+ *    [com.cues.core.inference.InferenceReport] — never a claim about what
+ *    *would* happen.
+ *
+ * A phone can show a real Hexagon/APU line here while line 2 still says
+ * "not confirmed" — that's not a contradiction, it's Cues declining to
+ * claim its own model uses hardware nobody has verified it on yet.
+ */
+private fun npuReading(
+    npuHardwareFamily: String?,
+    npuEligible: Boolean,
+    lastInferenceReport: com.cues.core.inference.InferenceReport?,
+): String {
+    val hardwareLine = npuHardwareFamily ?: "No NPU family identified from this chipset"
+    val cuesLine = when {
+        lastInferenceReport?.backend == com.cues.core.inference.InferenceBackend.NPU ->
+            "Cues ran last on NPU: ${lastInferenceReport.loadMs}ms load, ${"%.1f".format(lastInferenceReport.tokensPerSecond)} tok/s"
+        !npuEligible -> "Cues' model has no confirmed NPU build for this exact chip yet"
+        lastInferenceReport != null -> "Cues model eligible, but last draft ran on ${lastInferenceReport.backend.name}"
+        else -> "Cues model eligible, no draft has used it yet"
+    }
+    return "$hardwareLine\n$cuesLine"
+}
 
 private fun mb(bytes: Long): String = "%.1f".format(bytes / 1_000_000.0)
 

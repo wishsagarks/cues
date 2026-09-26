@@ -12,14 +12,15 @@ import android.os.SystemClock
 
 /**
  * The "basic symbols" tab's readings: battery health, this process's CPU
- * share, GPU, and the sensor inventory.
+ * share, and the sensor inventory. The NPU reading lives in
+ * [com.cues.app.ui.DiagnosticsScreen] instead, because unlike CPU/battery it
+ * isn't a fresh Android read — it's the SoC eligibility check and the last
+ * actual [com.cues.core.inference.InferenceReport] the screen already has.
  *
- * Every field says exactly what it measured, never more. There is no public,
- * non-root API for system-wide CPU load or GPU utilization on a stock phone,
- * so [cpuUsagePercent] is scoped to Cues' own process (labelled as such by
- * the screen that renders it) and [gpuNote] says plainly that usage isn't
- * exposed rather than inventing a number — the same rule [DiagnosticsScreen]
- * already applies to NPU eligibility and inference cost.
+ * Every field here says exactly what it measured, never more. There is no
+ * public, non-root API for system-wide CPU load on a stock phone, so
+ * [cpuUsagePercent] is scoped to Cues' own process — labelled as such by the
+ * screen that renders it, not claimed as a device-wide figure.
  */
 data class DeviceHealthSnapshot(
     val batteryHealth: String,
@@ -27,7 +28,8 @@ data class DeviceHealthSnapshot(
     val cpuCoreCount: Int,
     val cpuAbi: String?,
     val cpuUsagePercent: Float?,
-    val gpuNote: String,
+    /** See [DeviceIdentity.npuHardwareFamily] — a chipset-family hardware fact, not a Cues-model claim. */
+    val npuHardwareFamily: String?,
     val sensorGroups: List<SensorGroup>,
 )
 
@@ -45,7 +47,7 @@ object DeviceHealthReadings {
             cpuCoreCount = Runtime.getRuntime().availableProcessors(),
             cpuAbi = Build.SUPPORTED_ABIS?.firstOrNull(),
             cpuUsagePercent = processCpuUsagePercent(),
-            gpuNote = "GPU usage isn't exposed to apps without root on this build.",
+            npuHardwareFamily = DeviceIdentity.npuHardwareFamily(DeviceIdentity.chipset()),
             sensorGroups = sensorGroups(context),
         )
     }

@@ -811,7 +811,8 @@ to on the device under test (docs/DEVICE_MATRIX.md, M7).
 
 **Task 17 (AppFunctions), updated 24 Sep 2026: written, not compiled.**
 `app/.../appfunctions/CuesAppFunctionService.kt` implements `draftCue`,
-`forecastToday`, `currentContext` and `stopCue` against
+`forecastToday`, `currentContext`, `stopCue` and (added alongside CL-38's hub
+hardening) `askLocalGemma` against
 `androidx.appfunctions:appfunctions:1.0.0-alpha12` — every annotation,
 exception type and manifest shape checked against the live reference pages
 on developer.android.com on 24 Sep 2026 (not the stale "alpha11" guess
@@ -1716,19 +1717,33 @@ this is a parallel export capability, not a new path into cue execution.
    `adb shell content call`, on any device — everything above is written
    against real, stable Android APIs (`ContentProvider.call`,
    `Binder.getCallingUid`) but unexercised. See `docs/DEVICE_MATRIX.md` M10.
-2. **No permission-level access control.** The provider is
-   `exported="true"` with no `<uses-permission>`/signature-permission gate —
-   any installed app can attempt a call at any time; the only protection is
-   the in-memory `externalGemmaGate.enabled` toggle (reset every launch) and
-   the per-call caller-package log. A real developer-facing surface would
-   need a declared custom permission or a caller allowlist; neither exists.
-3. **No quota or rate limit.** A single caller, malicious or buggy, can call
-   `generate` in a tight loop; nothing here throttles it.
-   `ExternalCallerLedger` records usage after the fact, it does not gate it.
-4. **`ExternalGemmaGate` and `ExternalCallerLedger` are in-memory only** —
-   cleared on process death, not persisted to `JsonFileStore` the way
-   `InferenceLedger` is. A deliberate, disclosed scope cut rather than a
-   half-built persistence layer that had never been exercised either.
+2. **Permission gate declared, still unexercised on a device.** The manifest
+   now declares a normal `${applicationId}.permission.ASK_LOCAL_GEMMA`
+   permission and the provider requires it (`android:permission=...`), so a
+   caller that never declared the permission is refused by the platform
+   before `call()` even runs. On top of that, `call()` still requires the
+   in-memory `externalGemmaGate.enabled` toggle (reset every launch) plus an
+   explicit per-package approval pinned to that caller's signing-certificate
+   SHA-256 digest (persisted in `SharedPreferences`, so a reinstall with a
+   different signature re-asks) — layered, disclosed protection rather than
+   the provider's own single point of failure. Neither the permission
+   enforcement nor the signature-pinning re-consent has been exercised
+   against a real second installed app; see `docs/DEVICE_MATRIX.md` M10.
+3. **Quota is thermally aware, but still process-lifetime only.**
+   `HubPolicy`/`TokenBucketLimiter` enforce five calls per minute and thirty
+   per hour per package, and — ahead of spending any quota — refuse outright
+   whenever `PowerManager.getCurrentThermalStatus()` reports SEVERE or worse
+   (reason code `THERMAL`), so a caller throttled for heat keeps its full
+   quota once the phone cools. Both the token buckets and the thermal read
+   are unexercised on a real device; the buckets themselves are still not
+   durable across process death, an accepted gap since they refill in
+   minutes.
+4. **`ExternalGemmaGate`'s approvals now persist; its call log does not.**
+   Per-package consent survives process death (`SharedPreferences`), closing
+   half of this item. `ExternalCallerLedger` and the in-memory rate-limiter
+   state are still cleared on process death, not persisted to `JsonFileStore`
+   the way `InferenceLedger` is — a deliberate, disclosed scope cut for
+   diagnostic-only data, not a half-built persistence layer.
 5. **The BYOM path for this surface specifically has never been exercised**
    with a real second `.litertlm` file distinct from the authoring model —
    only argued from `ModelDownloader.installFromUri`'s already-disclosed
@@ -1736,13 +1751,20 @@ this is a parallel export capability, not a new path into cue execution.
 6. **`externalModelIdentity()`'s SHA-256 hash of a large model file runs on
    first access after install/swap**, synchronously inside a suspend
    context — timing against a real, large `.litertlm` file is unmeasured.
+7. **`CuesAppFunctionService.askLocalGemma`, the system-agent composition of
+   this same gate, inherits CL-24's own "written, not compiled" status** on
+   top of everything above — it has never been reached by
+   `adb shell cmd app_function execute-app-function ... #askLocalGemma`,
+   so its own quota bucket (`decideForSystemAgent`, distinct from any
+   installed app's) is unexercised alongside the rest of M7/M10.
 
 **Remove when:** a real second installed app (or the `adb shell content
 call` harness, M10) gets a real response on the loaner with a real token
 count and backend, the "Recent callers" list is seen rendering both an
-allowed and a denied entry, and a decision is recorded on whether a
-permission-level gate is needed before this is ever demoed to someone
-outside the team.
+allowed and a denied entry, `askLocalGemma` gets the same real response via
+`adb shell cmd app_function execute-app-function`, and a decision is
+recorded on whether a permission-level gate is needed before this is ever
+demoed to someone outside the team.
 
 ---
 
@@ -1894,3 +1916,44 @@ count are read off the Checks screen and recorded in
 observed to actually stop generation rather than merely discard its result;
 and `getBenchmarkInfo()`'s reflection path is confirmed to return real
 numbers rather than silently falling through to the estimate every time.
+
+---
+
+## CL-41 — Plan-graph groundwork exists (`PlanDraft`/`PlanValidator`), nothing runs one yet
+
+**Status:** open · **Raised:** 26 Sep 2026
+
+Future-scope "agent" design work: `core/.../plan/PlanDraft.kt` and
+`PlanValidator.kt` give a typed shape for a model to propose, once, before
+approval — a DAG of steps that each only ever name an *already-approved*
+routine by id, joined by declared transitions (`OnStepEnd`, `OnSignal`,
+`OnTimeout`, `Else`). `PlanValidator` rejects a dangling step reference, a
+missing fallback `Else`, a cycle (rejected outright rather than allowing a
+"bounded loop count" — see its own doc comment for why: a real bound needs
+runtime iteration state this shape-only validator has no access to), a step
+count past 8, and a start-to-leaf depth past 8; it also reports the
+composite risk across a plan's steps and which step ids (`UI_AUTOMATION`/
+`EXTERNAL_UNOWNED` risk) a review screen must let the user confirm
+individually rather than approving the whole plan at once. Fully covered by
+`PlanValidatorTest` in `:core` — this is pure, JVM-testable logic, the same
+split every other kit in this codebase already uses.
+
+**What does not exist yet, deliberately — this was scoped as groundwork, not
+a shippable feature:**
+1. **No `PlanExecutor`.** Nothing walks an approved `PlanDraft` at runtime.
+   There is no session-engine integration, no persistence
+   (`PlanStore`-equivalent), and no UI to draft, review or approve one.
+2. **No drafter produces a `PlanDraft`.** `OnDeviceLlmDrafter`/
+   `DifferentialDrafter` still only ever produce a single `Routine` — there
+   is no prompt, grammar or validation path that turns a multi-step request
+   into this shape yet.
+3. **The line this groundwork must not cross, restated:** even once a
+   `PlanExecutor` exists, it must be a plain finite-state machine that only
+   ever consults the *approved* graph — never a model choosing the next step
+   or re-planning at runtime. Building an executor that calls a model mid-run
+   would defeat the entire reason this validator checks shape only, ahead of
+   time, and never behaviour.
+
+**Remove when:** a `PlanExecutor` exists, is covered by session-engine-style
+tests the way `SessionEngineTest` covers a single routine, and a real drafter
+call site produces a `PlanDraft` a user can review and approve end to end.

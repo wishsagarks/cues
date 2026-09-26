@@ -193,6 +193,38 @@ abstract class BaseCuesAppFunctionService : AppFunctionService() {
             throw AppFunctionInvalidArgumentException("Could not stop \"${routine.title}\".")
         }
     }
+
+    /**
+     * Lets the system agent borrow Cues' own governed, on-device model for a
+     * bounded text completion — the same local-model hub
+     * [com.cues.app.devkit.CuesGemmaProvider] exposes to a separately
+     * installed app, reached here without a second Binder call because this
+     * service already runs inside Cues' process. This function stays firmly
+     * on the "borrow the brain" side of the line CLEANUP.md CL-38/this
+     * file's own doc comment draws: it returns a completion only, never a
+     * draft, never a routine, and can no more arm or execute a cue than
+     * [draftCue] can. It shares [CuesApplication.generateForExternalCaller]'s
+     * thermal-aware, rate-limited gate (`ExternalGemmaGate.decideForSystemAgent`)
+     * under its own quota bucket, and is refused outright — same as every
+     * other caller — whenever the hub's off-by-default switch is off.
+     *
+     * @param params The prompt to complete, in the caller's own words.
+     */
+    @AppFunction(isDescribedByKDoc = true)
+    suspend fun askLocalGemma(params: AskLocalGemmaParams): AskLocalGemmaResult =
+        app.generateForSystemAgent(params.prompt).fold(
+            onSuccess = { output ->
+                AskLocalGemmaResult(
+                    answered = true,
+                    text = output.text,
+                    backend = output.report.backend.name,
+                    problem = null,
+                )
+            },
+            onFailure = { error ->
+                AskLocalGemmaResult(answered = false, text = null, backend = null, problem = error.message ?: "refused")
+            },
+        )
 }
 
 @AppFunctionSerializable(isDescribedByKDoc = true)
@@ -255,4 +287,19 @@ data class StopCueParams(
 data class StopCueResult(
     val stopped: Boolean,
     val message: String,
+)
+
+@AppFunctionSerializable(isDescribedByKDoc = true)
+data class AskLocalGemmaParams(
+    val prompt: String,
+)
+
+@AppFunctionSerializable(isDescribedByKDoc = true)
+data class AskLocalGemmaResult(
+    /** False when the hub refused — see [problem] for the reason code's own message. */
+    val answered: Boolean,
+    val text: String?,
+    /** Which tier actually ran (NPU/GPU/CPU), never a claim beyond what the real run reported. */
+    val backend: String?,
+    val problem: String?,
 )

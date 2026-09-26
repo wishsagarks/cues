@@ -52,6 +52,13 @@ data class DraftCredit(
             DraftSourceId.ON_DEVICE_LLM -> "on-device model"
             DraftSourceId.SARVAM_CLOUD -> "cloud assist"
             DraftSourceId.IMPORTED_CARD -> "imported card"
+            // Neither ever backs a routine's own DraftCredit — both are
+            // completion-only hub/system-agent calls (CLEANUP.md CL-38),
+            // never a source `CueService.draft` can attach to a Routine —
+            // but the `when` above is exhaustive, so a label still exists
+            // rather than a crash if one is ever passed here by mistake.
+            DraftSourceId.EXTERNAL_GEMMA_CALL -> "local model hub"
+            DraftSourceId.SYSTEM_AGENT_CALL -> "system agent"
         }
 
         /**

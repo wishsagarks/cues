@@ -24,10 +24,11 @@ import kotlinx.coroutines.runBlocking
  * and Bundle marshalling.
  *
  * `exported="true"` with no `<uses-permission>` gate (see AndroidManifest.xml):
- * any installed app can attempt a call at any time. The only protection is
- * [com.cues.app.CuesApplication.externalGemmaGate]'s in-memory, off-by-default
- * toggle plus this class's own caller-package log — disclosed, not hidden,
- * as CL-38's own "no permission-level access control" item.
+ * any installed app can attempt a call, but it receives no completion unless
+ * Cues is enabled *and* the user has approved that exact caller package.
+ * The gate also rate-limits every approved caller and logs every outcome.
+ * Consent is still in-memory for this prototype; a signing-certificate-bound,
+ * persistent consent record is the remaining CL-38 hardening work.
  */
 class CuesGemmaProvider : ContentProvider() {
 
@@ -48,7 +49,7 @@ class CuesGemmaProvider : ContentProvider() {
                     Bundle().apply { putString(GemmaCallProtocol.KEY_ERROR, "No prompt given.") }
                 } else {
                     runBlocking {
-                        app.generateForExternalCaller(prompt, callerPackage).fold(
+                        app.generateForExternalCaller(prompt, callerPackage, signingDigest(callerPackage)).fold(
                             onSuccess = { output ->
                                 Bundle().apply {
                                     putString(GemmaCallProtocol.KEY_TEXT, output.text)
@@ -81,6 +82,13 @@ class CuesGemmaProvider : ContentProvider() {
         val names = ctx.packageManager.getPackagesForUid(uid)
         return names?.firstOrNull() ?: "unknown"
     }
+
+    private fun signingDigest(packageName: String): String = try {
+        val ctx = context ?: return "unavailable"
+        val info = ctx.packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+        val bytes = info.signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray() ?: return "unavailable"
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    } catch (_: Exception) { "unavailable" }
 
     override fun query(
         uri: Uri,

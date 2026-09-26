@@ -51,6 +51,8 @@ data class InferenceLedgerEntry(
     val verdict: DraftVerdict? = null,
     /** Which prompt template backed this attempt, if any — e.g. `"draft-v2"`. */
     val promptId: String? = null,
+    /** Null for Cues' own authoring calls; present for local-model hub/system-agent callers. */
+    val callerPackage: String? = null,
 )
 
 /**

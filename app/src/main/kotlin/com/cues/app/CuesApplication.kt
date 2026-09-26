@@ -30,6 +30,8 @@ import com.cues.core.drafting.DifferentialDrafter
 import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.InferenceOutput
+import com.cues.core.inference.InferenceCost
+import com.cues.core.inference.InferenceLedgerEntry
 import com.cues.core.drafting.OnDeviceLlmDrafter
 import com.cues.core.drafting.PairedDevice
 import com.cues.core.model.ActionArgs
@@ -219,7 +221,12 @@ class CuesApplication : Application() {
      * The real on-device LiteRT-LM session, kept separate from
      * [onDeviceLlmSession]'s gate so `:app` can reach [LiteRtLmSession.runner]
      * directly — to observe [com.cues.app.drafting.RunnerState], pre-warm, or
-     * release it — without going through the gated wrapper.
+     * release it — without going through the gated wrapper. Also how
+     * [probeNpu] reaches [LiteRtLmSession.probeNpuOnce] directly:
+     * [onDeviceModelUserEnabled]'s gate is about whether a real cue draft may
+     * use the model; a manual NPU probe is neither, so it deliberately
+     * bypasses [GatedLlmSession] rather than being blocked by a toggle that
+     * answers a different question.
      */
     private val onDeviceLiteRtSession by lazy { LiteRtLmSession(this, modelFile.path) }
 
@@ -251,6 +258,13 @@ class CuesApplication : Application() {
         !onDeviceModelUserEnabled -> com.cues.core.ports.ModelAvailability.INSTALLED_OFF
         else -> com.cues.core.ports.ModelAvailability.READY
     }
+
+    /**
+     * Checks screen's "Test NPU on this chip anyway" action — see
+     * [LiteRtLmSession.probeNpuOnce] for exactly what this does and doesn't
+     * prove, and why it's never called from [drafter]'s real path.
+     */
+    suspend fun probeNpu(prompt: String): InferenceOutput = onDeviceLiteRtSession.probeNpuOnce(prompt)
 
     private val drafter by lazy {
         DifferentialDrafter(
@@ -312,7 +326,7 @@ class CuesApplication : Application() {
     val externalModelDownloader by lazy { ModelDownloader(this, externalModelFile, "", "") }
 
     /** CL-38's third opt-in gate: a model being installed does not mean another app on the phone may reach it. Off by default every launch. */
-    val externalGemmaGate by lazy { ExternalGemmaGate() }
+    val externalGemmaGate by lazy { ExternalGemmaGate(this) }
 
     /** Per-caller token/cost bookkeeping for [externalGemmaGate]'s surface — see [ExternalCallerLedger]'s own doc comment for why this is a sibling to, not a reuse of, [com.cues.core.inference.InferenceLedger]. */
     val externalCallerLedger by lazy { ExternalCallerLedger() }
@@ -366,7 +380,18 @@ class CuesApplication : Application() {
      * [LiteRtLmSession] already produce, logged to [externalGemmaGate] and,
      * on success, recorded to [externalCallerLedger].
      */
-    suspend fun generateForExternalCaller(prompt: String, callerPackage: String): Result<InferenceOutput> = try {
+    fun approveExternalCaller(callerPackage: String) {
+        externalGemmaGate.approve(callerPackage, signingDigest(callerPackage))
+    }
+
+    suspend fun generateForExternalCaller(prompt: String, callerPackage: String, signingDigest: String): Result<InferenceOutput> = try {
+        // HubPolicy.decide checks authorization, then thermal status, then
+        // the rate limiter, in that order — a caller refused for heat never
+        // burns a quota token it will want back once the phone cools.
+        when (val decision = externalGemmaGate.decide(callerPackage, signingDigest, clock.nowMillis())) {
+            com.cues.core.hub.HubDecision.Allowed -> Unit
+            is com.cues.core.hub.HubDecision.Denied -> throw IllegalStateException(decision.detail)
+        }
         val output = externalGemmaSession.generate(prompt)
         externalGemmaGate.logAllowed(callerPackage, clock.nowMillis())
         externalCallerLedger.record(
@@ -378,10 +403,79 @@ class CuesApplication : Application() {
                 latencyMs = output.report.loadMs + output.report.generationMs,
             ),
         )
+        // Hub calls join the same opt-in ledger as authoring calls.  They
+        // remain distinguishable by source and caller, rather than creating
+        // a second, invisible accounting trail.
+        if (store.usageTrackingEnabled) {
+            val (costUsd, costBasis) = InferenceCost.costFor(
+                DraftSourceId.EXTERNAL_GEMMA_CALL,
+                output.report.estimatedTokens,
+            )
+            store.appendInference(
+                InferenceLedgerEntry(
+                    atMillis = clock.nowMillis(),
+                    source = DraftSourceId.EXTERNAL_GEMMA_CALL,
+                    backend = output.report.backend,
+                    estimatedTokens = output.report.estimatedTokens,
+                    latencyMs = output.report.loadMs + output.report.generationMs,
+                    costUsd = costUsd,
+                    costBasis = costBasis,
+                    callerPackage = callerPackage,
+                ),
+            )
+        }
         Result.success(output)
     } catch (e: Exception) {
         externalGemmaGate.logDenied(callerPackage, clock.nowMillis(), e.message ?: "generation failed")
         Result.failure(e)
+    }
+
+    /**
+     * The entry point [com.cues.app.appfunctions.BaseCuesAppFunctionService.askLocalGemma]
+     * calls. Shares [externalGemmaGate]'s thermal/rate-limit policy and
+     * [externalGemmaSession]'s separate BYOM-or-none model file with the
+     * installed-app hub path above, under its own quota bucket
+     * (`decideForSystemAgent`) — the platform's own agent can borrow Cues'
+     * governed local model, exactly as any other consented caller can, but
+     * it can never reach `draftCue`/`startCue`'s own trust boundary through
+     * this function: a completion is all it returns.
+     */
+    suspend fun generateForSystemAgent(prompt: String): Result<InferenceOutput> = try {
+        when (val decision = externalGemmaGate.decideForSystemAgent(clock.nowMillis())) {
+            com.cues.core.hub.HubDecision.Allowed -> Unit
+            is com.cues.core.hub.HubDecision.Denied -> throw IllegalStateException(decision.detail)
+        }
+        val output = externalGemmaSession.generate(prompt)
+        externalGemmaGate.logAllowed(SYSTEM_AGENT_CALLER_LABEL, clock.nowMillis())
+        if (store.usageTrackingEnabled) {
+            val (costUsd, costBasis) = InferenceCost.costFor(
+                DraftSourceId.SYSTEM_AGENT_CALL,
+                output.report.estimatedTokens,
+            )
+            store.appendInference(
+                InferenceLedgerEntry(
+                    atMillis = clock.nowMillis(),
+                    source = DraftSourceId.SYSTEM_AGENT_CALL,
+                    backend = output.report.backend,
+                    estimatedTokens = output.report.estimatedTokens,
+                    latencyMs = output.report.loadMs + output.report.generationMs,
+                    costUsd = costUsd,
+                    costBasis = costBasis,
+                    callerPackage = SYSTEM_AGENT_CALLER_LABEL,
+                ),
+            )
+        }
+        Result.success(output)
+    } catch (e: Exception) {
+        externalGemmaGate.logDenied(SYSTEM_AGENT_CALLER_LABEL, clock.nowMillis(), e.message ?: "generation failed")
+        Result.failure(e)
+    }
+
+    private fun signingDigest(packageName: String): String {
+        val info = packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+        val signatures = info.signingInfo?.apkContentsSigners ?: return "unavailable"
+        val bytes = signatures.firstOrNull()?.toByteArray() ?: return "unavailable"
+        return java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
     /**
@@ -511,5 +605,8 @@ class CuesApplication : Application() {
 
     private companion object {
         const val TAG = "CuesSession"
+
+        /** Not a real installed package — labels ledger/log rows for the platform system-agent path, distinctly from any app's own package name. */
+        const val SYSTEM_AGENT_CALLER_LABEL = "system-agent"
     }
 }

@@ -17,7 +17,9 @@ object InferenceCost {
 
     /** On-device cost is always, structurally, exactly $0 — real, not estimated, since no network call happened. */
     fun costFor(source: DraftSourceId, estimatedTokens: Int): Pair<Double, CostBasis> = when (source) {
-        DraftSourceId.ON_DEVICE_LLM -> 0.0 to CostBasis.ON_DEVICE_FREE
+        DraftSourceId.ON_DEVICE_LLM,
+        DraftSourceId.EXTERNAL_GEMMA_CALL,
+        DraftSourceId.SYSTEM_AGENT_CALL -> 0.0 to CostBasis.ON_DEVICE_FREE
         DraftSourceId.SARVAM_CLOUD -> sarvamCostPer1kTokensUsd
             ?.let { rate -> (rate * estimatedTokens / 1000.0) to CostBasis.CLOUD_METERED }
             ?: (0.0 to CostBasis.UNVERIFIED)
