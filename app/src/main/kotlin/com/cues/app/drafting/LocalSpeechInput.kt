@@ -67,6 +67,11 @@ class LocalSpeechInput(private val context: Context) {
         }
     }
 
+    /** Stop recording and deliver the best partial transcript via onResults. */
+    fun finishAndDeliver() {
+        recognizer?.stopListening()
+    }
+
     fun stop() {
         recognizer?.destroy()
         recognizer = null

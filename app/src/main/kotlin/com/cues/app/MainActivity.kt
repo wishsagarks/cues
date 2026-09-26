@@ -681,7 +681,7 @@ private fun CuesApp(
                         onDraft = ::draft,
                         drafterLabel = cueService.diagnostics().primaryDrafter.friendlyLabel(),
                         onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
-                        onStopVoice = { localSpeechInput.stop() },
+                        onStopVoice = { localSpeechInput.finishAndDeliver() },
                         cloudAssistAvailable = cloudAssistAvailable,
                         cloudAssistEnabled = cloudAssistEnabled,
                         onToggleCloudAssist = { cloudAssistEnabled = !cloudAssistEnabled },

@@ -234,7 +234,6 @@ fun AskScreen(
                         enabled = true,
                         onClick = {
                             isListening = false
-                            speechMessage = null
                             onStopVoice()
                         },
                         modifier = Modifier.weight(1f),
