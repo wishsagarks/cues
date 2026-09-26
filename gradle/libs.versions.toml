@@ -12,7 +12,16 @@
 [versions]
 kotlin = "2.2.21"
 serialization = "1.9.0"
-coroutines = "1.10.2"
+# Pinned to exactly what com.google.ai.edge.litertlm:litertlm-android:0.16.1 was
+# compiled against (its own POM: kotlinx-coroutines-android:1.9.0) — not the
+# latest. 1.10.2 resolves and compiles fine but is binary-incompatible at
+# runtime: litertlm's compiled Conversation.kt calls the synthetic
+# `SendChannel.close$default(...)` helper, which 1.10.2 no longer generates,
+# producing a real `NoSuchMethodError` that crashes the process the instant a
+# real on-device generation finishes (Conversation$sendMessageAsync's onDone
+# callback) — confirmed on the iQOO 15 loaner 26 Sep 2026, a genuine model
+# response completing right before the crash. See CLEANUP.md CL-18.
+coroutines = "1.9.0"
 junit = "5.14.4"
 
 # --- unverified from here down: confirm on first laptop build ---

@@ -44,7 +44,9 @@ import com.cues.app.ui.components.ClauseBlock
 import com.cues.app.ui.components.CountdownRing
 import com.cues.app.ui.components.EmptyState
 import com.cues.app.ui.components.FilterChipRow
+import com.cues.app.ui.components.GhostButton
 import com.cues.app.ui.components.HaltButton
+import com.cues.app.ui.components.KineticButton
 import com.cues.app.ui.components.KineticSwitch
 import com.cues.app.ui.components.MonoReadout
 import com.cues.app.ui.components.RiskTag
@@ -64,6 +66,7 @@ import com.cues.core.model.Routine
 import com.cues.core.model.RoutineStatus
 import com.cues.core.model.Session
 import com.cues.core.model.SessionState
+import com.cues.core.model.Trigger
 import com.cues.core.model.UnknownReason
 import com.cues.core.registry.ActionRegistry
 import com.cues.core.registry.ActionRisk
@@ -90,6 +93,8 @@ fun NowScreen(
     forecast: List<ForecastItem>,
     titleFor: (String) -> String,
     drafterLabel: String,
+    onCreateCue: () -> Unit,
+    onStartManualCue: (Routine) -> Unit,
     onOpenRoutine: (Routine) -> Unit,
     onArmPause: (Routine) -> Unit,
     onManualStop: (Session) -> Unit,
@@ -136,6 +141,14 @@ fun NowScreen(
             RuntimeContractPanel(drafterLabel)
         }
 
+        item {
+            ShortcutDeck(
+                manualCues = routines.filter { it.status == RoutineStatus.ARMED && it.trigger is Trigger.Manual },
+                onCreateCue = onCreateCue,
+                onStartManualCue = onStartManualCue,
+            )
+        }
+
         if (forecast.isNotEmpty()) {
             item { SectionHeader("TODAY", meta = "${forecast.count { it.status == ForecastStatus.WILL_ARM }} will arm") }
             item { TodayStrip(forecast, titleFor) }
@@ -167,6 +180,45 @@ fun NowScreen(
         }
 
         item { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+/**
+ * The app's visible equivalent of an Apple Shortcut: an action with an
+ * explicit scope and result. Creating always enters review; running is only
+ * offered for a cue that is already approved, armed, and manual.
+ */
+@Composable
+private fun ShortcutDeck(
+    manualCues: List<Routine>,
+    onCreateCue: () -> Unit,
+    onStartManualCue: (Routine) -> Unit,
+) {
+    val t = cuesTokens
+    SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+        SectionHeader("SHORTCUTS", meta = "reviewed actions")
+        Text(
+            "AI can help draft a cue. Only a reviewed, armed manual cue can run from here.",
+            style = CuesType.labelSmall,
+            color = t.inkSlate,
+            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+        )
+        KineticButton("Create a cue", onCreateCue, modifier = Modifier.fillMaxWidth())
+        manualCues.take(2).forEach { routine ->
+            GhostButton(
+                text = "Run ${routine.title}",
+                onClick = { onStartManualCue(routine) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
+        if (manualCues.isEmpty()) {
+            Text(
+                "Approve a cue with a manual trigger to make it runnable as a shortcut.",
+                style = CuesType.labelSmall,
+                color = t.inkSlate,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
     }
 }
 

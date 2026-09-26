@@ -113,6 +113,17 @@ class GrammarParserTest {
     }
 
     @Test
+    fun `charger connects phrasing is a reviewable power shortcut`() {
+        val routine = assertIs<DraftResult.Drafted>(
+            parser().parse("when my charger connects, silence notifications for 10 minutes"),
+        ).routine
+
+        assertEquals(Trigger.Charging(PowerTransition.PLUGGED_IN), routine.trigger)
+        assertTrue(routine.unaccountedClauses.isEmpty())
+        assertTrue(Validator.validate(routine).isValid)
+    }
+
+    @Test
     fun `ringer and quiet-notifications can be drafted together without colliding`() {
         val result = parser().parse("when charging, quiet notifications and put the phone on silent")
 

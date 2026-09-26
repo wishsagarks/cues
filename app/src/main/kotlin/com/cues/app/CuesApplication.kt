@@ -1,6 +1,7 @@
 package com.cues.app
 
 import android.app.Application
+import android.os.Process
 import android.util.Log
 import com.cues.app.data.ObservableStore
 import com.cues.app.data.StoreGeneration
@@ -74,6 +75,7 @@ class CuesApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        installLitertlmAbiCrashGuard()
         // 4.5: rebuild the zen-rule map from live system state before
         // anything might need to release one, then reconcile sessions —
         // expired ones are cleaned up, never restarted. Runs on every
@@ -600,6 +602,63 @@ class CuesApplication : Application() {
             }
         } catch (e: SecurityException) {
             emptyList()
+        }
+    }
+
+    /**
+     * Confirmed 26 Sep 2026 on the iQOO 15 loaner: the instant a real
+     * on-device generation actually finishes, the whole process dies with
+     * `FATAL EXCEPTION: Thread-32 — java.lang.NoSuchMethodError: No static
+     * method close$default(Lkotlinx/coroutines/channels/SendChannel;...)`,
+     * thrown from `com.google.ai.edge.litertlm.Conversation$JniMessageCallbackImpl.onDone`.
+     * `litertlm-android:0.16.1`'s compiled `Conversation.kt` calls a
+     * `SendChannel.close$default` synthetic that does not exist in *any*
+     * public `kotlinx-coroutines-core` release checked (1.6.4 through
+     * 1.10.2 — none generate it; `close(Throwable)` has never taken a
+     * default parameter in a public release). Pinning the version, as
+     * `gradle/libs.versions.toml`'s own `coroutines` comment first assumed,
+     * does not fix this — it is a hard ABI mismatch baked into the AAR's
+     * compiled bytecode, not a resolvable version conflict. See CLEANUP.md
+     * CL-18 for the full account and for why this is disclosed rather than
+     * silently patched over.
+     *
+     * The throw happens on `Thread-32` — a thread `litertlm`'s own JNI
+     * bridge spawns to deliver the async callback — entirely outside the
+     * coroutine stack `LocalModelRunner.generate()`'s own `catch (e:
+     * Exception)` runs on, so no try/catch in this app's own code can ever
+     * reach it: `NoSuchMethodError` extends `Error`, not `Exception`, and it
+     * is thrown on a call stack this app never entered. Left unhandled, one
+     * real generation completing kills the whole process.
+     *
+     * This handler is retained as a narrow defensive boundary for any future
+     * caller that accidentally reaches the async API. The loaner run showed
+     * that LiteRT-LM's JNI-created callback thread can bypass the process
+     * default handler, so this is not the primary fix and must not be relied
+     * on for authoring. LocalModelRunner now uses the synchronous API instead.
+     * Every other uncaught throwable still falls through to the platform's
+     * previous handler unchanged; no result is fabricated here.
+     */
+    private fun installLitertlmAbiCrashGuard() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            val isKnownLitertlmAbiBreak = throwable is NoSuchMethodError &&
+                throwable.message?.contains("kotlinx/coroutines/channels/SendChannel") == true
+            if (isKnownLitertlmAbiBreak) {
+                Log.e(
+                    TAG,
+                    "litertlm-android ABI break caught on '${thread.name}' (CLEANUP.md CL-18): " +
+                        "a real generation finished but SendChannel.close\$default doesn't exist in " +
+                        "this app's coroutines release. Not fatal — the awaiting drafter times out honestly instead.",
+                    throwable,
+                )
+            } else if (previous != null) {
+                previous.uncaughtException(thread, throwable)
+            } else {
+                // No platform handler was installed (should not happen on a real
+                // device) — never swallow an unrelated crash silently.
+                Log.e(TAG, "Uncaught exception with no previous handler installed", throwable)
+                Process.killProcess(Process.myPid())
+            }
         }
     }
 

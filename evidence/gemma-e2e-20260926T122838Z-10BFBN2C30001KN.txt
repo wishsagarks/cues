@@ -1,0 +1,40 @@
+# Gemma authoring E2E
+observed_utc: 2026-09-26T12:28:38Z
+serial: 10BFBN2C30001KN
+package: com.cues.android.debug
+head_commit: 7d6a9a0 (working tree includes LocalModelRunner ABI fix)
+fingerprint: iQOO/I2501i/I2501:16/BP2A.250605.031.A3_V000L1/compiler260812100432:user/release-keys
+chipset: SM8850
+
+## Model
+
+path: files/models/model.litertlm
+size_bytes: 584417280
+sha256: 1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be
+backend: GPU
+warm_load_ms: 1856
+
+## Draft exercised from the mirrored phone UI
+
+input: when my charger connects, silence notifications for 10 minutes
+pipeline: GEMMA · DONE · 1616ms; grammar parser · confirmed by on-device model
+inference_report: GPU · 1601 ms · 36 estimated tokens
+validation: Every word accounted for.
+review: shown as REVIEWABLE DRAFT; APPROVE & ARM remained available
+process: MainActivity remained top-resumed after an additional 8-second wait
+
+## Regression found and fixed during this run
+
+Before the fix, the same first completed generation killed the app with
+java.lang.NoSuchMethodError:
+SendChannel.close$default(Lkotlinx/coroutines/channels/SendChannel;...)
+from LiteRT-LM 0.16.1's async callback. LocalModelRunner now uses the
+library's synchronous Conversation.sendMessage path until that ABI mismatch
+is resolved; the run above completed without a crash.
+
+## NPU note
+
+The Diagnostics screen continues to report SM8850 as GPU/CPU eligible. The
+forced NPU probe's missing QAIRT/Hexagon dispatch library remains a separate,
+known packaging limitation; the successful authoring run intentionally used
+GPU.

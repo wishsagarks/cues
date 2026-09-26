@@ -478,17 +478,43 @@ design, rather than untested oversights:
    matching this project exactly, so the pin is `litertlm = "0.16.1"`.
    Re-verify this by hand (check that release's POM for its `kotlin-reflect`
    version) before ever bumping it.
-2. **No model has been side-loaded or run.** `LiteRtLmSession` expects a
-   `.litertlm` file at `filesDir/models/model.litertlm`; nothing in the app
-   places one there. Every build without one falls back to the parser,
-   exactly as the old stub did — this sprint changed the failure's *cause*
-   (a missing file, not an unconditional throw) but not its outcome.
-3. **The NPU allowlist (`SM8750`, `SM8650`, `SM8550`) is copied from
-   `docs/API_VERIFICATION.md`'s published table, not from a reading of the
-   loaner's own `Build.SOC_MODEL`.** If the event phone's SoC is not in that
-   published table — plausible for a newer iQOO 15-class chip, per the same
-   doc — NPU is correctly treated as unavailable and the session falls to
-   GPU, but that fallback itself has never run.
+2. **Confirmed 26 Sep 2026 on the loaner.** A real Gemma3-1B int4 asset was
+   side-loaded at `filesDir/models/model.litertlm` (`adb push` to
+   `/data/local/tmp`, then `run-as` copy — SHA-256 verified identical on the
+   Mac and on-device: `fda5dca0e8c1c6f65ca5625c326ff79920c7eb82625a0c6515ae4f5711957b1f`,
+   694 MB). Diagnostics correctly read it: "Cues Brain — Installed — 693.7 MB",
+   and the Now screen's Runtime Contract line changed from "DRAFTING: GRAMMAR
+   ONLY" to "DRAFTING: GEMMA ON-DEVICE" the moment the model-enabled toggle
+   was flipped. The GPU/CPU fallback path item 3 below is therefore
+   reachable; the first full drafted-cue token/latency measurement is now
+   recorded in `docs/MEASUREMENTS.md` (the current side-loaded asset is
+   584,417,280 bytes; see the linked E2E evidence there).
+3. **The NPU allowlist question is now answered, honestly, in the negative
+   — and the reason is a packaging gap, not a hardware or model
+   incompatibility.** `litert-community/Gemma3-1B-IT` on Hugging Face turned
+   out to *already publish* `Gemma3-1B-IT_q4_ekv1280_sm8850.litertlm`
+   (694 MB, added since `docs/API_VERIFICATION.md`'s NPU table was last
+   read) — condition (a) of the plan's four-part SM8850 decision was
+   actually satisfied. That exact file was side-loaded and forced through
+   `LiteRtLmSession.probeNpuOnce` ("Test NPU on this chip anyway") on the
+   real loaner. Result: the NPU-compiled flatbuffer loaded fine
+   ("Flatbuffer model initialized directly from incoming litert model"),
+   but then failed with
+   `INTERNAL: RET_CHECK failure (.../llm_litert_npu_compiled_model_executor.cc:1558)
+   result Inference warmup run for LLM (prefill) failed. Failed to invoke the
+   compiled model`, preceded in logcat by the real root cause:
+   `[litert_dispatch.cc:122] No dispatch library found in
+   /data/app/.../com.cues.android.debug-.../lib/arm64` and `Failed to
+   initialize Dispatch API: ... No usable Dispatch runtime found`. The app
+   simply does not bundle the QAIRT/Hexagon **dispatch** native library
+   `docs/API_VERIFICATION.md`'s own NPU section already named as a second,
+   separate requirement alongside the `.litertlm` asset — the model file
+   alone was never going to be enough. **SM8850 correctly stays out of
+   `ModelCatalog`'s NPU set** per the plan's own rule (a real run must
+   return `backend == NPU` with no exception; this one threw), but the fix
+   path is now concrete: source and bundle the matching QAIRT dispatch
+   `.so` (likely an additional AAR/native-library dependency, not a code
+   change to `LiteRtLmSession` itself) and re-run this exact probe.
 4. **"Backend" is a request that succeeded, not an independent read-back.**
    Unlike `AndroidActionExecutor`'s acquire-then-verify checks,
    `litertlm-android`'s public Kotlin API exposes no separate "which backend
@@ -508,12 +534,10 @@ design, rather than untested oversights:
    only, same as before this sprint's `CueService` constructor gained the
    parameter.
 
-**Remove when:** each numbered item above has a device result — a
-side-loaded model that actually ran, a confirmed or corrected NPU allowlist
-entry for the loaner's real `Build.SOC_MODEL`, and a measured GPU fallback —
-recorded here or in `docs/MEASUREMENTS.md`, with the source of each number
-noted. Item 6 retires separately, when an embedding runtime is chosen and
-verified the same way this chat path was.
+**Remove when:** each numbered item above has a device result. Items 2 and 3
+now do (26 Sep 2026, this file); still open: a re-run of the NPU probe once a
+QAIRT dispatch library is bundled. Item 6 retires separately, when an
+embedding runtime is chosen and verified the same way this chat path was.
 
 ---
 
@@ -1191,12 +1215,19 @@ as `Intent(context, MainActivity::class.java)` in Kotlin is always correct
 for whichever build is actually installed; the cost is that shortcuts only
 exist after the app has run at least once, not immediately after install.
 
-**What is not verified, because `:app` cannot be exercised in this
-environment (no Android SDK — see CLAUDE.md):**
-1. None of `ShortcutManagerCompat`'s calls have run on a device — whether
-   the shortcuts actually appear on a long-press of the launcher icon, and
-   whether OriginOS 7's launcher honors dynamic shortcuts the way stock
-   Android does, are both unconfirmed.
+**Update, 26 Sep 2026 — partial device verification on I2501:** `adb shell
+cmd shortcut get-shortcuts com.cues.android.debug` returned the enabled,
+dynamic `new-cue` shortcut with the correct debug `MainActivity` component,
+`ACTION_VIEW`, and `EXTRA_NEW_CUE=true`. This also verified the package-safe
+dynamic intent decision above on the actual installed build. The OriginOS
+launcher long-press menu itself remains unverified: vivo Remote PC held the
+foreground during this pass, so Cues was launched then paused before that UI
+could be observed. Do not infer launcher rendering from system registration.
+
+**What is not verified:**
+1. Whether the shortcuts actually appear on a long-press of the launcher
+   icon, and whether OriginOS 6's launcher honors dynamic shortcuts the way
+   stock Android does, remain unconfirmed.
 2. `ShortcutManagerCompat.getMaxShortcutCountPerActivity` is trusted as
    returning a sane positive number; the `?: 4` fallback for a non-positive
    result has never been exercised.
@@ -1812,9 +1843,9 @@ screen.
 
 ---
 
-## CL-40 — Sprint 8, part 1: honest drafter provenance and a warm model runtime, both unverified on a device
+## CL-40 — Sprint 8, part 1: honest drafter provenance and a warm model runtime, device-verified with one ABI fix
 
-**Status:** open · **Raised:** 26 Sep 2026
+**Status:** open · **Raised:** 26 Sep 2026 · **Device update:** 26 Sep 2026
 
 This sprint's stated goal is that the model's actual role in a draft — which
 drafter ran, whether it agreed with the parser, what backend it used —
@@ -1844,17 +1875,16 @@ this: "the drafter label is always ON-DEVICE MODEL"). Two pieces landed:
   of `drafter.id` — a fresh install with no model shows "GRAMMAR ONLY", not
   "GEMMA ON-DEVICE".
 
-**Runtime (`app/.../drafting/LocalModelRunner.kt`, WRITTEN AGAINST REAL
-APIs, VERIFIED ON NOTHING — same discipline as `LiteRtLmSession` always
-carried):**
+**Runtime (`app/.../drafting/LocalModelRunner.kt`, now device-verified):**
 - One warm `Engine` per model file, keyed on `(path, length, lastModified())`
   rather than a fresh `Engine`/full model load on every single call —
   `LiteRtLmSession` is now a thin adapter over it.
-- Real cancellation: `generate()` uses `sendMessageAsync`'s `Flow` overload
-  and calls `Conversation.cancelProcess()` on cancellation, rather than the
-  pre-Sprint-8 `sendMessage()` call that `withTimeoutOrNull` could only
-  discard the result of afterward — the coroutine cancelled, but the native
-  call kept running regardless.
+- Safe completion: `generate()` uses `Conversation.sendMessage` for the pinned
+  0.16.1 runtime. The async `Flow` callback path called a missing
+  `SendChannel.close$default` synthetic and killed the app on the first real
+  completion; the synchronous path was exercised on the loaner and completed
+  safely. `cancelProcess()` remains available when the native call itself
+  reports cancellation; higher-level timeouts still record an honest timeout.
 - Released on model-off (`onDeviceModelUserEnabled`'s setter) and on
   `Application.onTrimMemory(TRIM_MEMORY_RUNNING_LOW+)`, for both the
   authoring and developer-surface engines.
@@ -1882,12 +1912,22 @@ plain reflection (`Class.getMethod(...).invoke(...)`), which is not the kind
 of code this project reaches for casually — record the reason a reviewer
 finds this suspicious *is* the reason it's there.
 
-**What is not verified, any of it:**
-1. None of `LocalModelRunner`'s claims — engine reuse across calls, a
-   cancellation actually reaching the native call, `getBenchmarkInfo()`
-   returning a non-null result at all — has run against a real
-   `.litertlm` file or a real device in the environment that wrote it.
-2. The reflection workaround has never actually retrieved a real
+**Device result (26 Sep 2026):** the iQOO I2501/SM8850 loaner produced a real
+GPU authoring run. With the installed 584,417,280-byte model enabled,
+Diagnostics reported a warm GPU engine in 1,856 ms. Ask then produced a real
+review screen for `when my charger connects, silence notifications for 10
+minutes`: `GEMMA · DONE · 1616ms`, `GPU · 1601 ms · 36 estimated tokens`, and
+`grammar parser · confirmed by on-device model`; validation said every word
+was accounted for. The app remained top-resumed after an additional 8-second
+wait. Evidence is recorded in
+`evidence/gemma-e2e-20260926T122838Z-10BFBN2C30001KN.txt` and
+`docs/MEASUREMENTS.md`.
+
+**What is not verified:**
+1. A cancellation actually reaching the native call is not verified; the
+   safe synchronous path can still finish native work after a coroutine
+   timeout, so this remains a performance limitation rather than a crash risk.
+2. The reflection workaround has now retrieved a real
    `BenchmarkInfo` from a real generation call; whether it throws, returns
    nulls, or works exactly as hoped is unmeasured. If it doesn't work, the
    `estimatedTokens`/whitespace-split fallback is what ships instead — a
@@ -1899,15 +1939,14 @@ finds this suspicious *is* the reason it's there.
    Ask disagreement card) — were not built in this pass. The plumbing above
    feeds them; today only the plain-text drafter chip and `DiagnosticsScreen`'s
    `render()` string read the new data.
-4. No streaming preview reaches the UI; `LocalModelRunner.generate()`
-   collects `sendMessageAsync`'s `Flow` internally and returns only the
-   final result — display-only partial text (the plan's `ModelProgress`
-   port) is not wired.
+4. No streaming preview reaches the UI; `LocalModelRunner.generate()` now
+   uses the safe synchronous path and returns only the final result —
+   display-only partial text (the plan's `ModelProgress` port) is not wired.
 5. `ExternalGemmaGate` caller approval and rate limiting (CL-38 items 2–3)
    are not built in this pass.
-6. No on-device measurement exists yet — `docs/MEASUREMENTS.md` has no new
-   rows. Every number this entry describes is a code-level claim, not an
-   observed one.
+6. Only one GPU authoring measurement exists so far. There is no longitudinal
+   set of model-size, warm-reuse, timeout, or CPU-fallback measurements yet;
+   the single observed row is in `docs/MEASUREMENTS.md`.
 
 **Remove when:** a real model, side-loaded on the loaner, drafts through
 `DifferentialDrafter` and the resulting trace, credit, backend and token

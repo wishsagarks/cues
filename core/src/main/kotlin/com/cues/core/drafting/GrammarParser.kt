@@ -233,6 +233,12 @@ class GrammarParser(
         if (chargerMatches.isNotEmpty()) {
             val unplugged = Regex("\\b(unplug\\w*|disconnect\\w*|stop\\w* charging|off charge)\\b").containsMatchIn(text)
             chargerMatches.forEach { consumed += it.range }
+            // "when my charger connects" is the ordinary equivalent of
+            // "when my charger is plugged in". The charger phrase already
+            // establishes the power trigger; the connection verb merely
+            // names its transition, so account for it rather than forcing a
+            // user to reword an otherwise exact, safe request.
+            Regex("\\b(?:connect\\w*|plug\\w*)\\b").find(text)?.let { consumed += it.range }
             return ResolvedTrigger(
                 Trigger.Charging(if (unplugged) PowerTransition.UNPLUGGED else PowerTransition.PLUGGED_IN),
             )

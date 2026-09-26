@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.cues.app.ui.components.ClauseBadge
 import com.cues.app.ui.components.ClauseKind
+import com.cues.app.ui.components.DraftPipelineStrip
+import com.cues.app.ui.components.DraftProvenance
 import com.cues.app.ui.components.GhostButton
 import com.cues.app.ui.components.KineticButton
 import com.cues.app.ui.components.RiskTag
@@ -45,7 +47,6 @@ import com.cues.core.model.Capability
 import com.cues.core.model.Routine
 import com.cues.core.rehearsal.RehearsalRow
 import com.cues.core.registry.ActionRegistry
-import com.cues.core.review.DraftCredit
 import com.cues.core.review.ReviewCopy
 
 /**
@@ -93,11 +94,7 @@ fun ReviewScreenV2(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("REVIEW", style = CuesType.headline, color = t.inkPrimary)
-            Text(
-                routine.draftedBy?.let { DraftCredit.credit(trace, it).label() } ?: "drafted by unknown",
-                style = CuesType.labelSmall,
-                color = t.inkSlate,
-            )
+            StatusPill("REVIEWABLE DRAFT", StatusTone.WARN)
         }
 
         LazyColumn(
@@ -106,6 +103,16 @@ fun ReviewScreenV2(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { TrustBanner() }
+
+            routine.draftedBy?.let { draftedBy ->
+                item { DraftProvenance(trace = trace, draftedBy = draftedBy) }
+            }
+
+            if (trace != null) {
+                // A review only represents a completed draft; the pipeline is
+                // historical here, so it never claims the runner is active.
+                item { DraftPipelineStrip(trace, com.cues.app.drafting.RunnerState.Cold, isDrafting = false) }
+            }
 
             item { SourceTextCard(routine) }
 

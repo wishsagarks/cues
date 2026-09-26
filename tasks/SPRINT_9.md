@@ -1,8 +1,14 @@
 # Sprint 9 — Visible Intelligence, Sarvam, and Declared Sensing
 
-**Status:** proposed implementation plan  
+**Status:** proposed implementation plan, rebased on `main` at `7d6a9a0`
 **Target device:** vivo/iQOO I2501, Snapdragon SM8850, Android 16  
-**Prerequisite:** land Sprint 8 (`619a7fd` → `58e8247` → `a724b30`) on the actual `main` branch before work begins. At plan time, those commits are reachable from `feat/gemma-ui-sprint8`, not current `main`.
+**Baseline:** Sprint 8 (`619a7fd` → `58e8247` → `a724b30`) is already an ancestor of `main`. Main also now contains the model catalog, thermal-aware local-model hub, AppFunctions composition, face-down/ambient-light classifiers, plan-graph validation groundwork, and the structured Receipts view.
+
+## Implementation status — 2026-09-26
+
+- **Started:** Ask and Review now receive the live `LocalModelRunner` state and observable `CueService.lastTrace`. `ModelStatusBar`, `DraftPipelineStrip`, and `DraftProvenance` render real availability, runner tier, attempt outcomes, provenance, timing, and token-count source. A prior draft trace is explicitly hidden while a new request is running.
+- **Device evidence:** the 693.7 MB `Gemma3-1B-IT_q4_ekv1280_sm8850.litertlm` artifact is installed on I2501 (SHA-256 `fda5dca0…1957b1f`). Its forced NPU probe fails before inference because this APK lacks the QAIRT/Hexagon dispatch library. `ModelCatalog` records this as a known dispatch failure; authoring deliberately routes GPU → CPU.
+- **Deliberately deferred:** streaming partial text/cancel, a state-owning `ModelController`/`AskViewModel`, disagreement selection, Now/Insights readouts, and draft latency measurement. No model state has been fabricated meanwhile.
 
 ## Outcome
 
@@ -28,17 +34,19 @@ DraftTrace → validation → user Review → approved cue
 - `UNKNOWN` signal/model state never authorizes a cue or reads as ready.
 - Sarvam never silently receives a request. A production app must not embed a reusable Sarvam API key; use a user-managed key or authenticated proxy.
 - A new sensor must have: a closed core condition kit, a clear permission story, an Android adapter, a reason-code receipt, a user-visible source/age, and a device-matrix test.
+- A `PlanDraft` remains a reviewed, validated proposal. No multi-step plan executor or model-directed runtime loop is in Sprint 9.
 
 ## Workstreams
 
-### W0 — Integrate and stabilize Sprint 8
+### W0 — Baseline the landed model, hub, and device contracts
 
-1. Rebase or merge the three Sprint 8 commits in order, resolving against the current app changes only after preserving the working tree.
-2. Run `./dev t`, `./dev b`, and `./dev perms`; install the debug APK on I2501.
-3. Confirm model-off behavior first: every authoring surface says **Grammar only · model off/not installed**, never “on-device model”.
-4. Retain the new `DraftTrace`, `DraftCredit`, `ModelAvailability`, `LocalModelRunner`, warm-engine lifecycle, cancellation, and cloud-through-`CueService` contracts as the data foundation for the UI below.
+1. Run `./dev t`, `./dev b`, and `./dev perms`; install the current debug APK on I2501.
+2. Confirm model-off behavior first: every authoring surface says **Grammar only · model off/not installed**, never “on-device model”.
+3. Smoke-test the already-landed `DraftTrace`, `DraftCredit`, `ModelAvailability`, `LocalModelRunner`, warm-engine lifecycle, cancellation, and cloud-through-`CueService` contracts against current UI wiring.
+4. Record I2501's real thermal state and verify the local-model hub's policy order: authorization → thermal refusal → rate limit. Its external/AppFunctions completion surface is separate from Cues authoring and cannot arm or execute a cue.
+5. Preserve the current device truth: `SM8850` has a published, installed NPU-specific artifact, but its real probe failed before inference because the app does not bundle the QAIRT/Hexagon dispatch runtime. Keep SM8850 out of the NPU allowlist and route authoring GPU → CPU until that packaging gap is fixed and a probe succeeds.
 
-**Exit:** Sprint 8 APIs compile on `main`; model-off UI and parser drafting work on the phone.
+**Exit:** the current main build and model-off/parser/hub-refusal paths work on the phone; no plan item is based on stale branch assumptions.
 
 ### W1 — Visualization layer (the missing Sprint 8 deliverable)
 
@@ -50,7 +58,7 @@ Create `ui/components/ModelReadouts.kt`:
 |---|---|
 | `ModelStatusBar` | grammar-only / loading / warm state; installed/enabled state; actual tier only after a runner/report says it |
 | `DraftPipelineStrip` | input → Gemma → grammar → compare → validate → user, with skipped/success/failure/cancel/timing state |
-| `ProvenanceBadge` | `DraftCredit`, actual backend, total time, token count and estimated/measured marker |
+| `DraftProvenance` | `DraftCredit`, actual backend, total time, token count and estimated/measured marker |
 | `StreamingPreview` | partial text labelled “not yet checked”, plus Cancel |
 | `BackendPill` | reusable factual backend/readout |
 
@@ -67,9 +75,10 @@ Wire them into:
 ### W2 — Gemma provisioning, routing, and measurement
 
 1. Import the downloaded Gemma `.litertlm` through the existing picker/side-load route; identify the exact filename, checksum, quantization, and LiteRT-LM compatibility before enabling it.
-2. Keep the runtime policy: compatible, verified NPU → GPU → CPU → grammar-only. The I2501 reports `SM8850`, which is not currently in Cues’ verified NPU allowlist; only a successful, deliberate probe with a matching model can add evidence for that tier.
+2. Keep the runtime policy: compatible, verified NPU → GPU → CPU → grammar-only. I2501's SM8850-specific NPU asset currently fails before inference because the QAIRT dispatch runtime is absent, so this release must take GPU → CPU; only a successful, deliberate probe after packaging that runtime can add SM8850 to the allowlist.
 3. Complete prompt/sampler quality: one canonical grammar output, deterministic drafting settings, bounded tokens, corpus-held-out evaluation, and a prompt id in every trace.
 4. Measure cold/warm load, TTFT, generation, tokens/sec, memory, cancellation, and corpus correctness on-device. Record evidence in `docs/MEASUREMENTS.md` and `docs/DEVICE_MATRIX.md` M2; do not claim a tier beforehand.
+5. Add an `SM8850` entry to `ModelCatalog` only after the exact artifact, successful NPU report, and measurement evidence are recorded together. A successful GPU/CPU run does not change the NPU catalog.
 
 **Exit:** the Checks test prompt, corpus score, and cancellation demonstrate actual behavior on I2501, and second warm drafts are measured rather than assumed faster.
 
@@ -96,7 +105,7 @@ The structured Receipts UI is already wired to prefer `ReceiptRecord` with legac
 
 ### W5 — Declared sensor kits
 
-Start with the two already-created pure classifiers, then complete their product contracts rather than adding a broad sensor grab:
+Start with the two pure classifiers and their tests already landed on `main`, then complete their product contracts rather than adding a broad sensor grab:
 
 | Candidate | Current state | Sprint 9 work |
 |---|---|---|
@@ -109,11 +118,16 @@ For each admitted sensor: add core tests first, derive capability from the kit, 
 
 **Exit:** a cue can explicitly use face-down or light-band context; missing/stale hardware data safely prevents execution and says why.
 
-### W6 — External local-Gemma surface and safety
+### W6 — Governed local-Gemma hub and AppFunctions verification
 
-Finish Sprint 8’s provider hardening before demonstrating it: package-plus-signing-digest consent, visible pending/approved/blocked callers, per-caller rate limit, authoring-priority busy handling, shared warm-load gate, and a user-visible audit trail. Run `DEVICE_MATRIX.md` M10 for disabled, unapproved, approved, rate-limited, and busy cases.
+The policy and composition code is landed: package-plus-signing-digest consent, pending/approved/blocked callers, rate limits, thermal refusal, separate system-agent quota, and audit entries. Sprint 9 verifies and closes those device-facing contracts:
 
-**Exit:** no other app can silently consume a local model or masquerade as an approved caller.
+1. Run `DEVICE_MATRIX.md` M10 for disabled, unapproved, approved, rate-limited, thermal-refused, and busy cases.
+2. Run M7 for `askLocalGemma`; confirm it returns a bounded completion only and cannot bypass `draftCue`/approval/runtime gates.
+3. Render thermal refusal, caller identity, and rate-limit retry time in Checks without exposing model text or pretending a refusal was inference.
+4. Verify the shared load gate and memory trimming while authoring and a hub request contend; authoring remains the product-priority path.
+
+**Exit:** no other app can silently consume a local model or masquerade as an approved caller; device evidence exists for both ordinary-app and system-agent calls.
 
 ### W7 — Documentation, polish, and release gate
 
@@ -121,7 +135,7 @@ Update `CLEANUP.md`, `docs/API_VERIFICATION.md`, `docs/MEASUREMENTS.md`, `docs/D
 
 ## Delivery order and cut line
 
-**Must ship:** W0, W1 Ask/Review components, W2 safe routing/measurement, W3 consent/provenance, W4 device Receipts proof, W5 face-down/light correctness, and W6 provider safety.
+**Must ship:** W0, W1 Ask/Review components, W2 safe routing/measurement, W3 consent/provenance, W4 device Receipts proof, W5 face-down/light correctness, and W6 hub/AppFunctions verification.
 
 **Cut first if time is tight:** streaming preview (keep the final trace), corpus-score UI (keep CLI/device test), Insights aggregation, coach narration, and advanced Sarvam language picker. Never cut the parser/validator/approval boundary, model-off truthfulness, disagreement choice, or device measurement.
 
@@ -138,10 +152,12 @@ Update `CLEANUP.md`, `docs/API_VERIFICATION.md`, `docs/MEASUREMENTS.md`, `docs/D
 | Sarvam assist | Consent and provenance visible; request is ledgered; network failure returns to local drafting |
 | Sensor unavailable/stale | `UNKNOWN`, no start, receipt names source and remediation |
 | Session lifecycle | Structured Receipt records start/skip/end/cleanup on phone |
+| Hub overheated/unapproved | No model load; Checks names the thermal/authorization refusal and preserves quota correctly |
+| AppFunctions local request | Bounded completion is ledgered and cannot arm, change, or run a cue |
 
 ## Required decisions before W2/W3/W5 implementation
 
-1. Provide the Gemma artifact filename, source, SHA-256, and whether it is a LiteRT-LM `.litertlm` build intended for SM8850/QNN.
+1. Choose whether to pursue the vendor QAIRT/Hexagon dispatch packaging needed for SM8850 NPU, or ship the measured GPU/CPU route for this release.
 2. Choose Sarvam credentials: user-provided key for development, or an authenticated proxy for a distributable app.
 3. Confirm the first sensor priority: **face-down + ambient light** is the recommended pair because both classifiers already exist and require no location/activity profiling.
 

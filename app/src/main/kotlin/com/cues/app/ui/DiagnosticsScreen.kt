@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.DeviceDiagnostics
 import com.cues.app.runtime.DeviceHealthSnapshot
 import com.cues.app.runtime.ManualObservation
+import com.cues.app.drafting.RunnerState
 import com.cues.core.CueService
 import com.cues.core.drafting.DraftTrace
 import com.cues.core.inference.ModelProvisionState
@@ -67,8 +68,12 @@ fun DiagnosticsScreen(
     canDownloadModel: Boolean = false,
     isOnWifi: Boolean = false,
     npuEligible: Boolean = false,
+    /** Set only when [com.cues.core.model.ModelCatalog.knownDispatchFailureFor] has a real, on-device-confirmed finding for this exact SoC — never a guess. */
+    npuKnownIssue: String? = null,
+    runnerState: RunnerState = RunnerState.Cold,
     onDeviceModelEnabled: Boolean = false,
     onToggleOnDeviceModel: ((Boolean) -> Unit)? = null,
+    onWarmModel: (() -> Unit)? = null,
     onDownloadModel: (() -> Unit)? = null,
     onChooseModel: (() -> Unit)? = null,
     onCancelDownloadModel: (() -> Unit)? = null,
@@ -115,7 +120,8 @@ fun DiagnosticsScreen(
             DeviceHealthCard(
                 it,
                 npuEligible = npuEligible,
-                lastInferenceReport = cueDiagnostics?.lastInferenceReport,
+                npuKnownIssue = npuKnownIssue,
+                lastInferenceReport = cueDiagnostics?.lastTrace.modelReport(),
                 isProbingNpu = isProbingNpu,
                 npuProbeResult = npuProbeResult,
                 onProbeNpu = onProbeNpu,
@@ -138,9 +144,12 @@ fun DiagnosticsScreen(
                 canDownload = canDownloadModel,
                 isOnWifi = isOnWifi,
                 npuEligible = npuEligible,
+                npuKnownIssue = npuKnownIssue,
                 lastInferenceReport = cueDiagnostics?.lastTrace.modelReport(),
                 enabled = onDeviceModelEnabled,
                 onToggleEnabled = onToggleOnDeviceModel,
+                runnerState = runnerState,
+                onWarmModel = onWarmModel,
                 onDownload = onDownloadModel,
                 onChoose = onChooseModel,
                 onCancel = onCancelDownloadModel,
@@ -322,6 +331,7 @@ private fun CueService.Diagnostics.render(): String = buildString {
 private fun DeviceHealthCard(
     health: DeviceHealthSnapshot,
     npuEligible: Boolean,
+    npuKnownIssue: String? = null,
     lastInferenceReport: com.cues.core.inference.InferenceReport?,
     isProbingNpu: Boolean = false,
     npuProbeResult: String? = null,
@@ -381,7 +391,7 @@ private fun DeviceHealthCard(
                 HealthTile(
                     Icons.Filled.Psychology,
                     "NPU",
-                    npuReading(health.npuHardwareFamily, npuEligible, lastInferenceReport),
+                    npuReading(health.npuHardwareFamily, npuEligible, npuKnownIssue, lastInferenceReport),
                     Modifier.weight(1f).fillMaxHeight(),
                 )
             }
@@ -490,9 +500,12 @@ private fun ModelBrainCard(
     canDownload: Boolean,
     isOnWifi: Boolean,
     npuEligible: Boolean,
+    npuKnownIssue: String? = null,
     lastInferenceReport: com.cues.core.inference.InferenceReport?,
     enabled: Boolean,
     onToggleEnabled: ((Boolean) -> Unit)?,
+    runnerState: RunnerState,
+    onWarmModel: (() -> Unit)?,
     onDownload: () -> Unit,
     onChoose: (() -> Unit)?,
     onCancel: (() -> Unit)?,
@@ -516,7 +529,7 @@ private fun ModelBrainCard(
             when (state) {
                 is ModelProvisionState.NotInstalled -> {
                     Text(
-                        eligibilityLine(npuEligible),
+                        eligibilityLine(npuEligible, npuKnownIssue),
                         style = MaterialTheme.typography.labelSmall,
                         color = cuesColors.ink200,
                     )
@@ -585,7 +598,7 @@ private fun ModelBrainCard(
                         color = cuesColors.ink200,
                     )
                     Text(
-                        eligibilityLine(npuEligible),
+                        eligibilityLine(npuEligible, npuKnownIssue),
                         style = MaterialTheme.typography.labelSmall,
                         color = cuesColors.ink200,
                         modifier = Modifier.padding(top = 2.dp),
@@ -611,6 +624,17 @@ private fun ModelBrainCard(
                             enabled = onToggleEnabled != null,
                         )
                     }
+                    Text(
+                        runnerState.checksLabel(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cuesColors.ink200,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    OutlinedButton(
+                        onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onWarmModel?.invoke() },
+                        enabled = enabled && onWarmModel != null && runnerState !is RunnerState.Loading && runnerState !is RunnerState.Generating,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    ) { Text(if (runnerState is RunnerState.Warm) "Refresh warm model" else "Warm model (no prompt)") }
                     if (onRemove != null) {
                         OutlinedButton(
                             onClick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onRemove() },
@@ -726,10 +750,26 @@ private fun DeveloperSurfaceCard(
     }
 }
 
-/** Never "NPU accelerated" — only what the SoC allowlist says is eligible, per CL-18's rule applied to this UI. */
-private fun eligibilityLine(npuEligible: Boolean): String =
-    if (npuEligible) "Eligible for: NPU, GPU, CPU (this SoC is on the published table)"
-    else "Eligible for: GPU, CPU (this SoC has no published NPU build)"
+/**
+ * Never "NPU accelerated" — only what the SoC allowlist says is eligible,
+ * per CL-18's rule applied to this UI. [npuKnownIssue], when set, means a
+ * real on-device attempt already confirmed *why* this chip isn't eligible —
+ * a different, more precise fact than "nothing published for this chip yet"
+ * (see [com.cues.core.model.ModelCatalog.knownDispatchFailureFor]).
+ */
+private fun eligibilityLine(npuEligible: Boolean, npuKnownIssue: String? = null): String = when {
+    npuEligible -> "Eligible for: NPU, GPU, CPU (this SoC is on the published table)"
+    npuKnownIssue != null -> "Eligible for: GPU, CPU. $npuKnownIssue"
+    else -> "Eligible for: GPU, CPU (this SoC has no published NPU build)"
+}
+
+private fun RunnerState.checksLabel(): String = when (this) {
+    RunnerState.Cold -> "Runtime: cold — no engine is held in memory."
+    is RunnerState.Loading -> "Runtime: loading ${tier.name}."
+    is RunnerState.Warm -> "Runtime: warm on ${tier.name} — loaded in ${loadMs}ms."
+    is RunnerState.Generating -> "Runtime: generating on ${tier.name}."
+    is RunnerState.Failed -> "Runtime: unavailable — $reasonCode"
+}
 
 /**
  * The Device Health tile's NPU reading — two separate, honestly-labelled
@@ -752,12 +792,14 @@ private fun eligibilityLine(npuEligible: Boolean): String =
 private fun npuReading(
     npuHardwareFamily: String?,
     npuEligible: Boolean,
+    npuKnownIssue: String? = null,
     lastInferenceReport: com.cues.core.inference.InferenceReport?,
 ): String {
     val hardwareLine = npuHardwareFamily ?: "No NPU family identified from this chipset"
     val cuesLine = when {
         lastInferenceReport?.backend == com.cues.core.inference.InferenceBackend.NPU ->
             "Cues ran last on NPU: ${lastInferenceReport.loadMs}ms load, ${"%.1f".format(lastInferenceReport.tokensPerSecond)} tok/s"
+        npuKnownIssue != null -> npuKnownIssue
         !npuEligible -> "Cues' model has no confirmed NPU build for this exact chip yet"
         lastInferenceReport != null -> "Cues model eligible, but last draft ran on ${lastInferenceReport.backend.name}"
         else -> "Cues model eligible, no draft has used it yet"

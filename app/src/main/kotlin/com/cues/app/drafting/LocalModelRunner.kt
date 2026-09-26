@@ -15,7 +15,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -56,12 +55,15 @@ sealed interface RunnerState {
  *   which is exactly the moment [ModelDownloader]'s atomic rename could have
  *   swapped it. A fresh [com.google.ai.edge.litertlm.Conversation] is still
  *   created per call, so no two drafts ever share conversational context.
- * - *Real cancellation.* [generate] uses `sendMessageAsync`'s `Flow`
- *   overload rather than the blocking `sendMessage` — a coroutine
- *   cancellation (a timeout, or the user's own Cancel) now actually reaches
- *   the native call via `cancelProcess()`, instead of running to completion
- *   on the `IO` dispatcher regardless while `withTimeoutOrNull` only threw
- *   the result away afterward.
+ * - *Safe completion.* [generate] deliberately uses the blocking
+ *   `sendMessage` API.  LiteRT-LM 0.16.1's async callback path calls a
+ *   Kotlin synthetic (`SendChannel.close$default`) that is absent from the
+ *   coroutines ABI shipped by this app; on a real device that killed the
+ *   process exactly when a generation finished.  The synchronous API is the
+ *   supported path that completes without crossing that broken callback ABI.
+ *   Cancellation still calls `cancelProcess()` when the native call reports
+ *   cancellation; the higher-level drafter timeout remains an honest
+ *   timeout, never a fabricated model result.
  * - *Real token counts.* [InferenceReport.estimatedTokens] comes from
  *   `Conversation.getBenchmarkInfo()`'s own prefill+decode counts
  *   ([TokenCountSource.MEASURED]) when the runtime provides one, falling
@@ -125,23 +127,20 @@ class LocalModelRunner(
             withContext(Dispatchers.IO) {
                 val conversation = eng.createConversation()
                 try {
-                    var lastText = ""
                     val genStart = System.nanoTime()
-                    try {
-                        conversation.sendMessageAsync(prompt).collect { message ->
-                            lastText = message.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
-                        }
+                    val response = try {
+                        // Do not switch this back to sendMessageAsync until
+                        // the library fixes its SendChannel.close$default ABI
+                        // mismatch (see CLEANUP.md CL-18).  The async path
+                        // crashes the whole app on the first real completion.
+                        conversation.sendMessage(prompt)
                     } catch (e: CancellationException) {
-                        // The Flow being cancelled does not, by itself,
-                        // guarantee the native call underneath actually
-                        // stops — cancelProcess() is the one API this
-                        // library exposes for that, so cancellation reaches
-                        // the model instead of merely being discarded after
-                        // the blocking call finishes anyway (the bug this
-                        // class exists to fix).
                         conversation.cancelProcess()
                         throw e
                     }
+                    val lastText = response.contents.contents
+                        .filterIsInstance<Content.Text>()
+                        .joinToString("") { it.text }
                     val genMs = ((System.nanoTime() - genStart) / 1_000_000).coerceAtLeast(1)
                     InferenceOutput(text = lastText, report = reportFor(tier, loadMsForTier, genMs, lastText, conversation))
                 } finally {

@@ -36,21 +36,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.cues.app.drafting.RunnerState
 import com.cues.app.runtime.InstalledApp
 import com.cues.app.ui.AppPickerDialog
 import com.cues.app.ui.AssistantHistory
 import com.cues.app.ui.DevicePickerDialog
 import com.cues.app.ui.TemplateGallery
 import com.cues.app.ui.components.KineticButton
+import com.cues.app.ui.components.DraftPipelineStrip
+import com.cues.app.ui.components.ModelStatusBar
 import com.cues.app.ui.components.SlabCard
 import com.cues.app.ui.components.SlabTier
-import com.cues.app.ui.components.TrustChip
 import com.cues.app.ui.theme.CuesShape
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.assistant.PendingCommand
 import com.cues.core.assistant.Turn
+import com.cues.core.drafting.DraftTrace
 import com.cues.core.drafting.PairedDevice
+import com.cues.core.ports.ModelAvailability
 
 /**
  * Ask: compose, converse and review drafts (redesign plan §3.3). Reuses
@@ -62,7 +66,11 @@ import com.cues.core.drafting.PairedDevice
 fun AskScreen(
     isDrafting: Boolean,
     onDraft: (String) -> Unit,
-    drafterLabel: String,
+    modelAvailability: ModelAvailability,
+    runnerState: RunnerState,
+    lastTrace: DraftTrace?,
+    onDeviceModelEnabled: Boolean,
+    onToggleOnDeviceModel: (Boolean) -> Unit,
     onStartVoice: (onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) -> Unit,
     onStopVoice: () -> Unit = {},
     cloudAssistAvailable: Boolean = false,
@@ -150,7 +158,14 @@ fun AskScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item { TrustChip("DRAFTING: $drafterLabel") }
+        item {
+            ModelStatusBar(
+                availability = modelAvailability,
+                runnerState = runnerState,
+                enabled = onDeviceModelEnabled,
+                onEnabledChange = onToggleOnDeviceModel,
+            )
+        }
 
         if (cloudAssistAvailable) {
             item {
@@ -257,8 +272,12 @@ fun AskScreen(
             item { Text(message, style = CuesType.labelSmall, color = t.warn) }
         }
 
+        if (isDrafting || lastTrace != null) {
+            item { DraftPipelineStrip(trace = lastTrace, runnerState = runnerState, isDrafting = isDrafting) }
+        }
+
         item {
-            AnimatedVisibility(visible = isListening || isCloudListening || isDrafting || isTryingCloudAssist) {
+            AnimatedVisibility(visible = isListening || isCloudListening || isTryingCloudAssist) {
                 Column {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = t.doYellow, trackColor = t.raised)
                     Text(

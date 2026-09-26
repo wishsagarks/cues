@@ -6,12 +6,10 @@ results are different things and the documents say which is which." This is
 the *results* document. `CLEANUP.md` holds the assumptions that haven't been
 retired yet; this file holds the real numbers once they exist.
 
-**No row below has been recorded.** This file was created in an environment
-with no loaner phone and no Android SDK-driven device session — see
-`RED_LIGHT.md` and `docs/DEVICE_MATRIX.md` for the protocol that fills it in.
-Do not add a row here from a simulator, an estimate, or a number carried over
-from a different build — only from an observation on the loaner, with the
-evidence it came from.
+The first on-device authoring row below was recorded from the mirrored iQOO
+I2501 session on 26 Sep 2026. Do not add a row from a simulator, an estimate,
+or a number carried over from a different build — only from an observation on
+the loaner, with the evidence it came from.
 
 ## How to record a result
 
@@ -26,7 +24,7 @@ measurement.
 
 | Date | Device | OS build | Commit | Backend | Load (ms) | Generation (ms) | Tokens/sec | Model file | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| | | | | | | | | | |
+| 2026-09-26 | vivo/iQOO I2501 (SM8850) | Android 16 / BP2A.250605.031.A3_V000L1 | 7d6a9a0 + working tree ABI fix | GPU | 1856 | 1601 | n/a (36 estimated tokens) | 584,417,280 B; SHA-256 `1325ae36…98be` | [Gemma E2E evidence](/Users/wish/Documents/DailyCodes/iqoo+/evidence/gemma-e2e-20260926T122838Z-10BFBN2C30001KN.txt) |
 
 Backend must be read from `CueService.Diagnostics.lastInferenceReport` after
 a real draft call on the loaner — never asserted from the NPU SoC allowlist

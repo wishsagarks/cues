@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
                     syncAdapters = { app.adapterSupervisor.sync(app.cueService.list().filter { it.status == RoutineStatus.ARMED }) },
                     runBakeOff = { com.cues.app.drafting.AppBakeOff.run(app.pairedDevices(), app.onDeviceLlmSession, com.cues.app.BuildConfig.SARVAM_API_KEY) },
                     modelDownloader = app.modelDownloader,
+                    onDeviceModelRunner = app.onDeviceModelRunner,
                     onDeviceModelUserEnabled = app.onDeviceModelUserEnabled,
                     onToggleOnDeviceModel = { app.onDeviceModelUserEnabled = it },
                     probeNpu = app::probeNpu,
@@ -277,6 +278,7 @@ private fun CuesApp(
     syncAdapters: () -> Unit,
     runBakeOff: suspend () -> com.cues.core.corpus.BakeOffReport,
     modelDownloader: com.cues.app.drafting.ModelDownloader,
+    onDeviceModelRunner: com.cues.app.drafting.LocalModelRunner,
     onDeviceModelUserEnabled: Boolean = false,
     onToggleOnDeviceModel: (Boolean) -> Unit = {},
     probeNpu: (suspend (String) -> com.cues.core.drafting.InferenceOutput)? = null,
@@ -358,6 +360,11 @@ private fun CuesApp(
     var cueCardShareRoutine by remember { mutableStateOf<Routine?>(null) }
 
     val context = LocalContext.current
+    // These flows are the live record of what actually happened. They keep
+    // Ask current after an engine load or a completed draft without treating
+    // a static setup snapshot as live state.
+    val runnerState by onDeviceModelRunner.state.collectAsStateWithLifecycle()
+    val lastDraftTrace by cueService.lastTrace.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -395,6 +402,11 @@ private fun CuesApp(
     fun refresh() {
         routines = cueService.list()
         liveSessions = store.allUnfinished().filter { it.state.isLive() }
+        // Launcher shortcuts are an extension of the same reviewed routine
+        // list the app renders. Refresh immediately after arm/pause/delete,
+        // not only on process start or resume, so a stale long-press entry
+        // can never present a cue whose current state no longer permits it.
+        com.cues.app.runtime.AppShortcuts.refresh(context, routines)
         syncAdapters()
         adapterStatuses = monitoring.statuses(adapterHealth())
     }
@@ -429,15 +441,12 @@ private fun CuesApp(
         scope.launch { snackbarHost.showSnackbar(message) }
     }
 
-    androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
-        if (incomingScreenText != null) navController.navigateToTab(CuesRoutes.ASK)
-    }
-    androidx.compose.runtime.LaunchedEffect(newCueShortcutTick) {
-        if (newCueShortcutTick > 0) navController.navigateToTab(CuesRoutes.ASK)
-    }
-    androidx.compose.runtime.LaunchedEffect(startRoutineShortcutId) {
-        val routineId = startRoutineShortcutId ?: return@LaunchedEffect
-        onStartRoutineShortcutConsumed()
+    /**
+     * The one in-app and launcher/App Function-equivalent route for running
+     * a shortcut. It deliberately accepts only a reviewed, armed manual cue;
+     * an AI suggestion can get a user to Review, never around it.
+     */
+    fun startManualCue(routineId: String) {
         val routine = cueService.list().firstOrNull { it.id == routineId }
         when {
             routine == null -> notify("That cue no longer exists.")
@@ -452,6 +461,18 @@ private fun CuesApp(
                 refresh()
             }
         }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
+        if (incomingScreenText != null) navController.navigateToTab(CuesRoutes.ASK)
+    }
+    androidx.compose.runtime.LaunchedEffect(newCueShortcutTick) {
+        if (newCueShortcutTick > 0) navController.navigateToTab(CuesRoutes.ASK)
+    }
+    androidx.compose.runtime.LaunchedEffect(startRoutineShortcutId) {
+        val routineId = startRoutineShortcutId ?: return@LaunchedEffect
+        onStartRoutineShortcutConsumed()
+        startManualCue(routineId)
     }
 
     /**
@@ -541,6 +562,28 @@ private fun CuesApp(
                 "NPU attempt failed: ${e.message ?: e::class.simpleName}"
             }
             isProbingNpu = false
+        }
+    }
+
+    /**
+     * A user-triggered readiness check for the installed authoring model.
+     * This only initializes the engine; it does not generate text, create a
+     * turn, or make a model-derived decision. The runner itself chooses the
+     * conservative NPU → GPU → CPU order and reports the tier that loaded.
+     */
+    fun warmOnDeviceModelNow() {
+        if (!onDeviceModelEnabled) {
+            notify("Enable Gemma for drafting before warming it.")
+            return
+        }
+        scope.launch {
+            val result = onDeviceModelRunner.warm()
+            notify(
+                result.fold(
+                    onSuccess = { tier -> "Gemma is warm on ${tier.name}." },
+                    onFailure = { error -> "Gemma could not warm: ${error.message ?: error::class.simpleName}" },
+                ),
+            )
         }
     }
 
@@ -682,6 +725,8 @@ private fun CuesApp(
                         forecast = forecast,
                         titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
                         drafterLabel = cueService.diagnostics().setup.friendlyLabel(),
+                        onCreateCue = { navController.navigateToTab(CuesRoutes.ASK) },
+                        onStartManualCue = { routine -> startManualCue(routine.id) },
                         onOpenRoutine = { routine -> navController.navigate(CuesRoutes.cueDetail(routine.id)) },
                         onArmPause = { routine ->
                             val result = if (routine.status == RoutineStatus.PAUSED) cueService.resume(routine.id)
@@ -731,7 +776,16 @@ private fun CuesApp(
                     AskScreen(
                         isDrafting = isDrafting,
                         onDraft = ::draft,
-                        drafterLabel = cueService.diagnostics().setup.friendlyLabel(),
+                        modelAvailability = cueService.diagnostics().setup.model,
+                        runnerState = runnerState,
+                        // A prior request's trace is a receipt, not progress
+                        // for the request currently running.
+                        lastTrace = if (isDrafting) null else lastDraftTrace,
+                        onDeviceModelEnabled = onDeviceModelEnabled,
+                        onToggleOnDeviceModel = { enabled ->
+                            onDeviceModelEnabled = enabled
+                            onToggleOnDeviceModel(enabled)
+                        },
                         onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
                         onStopVoice = { localSpeechInput.finishAndDeliver() },
                         cloudAssistAvailable = cloudAssistAvailable,
@@ -922,8 +976,13 @@ private fun CuesApp(
                         canDownloadModel = modelDownloader.canDownload(),
                         isOnWifi = modelDownloader.isOnWifi(),
                         npuEligible = com.cues.app.drafting.LiteRtLmSession.npuSocEligible(),
+                        npuKnownIssue = com.cues.core.model.ModelCatalog
+                            .knownDispatchFailureFor(com.cues.app.runtime.DeviceIdentity.chipset())
+                            ?.failureNote,
+                        runnerState = runnerState,
                         onDeviceModelEnabled = onDeviceModelEnabled,
                         onToggleOnDeviceModel = { onDeviceModelEnabled = it; onToggleOnDeviceModel(it) },
+                        onWarmModel = ::warmOnDeviceModelNow,
                         onDownloadModel = ::downloadModelNow,
                         onChooseModel = { modelPicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
                         onCancelDownloadModel = if (modelProvisionState is com.cues.core.inference.ModelProvisionState.Downloading) ::cancelModelDownloadNow else null,
