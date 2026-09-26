@@ -78,6 +78,7 @@ fun AskScreen(
     onToggleCloudAssist: () -> Unit = {},
     onStartCloudVoice: (onResult: (original: String, translated: String) -> Unit, onError: (String) -> Unit) -> Unit =
         { _, onError -> onError("Cloud assist is not available.") },
+    onStopCloudVoice: () -> Unit = {},
     isTryingCloudAssist: Boolean = false,
     onTranslateReadback: (englishText: String, onDone: (String) -> Unit, onError: (String) -> Unit) -> Unit =
         { _, _, onError -> onError("Cloud assist is not available.") },
@@ -109,29 +110,21 @@ fun AskScreen(
     val startVoice = {
         speechMessage = null
         isListening = true
-        onStartVoice(
-            { transcript -> text = transcript; isListening = false },
-            { message -> speechMessage = message; isListening = false },
-        )
-    }
-    val startCloudVoice = {
-        speechMessage = null
-        cloudOriginalTranscript = null
-        isCloudListening = true
-        onStartCloudVoice(
-            { original, translated ->
-                text = translated
-                cloudOriginalTranscript = original
-                isCloudListening = false
-            },
-            { message -> speechMessage = message; isCloudListening = false },
-        )
+        isCloudListening = cloudAssistEnabled
+        if (cloudAssistEnabled) {
+            onStartCloudVoice(
+                { original, translated -> text = translated; cloudOriginalTranscript = original; isListening = false; isCloudListening = false },
+                { message -> speechMessage = message; isListening = false; isCloudListening = false },
+            )
+        } else {
+            onStartVoice(
+                { transcript -> text = transcript; isListening = false; isCloudListening = false },
+                { message -> speechMessage = message; isListening = false; isCloudListening = false },
+            )
+        }
     }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startVoice() else speechMessage = "Microphone access was not granted. Type your cue instead."
-    }
-    val cloudMicrophonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startCloudVoice() else speechMessage = "Microphone access was not granted. Type your cue instead."
     }
     var pendingDeviceDraft by remember { mutableStateOf<String?>(null) }
     val bluetoothPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -173,13 +166,23 @@ fun AskScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Cloud language assist (Sarvam)", style = CuesType.labelSmall, color = t.inkPrimary)
                         Text(
-                            "Optional and off by default. Sends audio/text to Sarvam over the network — see docs/PERMISSIONS.md.",
+                            "Translation only. Sends audio/text to Sarvam, then Gemma and the local parser handle the cue — switch off for offline authoring.",
                             style = CuesType.labelSmall,
                             color = t.inkSlate,
                         )
                     }
                     Switch(checked = cloudAssistEnabled, onCheckedChange = { onToggleCloudAssist() })
                 }
+                Text(
+                    when {
+                        cloudAssistEnabled && onDeviceModelEnabled -> "Routing: Sarvam translates → Gemma normalizes → parser validates."
+                        cloudAssistEnabled -> "Routing: Sarvam translates → parser validates (Gemma is off)."
+                        onDeviceModelEnabled -> "Routing: Gemma normalizes → local parser validates."
+                        else -> "Routing: local grammar parser only (offline)."
+                    },
+                    style = CuesType.labelSmall,
+                    color = t.inkSlate,
+                )
             }
         }
 
@@ -214,14 +217,15 @@ fun AskScreen(
                         enabled = true,
                         onClick = {
                             isListening = false
-                            onStopVoice()
+                            isCloudListening = false
+                            if (cloudAssistEnabled) onStopCloudVoice() else onStopVoice()
                         },
                         modifier = Modifier.weight(1f),
                     )
                 } else {
                     com.cues.app.ui.components.GhostButton(
                         text = "Speak",
-                        enabled = !isCloudListening && !isDrafting,
+                        enabled = !isDrafting,
                         onClick = {
                             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                                 startVoice()
@@ -243,20 +247,6 @@ fun AskScreen(
         }
 
         if (cloudAssistEnabled) {
-            item {
-                com.cues.app.ui.components.GhostButton(
-                    text = if (isCloudListening) "Listening…" else "Speak (your language, online)",
-                    enabled = !isListening && !isCloudListening && !isDrafting,
-                    onClick = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            startCloudVoice()
-                        } else {
-                            cloudMicrophonePermission.launch(Manifest.permission.RECORD_AUDIO)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
             cloudOriginalTranscript?.let { original ->
                 item {
                     Text(
@@ -282,8 +272,8 @@ fun AskScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = t.doYellow, trackColor = t.raised)
                     Text(
                         when {
+                            isListening && isCloudListening -> "Listening, then sending to Sarvam (online)…"
                             isListening -> "Listening on this phone…"
-                            isCloudListening -> "Listening, then sending to Sarvam (online)…"
                             isTryingCloudAssist -> "Trying cloud assist (Sarvam, online)…"
                             else -> "Turning your words into a reviewable cue…"
                         },

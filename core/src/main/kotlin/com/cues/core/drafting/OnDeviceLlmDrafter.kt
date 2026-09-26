@@ -68,7 +68,8 @@ class OnDeviceLlmDrafter(
         val output = session.generate(prompt(text))
         // The model proposes a sentence in the same closed grammar; parsing it
         // keeps capabilities and validation independent of model prose.
-        when (val parsed = parser.parse(output.text)) {
+        val candidate = cleanCandidate(output.text)
+        when (val parsed = parser.parse(candidate)) {
             is DraftResult.Drafted -> parsed.copy(
                 source = id, consumed = emptyList(), clauses = emptyList(), inferenceReport = output.report,
             )
@@ -82,5 +83,31 @@ class OnDeviceLlmDrafter(
     }
 
     private fun prompt(text: String): String =
-        "Return one Cues request using only supported trigger, condition, action and ending vocabulary. Request: $text"
+        """
+            You are the Cues on-device cue normalizer. Convert the user's request into exactly one
+            plain-English sentence that GrammarParser can understand. Preserve the meaning, but
+            use only supported trigger, condition, action, and ending vocabulary.
+            Preserve named devices exactly (earbuds, headphones, watch, charger, Wi-Fi); never
+            replace a named device with the generic word "device" and never invent a device.
+            Never return DSL, code, JSON, labels, explanations, markdown, or multiple alternatives.
+            Good examples:
+            - when my charger connects, silence notifications for 10 minutes
+            - when my earbuds connect, start a focus timer for 25 minutes
+            - when I enter the office, silence notifications until I leave
+            - every weekday at 9 AM, remind me to start a focus timer for 25 minutes
+            - when my phone connects to any Wi-Fi, start a focus timer for 25 minutes
+            - while I am in the office, silence notifications until I leave
+            User request: $text
+        """.trimIndent()
+
+    /** Keep harmless model wrappers from preventing the deterministic parser from seeing the sentence. */
+    private fun cleanCandidate(raw: String): String = raw
+        .replace("```", "")
+        .trim()
+        .removePrefix("Output:")
+        .removePrefix("Cue:")
+        .trim()
+        .removeSurrounding("\"", "\"")
+        .removeSurrounding("'", "'")
+        .trim()
 }

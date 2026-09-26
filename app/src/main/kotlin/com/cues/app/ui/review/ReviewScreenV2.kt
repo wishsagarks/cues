@@ -294,6 +294,7 @@ private fun PermissionCheckRowV2(capability: Capability, isMissing: Boolean, onC
                         when (capability) {
                             Capability.POST_NOTIFICATIONS -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             Capability.BLUETOOTH_CONNECT -> permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                            Capability.LOCATION_FOREGROUND -> permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                             else -> context.startActivity(capability.settingsIntent(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         }
                     })
@@ -310,6 +311,7 @@ private fun PermissionCheckRowV2(capability: Capability, isMissing: Boolean, onC
 private fun Capability.grantLabel(): String? = when (this) {
     Capability.POST_NOTIFICATIONS -> "Allow"
     Capability.BLUETOOTH_CONNECT -> "Allow"
+    Capability.LOCATION_FOREGROUND -> "Allow"
     Capability.NOTIFICATION_POLICY_ACCESS -> "Open settings"
     Capability.EXACT_ALARM -> "Open settings"
     else -> null

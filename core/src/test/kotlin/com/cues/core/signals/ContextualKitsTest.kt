@@ -50,11 +50,15 @@ class ContextualKitsTest {
         assertEquals(Truth.MATCH, Evaluator.evaluate(low, Fixtures.connect(), Fixtures.snapshot().copy(batteryPercent = Fixtures.known(20, source = ContextSource.BATTERY_MANAGER)), FreshnessPolicy.NONE).truth)
     }
 
-    @Test fun `place movement is semantic and its trigger derives background capability`() {
+    @Test fun `place movement is semantic and its trigger derives foreground location capability`() {
         ContextualStores.places = Places(Place("gym", "Gym", 1, 12.1, 77.1, 150))
         val trigger = Trigger.PlaceTransition("gym", 1, "Gym", PlaceTransitionKind.ENTER)
         val routine = Fixtures.heroRoutine().copy(trigger = trigger, conditions = emptyList())
-        assertTrue(Capability.LOCATION_BACKGROUND in Normalizer.normalize(routine).requiredCapabilities)
+        // Delivery is PlaceWatcherService, a foreground service, not a
+        // GeofencingClient/ACCESS_BACKGROUND_LOCATION callback — see
+        // CLEANUP.md CL-13 — so only foreground location is required.
+        assertTrue(Capability.LOCATION_FOREGROUND in Normalizer.normalize(routine).requiredCapabilities)
+        assertFalse(Capability.LOCATION_BACKGROUND in Normalizer.normalize(routine).requiredCapabilities)
         val digest = Normalizer.digest(routine)
         ContextualStores.places = Places(Place("gym", "Gym", 2, 12.2, 77.1, 150))
         assertFalse(digest == Normalizer.digest(routine))

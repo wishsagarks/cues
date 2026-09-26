@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -42,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
@@ -49,7 +52,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.cues.app.runtime.AdapterStatus
@@ -452,29 +454,38 @@ internal fun TemplateGallery(onPick: (Template) -> Unit) {
     if (templates.isEmpty()) return
     val haptics = LocalHapticFeedback.current
     val t = com.cues.app.ui.theme.cuesTokens
+    var expanded by remember { mutableStateOf(false) }
     Column {
-        Text(
-            "TRY A TEMPLATE",
-            style = com.cues.app.ui.theme.CuesType.labelSmall,
-            color = t.inkSlate,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(templates, key = { it.label }) { template ->
-                Surface(
-                    color = t.island,
-                    contentColor = t.inkSecondary,
-                    shape = com.cues.app.ui.theme.CuesShape.capsule,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, t.hairline),
-                    modifier = Modifier.clickable {
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onPick(template)
-                    },
+        Text("START FROM A TEMPLATE", style = com.cues.app.ui.theme.CuesType.labelSmall, color = t.inkSlate)
+        Box {
+            Surface(
+                color = t.island,
+                contentColor = t.inkPrimary,
+                shape = com.cues.app.ui.theme.CuesShape.card,
+                border = androidx.compose.foundation.BorderStroke(1.dp, t.hairline),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .clickable { expanded = true },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        template.label,
-                        style = com.cues.app.ui.theme.CuesType.labelSmall,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    Text("Choose a starting cue…", style = com.cues.app.ui.theme.CuesType.body)
+                    Text("⌄", style = com.cues.app.ui.theme.CuesType.title, color = t.doYellow)
+                }
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                templates.forEach { template ->
+                    DropdownMenuItem(
+                        text = { Text(template.label) },
+                        onClick = {
+                            expanded = false
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onPick(template)
+                        },
                     )
                 }
             }

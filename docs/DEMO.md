@@ -49,6 +49,7 @@ out loud rather than smoothed over.
 | 5 | Disconnect, then reconnect within 20 s | "Kept going". No second timer | R1 |
 | 6 | Disconnect and wait | The session ends after the grace. The receipt says "Released our quiet rule". Any user DND stays on | R2 |
 | 7 | Open Receipts and read one aloud | The start and end reasons, rendered from reason codes | — |
+| 7b | Draft "When I arrive at Office, text Mum I'm home" | Review: WHEN a place arrival, DO a drafted message handed to the user's own messaging app (never auto-sent), and a new "foreground location" row in Required access with its own grant button | CL-13 |
 | 8 | Draft "When my earbuds connect start a timer and text Mum" | "text, Mum" flagged as unaccounted. Approve stays disabled | — |
 | 9 | Ask Cues: "book me a cab home" | "That is a Jovi task", plus a handoff card. Tap it and say what opened | CL-24 / M7 |
 | 10 | Share the cue as a Cue Card and scan it on a second phone | It imports as a DRAFT bound to that phone's own earbuds, not armed | M9 |
@@ -61,6 +62,7 @@ Don't retry on stage more than once.
 
 | Feature | Why it's cut | Tracked |
 |---|---|---|
+| Place arrival trigger fires live (walking into the geofence on stage) | R13 (delivery under the OEM battery policy with the screen off) has not been run on the loaner. Draft, review, and arm the cue live — that part is real and verified the moment CL-13 ships — but the live-fire step stays cut until R13 passes; show the recorded clip (below) instead and say so | CL-13, R13 |
 | Accepting a coach suggestion | Fixed and tested in `:core`; the `:app` wiring is written but uncompiled, so confirm one Accept end to end on the loaner before relying on it live — show the evidence card only until then | CL-27 |
 | Actions that wait until you're at the phone | The attention port is not wired, so they don't wait | CL-25, M8 |
 | A utility binding inside a cue | Drafting works now ("turn on eye protection" — CL-23 item 7). Still cut live: the accessibility replay itself is unverified on any device | CL-23 |
@@ -82,4 +84,8 @@ Don't retry on stage more than once.
   from the commit named in its header.
 - **Phone footage.** Not yet recorded. Record steps 1–7 on the loaner once
   R1/R2 pass, with "Recorded" burned into the video, and rehearse once from
-  the phone and once from the footage (Sprint 5, task 5.8).
+  the phone and once from the footage (Sprint 5, task 5.8). Once R13 passes,
+  record a second clip of an actual place arrival — screen off, app
+  backgrounded — firing the drafted-message action and landing a Receipts
+  entry; burn "Recorded" into it the same way. Until R13 passes, step 7b
+  stays live only through "armed" and the arrival itself is not claimed.

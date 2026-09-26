@@ -139,7 +139,9 @@ class SarvamClient(private val apiKey: String) {
             requestMethod = "POST"
             doOutput = true
             connectTimeout = 10_000
-            readTimeout = 30_000
+            // Match the authoring budget so a cancelled UI request cannot
+            // leave a socket blocked for an extra 18 seconds.
+            readTimeout = 12_000
             setRequestProperty("api-subscription-key", apiKey)
             setRequestProperty("Content-Type", contentType)
         }

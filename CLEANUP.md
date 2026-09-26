@@ -1539,10 +1539,9 @@ chat model consulted as an explicit third opinion when the offline
 grammar/on-device-model pair disagrees or both fail.
 
 **What makes this safe, by construction:**
-- Off by default. `AskScreen`'s "Cloud language assist" switch only appears
-  when `BuildConfig.SARVAM_API_KEY` is non-blank, and even then defaults to
-  unchecked every launch (`CuesApplication.cloudAssistAvailable`,
-  `MainActivity.kt`'s `cloudAssistEnabled` state).
+- Configured-key default. `AskScreen`'s "Cloud language assist" switch only
+  appears when `BuildConfig.SARVAM_API_KEY` is non-blank, and starts enabled
+  when present; the user can still turn it off for an offline session.
 - Authoring-time only. Every Sarvam call happens before approval — regional
   voice input translates into the existing `GrammarParser`/`OnDeviceLlmDrafter`
   pipeline unchanged, and the cloud chat drafter (`SarvamChatDrafter`,

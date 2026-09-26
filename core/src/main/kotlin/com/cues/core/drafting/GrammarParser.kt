@@ -55,6 +55,16 @@ class GrammarParser(
         var trigger = parseTrigger(normalized, consumed)
 
         if (trigger is AmbiguousDevice) {
+            if (trigger.candidates.isEmpty()) {
+                return DraftResult.NeedsClarification(
+                    id,
+                    "Pair the device named in this cue in Bluetooth, then try again. Cues will bind it to that exact device.",
+                    about = "trigger.device",
+                    deviceCandidates = emptyList(),
+                    consumed = consumed,
+                    clauses = ClauseAccounting.classify(text, consumed),
+                )
+            }
             return DraftResult.NeedsClarification(
                 id,
                 "Which device did you mean: ${trigger.candidates.joinToString(", ") { it.label }}?",
@@ -350,9 +360,28 @@ class GrammarParser(
     }
 
     private fun parseScheduledDays(text: String, consumed: MutableList<IntRange>): Set<Day> {
-        val match = Regex("\\b(?:on\\s+)?(weekdays?|weekends?)\\b").find(text) ?: return emptySet()
-        consumed += match.range
-        return if (match.value.contains("weekend")) WEEKEND else WEEKDAYS
+        Regex("\\bevery\\s+(day|weekday|weekdays|weekend|weekends)\\b").find(text)?.let { match ->
+            consumed += match.range
+            return when (match.groupValues[1]) {
+                "weekend", "weekends" -> WEEKEND
+                "weekday", "weekdays" -> WEEKDAYS
+                else -> Day.entries.toSet()
+            }
+        }
+        Regex("\\b(?:on\\s+)?(weekdays?|weekends?)\\b").find(text)?.let { match ->
+            consumed += match.range
+            return if (match.value.contains("weekend")) WEEKEND else WEEKDAYS
+        }
+        // Named days after "on" remain conditions (including on a scheduled
+        // trigger); only explicit "every Monday" belongs to the trigger.
+        val named = DAY_WORDS.mapNotNull { (word, day) ->
+            Regex("\\bevery\\s+$word(?:s)?\\b").find(text)?.let { it to day }
+        }
+        if (named.isNotEmpty()) {
+            named.forEach { consumed += it.first.range }
+            return named.map { it.second }.toSet()
+        }
+        return emptySet()
     }
 
     private fun parseDays(text: String, consumed: MutableList<IntRange>): Condition.DaysOfWeek? {
@@ -366,7 +395,7 @@ class GrammarParser(
         }
 
         val named = DAY_WORDS.mapNotNull { (word, day) ->
-            Regex("\\b$word\\b").find(text)?.let { it to day }
+            Regex("\\b$word(?:s)?\\b").find(text)?.let { it to day }
         }
         if (named.isEmpty()) return null
         named.forEach { consumed += it.first.range }

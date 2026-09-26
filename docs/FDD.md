@@ -120,10 +120,9 @@ An opt-in "cloud language assist" backed by Sarvam AI (translate, speech-to-text
 text-to-speech, chat completion) exists for regional-Indian-language cue
 drafting, a translated read-back of the assistant's reply, and a cloud chat
 model consulted as an explicit third opinion when the offline
-grammar/on-device-model pair disagrees or both fail. It is off by default even
-when a key is configured — the switch only appears when
-`BuildConfig.SARVAM_API_KEY` is non-blank, and still starts unchecked every
-launch.
+grammar/on-device-model pair disagrees or both fail. When a key is configured,
+Ask starts with Sarvam enabled as the default translation/cue-authoring path;
+the visible switch can still turn it off for an offline session.
 
 Every Sarvam call happens at authoring time only, before approval. It does not
 change where the trust boundary sits: nothing downstream of approval consults

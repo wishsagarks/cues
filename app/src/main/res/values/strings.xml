@@ -8,6 +8,11 @@
     <string name="session_notification_remaining">%1$d minutes left</string>
     <string name="session_notification_stop">Stop</string>
 
+    <string name="place_watcher_channel_name">Watching for a place</string>
+    <string name="place_watcher_notification_title">Cues is watching for a place</string>
+    <string name="place_watcher_notification_text">Arrival or exit: %1$s</string>
+    <string name="place_watcher_notification_fallback">a saved place</string>
+
     <string name="utility_bindings_accessibility_description">
         Lets Cues read the current screen once when you ask it to ("Cue this
         screen"), and replay macros you teach it to turn Eye protection,

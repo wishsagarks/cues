@@ -39,10 +39,15 @@ class AndroidCapabilityProvider(private val context: Context) : CapabilityProvid
         add(Capability.BATTERY_STATE)
         if (accessibilityServiceEnabled()) add(Capability.ACCESSIBILITY_SERVICE)
         if (readCalendarGranted()) add(Capability.READ_CALENDAR)
+        if (fineLocationGranted()) add(Capability.LOCATION_FOREGROUND)
     }
 
     private fun readCalendarGranted(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun fineLocationGranted(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
 
     /**

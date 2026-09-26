@@ -55,18 +55,16 @@ class SarvamHttpChatSession(private val client: SarvamClient) : SarvamChatSessio
 }
 
 /**
- * Proposes a routine by asking Sarvam's cloud chat model for one sentence in
- * the closed grammar, then handing that sentence to [GrammarParser] — exactly
+ * Proposes a routine by asking Sarvam's cloud chat model for one plain-English
+ * sentence in the closed grammar, then handing that sentence to [GrammarParser] — exactly
  * [com.cues.core.drafting.OnDeviceLlmDrafter]'s pattern, on purpose. The model's own words are never
  * trusted as structure, only as candidate prose for the same deterministic
  * compiler every other draft goes through, and [DifferentialDrafter.guarded]
  * (or the app-level cloud-assist fallback that calls this drafter directly)
  * independently validates the result before it can reach Review.
  *
- * This is not part of the default drafting pipeline. It is consulted only
- * when the user has opted into cloud assist and the offline drafters
- * disagreed or both failed — see CuesApplication's `tryCloudAssist` and
- * CLEANUP.md CL-35.
+ * When enabled, this can be the default drafting path; an invalid or failed
+ * cloud response still falls back to the local parser/Gemma path.
  */
 class SarvamChatDrafter(
     private val session: SarvamChatSession = UnconfiguredSarvamChatSession(),
@@ -77,7 +75,7 @@ class SarvamChatDrafter(
 
     override suspend fun draft(text: String): DraftResult = try {
         val output = session.complete(prompt(text))
-        when (val parsed = parser.parse(output.text)) {
+        when (val parsed = parser.parse(cleanCandidate(output.text))) {
             is DraftResult.Drafted -> parsed.copy(
                 source = id, consumed = emptyList(), clauses = emptyList(), inferenceReport = output.report,
             )
@@ -90,6 +88,26 @@ class SarvamChatDrafter(
         DraftResult.Failed(id, e.message ?: "Cloud assist could not produce a draft.")
     }
 
-    private fun prompt(text: String): String =
-        "Return one Cues request using only supported trigger, condition, action and ending vocabulary. Request: $text"
+    private fun prompt(text: String): String = """
+        You are Cues' cue translator. Return exactly one plain-English sentence
+        that the Cues grammar parser can understand. Preserve the user's meaning.
+        Never return code, JSON, labels, semicolons, a DSL, explanations, or markdown.
+        Use the same style as these valid examples:
+        - when my charger connects, silence notifications for 10 minutes
+        - when my earbuds connect, start a focus timer for 25 minutes
+        - when I enter the office, silence notifications until I leave
+        - every weekday at 9 AM, remind me to start a focus timer for 25 minutes
+        - while I am in the office, silence notifications until I leave
+        User request: $text
+    """.trimIndent()
+
+    private fun cleanCandidate(raw: String): String = raw
+        .replace("```", "")
+        .trim()
+        .removePrefix("Output:")
+        .removePrefix("Cue:")
+        .trim()
+        .removeSurrounding("\"", "\"")
+        .removeSurrounding("'", "'")
+        .trim()
 }

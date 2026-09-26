@@ -5,9 +5,12 @@
     <!--
       Every permission here is required by a specific entry in the action
       registry or a specific event adapter. There is no microphone-in-the-
-      background permission, no notification-listener access and no location:
-      context in Cues is declared, and a permission we do not need is a promise
-      we would have to keep explaining.
+      background permission and no notification-listener access. Location is
+      requested only in the foreground (PlaceWatcherService, visible as its
+      own notification), only for places the user explicitly saved, and only
+      while a cue using that place is armed — never inferred, never
+      background/kill-proof (see CLEANUP.md CL-13). A permission we do not
+      need is a promise we would have to keep explaining.
     -->
 
     <!-- Resolving the chosen paired device and observing its connection. -->
@@ -58,6 +61,18 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!--
+      A place-arrival cue's declared radius (CL-13). Foreground-only by
+      design: PlaceWatcherService reads location while its own notification
+      is visible, not via ACCESS_BACKGROUND_LOCATION/GeofencingClient — see
+      the file header of PlaceWatcherService.kt for why. No coarse-only path
+      is offered because place-radius matching (100-1000m) needs fine
+      accuracy to be honest about entry/exit.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!--
       "Point at your timetable" (Task 12). One-shot, user-invoked capture
@@ -178,6 +193,18 @@
                 android:value="Running a user-approved focus session with a visible countdown." />
         </service>
 
+        <!--
+          Foreground-only place-arrival watcher (CL-13). Started only while
+          at least one armed cue references a place; stopped otherwise. See
+          PlaceWatcherService.kt for why this is plain LocationManager
+          behind a foreground service rather than Play Services
+          GeofencingClient.
+        -->
+        <service
+            android:name=".runtime.PlaceWatcherService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <service
             android:name=".runtime.CueTileService"
             android:exported="true"
@@ -223,6 +250,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <!-- OEM-safe fallback: derive charging edges from battery state
+                     when protected power broadcasts are dropped. -->
+                <action android:name="android.intent.action.BATTERY_CHANGED" />
             </intent-filter>
         </receiver>
 

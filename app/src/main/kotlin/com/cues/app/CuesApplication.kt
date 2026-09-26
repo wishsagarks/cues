@@ -11,9 +11,6 @@ import com.cues.app.devkit.ExternalGemmaGate
 import com.cues.app.drafting.GatedLlmSession
 import com.cues.app.drafting.LiteRtLmSession
 import com.cues.app.drafting.ModelDownloader
-import com.cues.app.drafting.SarvamChatDrafter
-import com.cues.app.drafting.SarvamHttpChatSession
-import com.cues.app.drafting.UnconfiguredSarvamChatSession
 import com.cues.app.net.SarvamClient
 import com.cues.app.runtime.AndroidActionExecutor
 import com.cues.app.runtime.AndroidCapabilityProvider
@@ -22,13 +19,11 @@ import com.cues.app.runtime.AudioOutputAdapter
 import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import com.cues.app.runtime.MonitoringRepository
+import com.cues.app.runtime.PlaceAdapter
 import com.cues.app.runtime.TimeAdapter
 import com.cues.app.runtime.WifiAdapter
 import com.cues.core.CueService
-import com.cues.core.compile.Validator
-import com.cues.core.drafting.ClauseAccounting
 import com.cues.core.drafting.DifferentialDrafter
-import com.cues.core.drafting.DraftResult
 import com.cues.core.drafting.GrammarParser
 import com.cues.core.drafting.InferenceOutput
 import com.cues.core.inference.InferenceCost
@@ -484,7 +479,7 @@ class CuesApplication : Application() {
      * CL-35: opt-in cloud assist. `null` whenever no key is configured — the
      * honest default, same shape as [modelFile]'s absence for the on-device
      * model. Nothing here is called unless a caller (the Ask flow's cloud
-     * voice entry point, or [tryCloudAssist] below) explicitly reaches for
+     * voice entry point) explicitly reaches for
      * it; process start never touches the network.
      */
     private val sarvamClient: SarvamClient? by lazy {
@@ -492,36 +487,6 @@ class CuesApplication : Application() {
     }
 
     val cloudAssistAvailable: Boolean get() = sarvamClient != null
-
-    private val sarvamChatDrafter by lazy {
-        SarvamChatDrafter(session = sarvamClient?.let(::SarvamHttpChatSession) ?: UnconfiguredSarvamChatSession())
-    }
-
-    /**
-     * The explicit, opt-in third opinion (Architecture decision 2 in
-     * docs/FDD.md's "Optional cloud assist" section): called only from the
-     * app layer, only after [drafter] (the offline pair) has already
-     * disagreed or both failed, and only if the caller has cloud assist
-     * turned on. Never wired into [drafter] itself — [DifferentialDrafter] is
-     * a strict pairwise comparison and stays that way.
-     *
-     * Guards its result exactly like [DifferentialDrafter.guarded] guards the
-     * on-device model: Sarvam's prose does not get to vouch for its own
-     * structure, so a cloud draft that fails independent validation is
-     * reported as failed, not shown.
-     */
-    suspend fun tryCloudAssist(text: String): DraftResult {
-        val result = when (val r = sarvamChatDrafter.draft(text)) {
-            is DraftResult.Drafted -> ClauseAccounting.stamp(text, r)
-            else -> r
-        }
-        val unvalidated = result is DraftResult.Drafted && !Validator.validate(result.routine).isValid
-        return if (unvalidated) {
-            DraftResult.Failed(DraftSourceId.SARVAM_CLOUD, "Cloud assist produced a cue that did not pass independent validation.")
-        } else {
-            result
-        }
-    }
 
     val cueService: CueService by lazy {
         CueService(
@@ -563,6 +528,7 @@ class CuesApplication : Application() {
             "wifi" to WifiAdapter(this),
             "time" to timeAdapter,
             "audio-output" to AudioOutputAdapter(this),
+            "place" to PlaceAdapter(this),
         ))
     }
 

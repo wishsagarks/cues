@@ -18,6 +18,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +70,6 @@ import com.cues.core.CueService
 import com.cues.core.approval.ArmResult
 import com.cues.core.approval.DeleteResult
 import com.cues.core.drafting.PairedDevice
-import com.cues.core.model.DraftSourceId
 import com.cues.core.model.AudioKind
 import com.cues.core.model.Capability
 import com.cues.core.model.Condition
@@ -91,6 +91,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.ZoneId
 import java.util.UUID
 
@@ -199,7 +200,6 @@ class MainActivity : ComponentActivity() {
                     pairedDevices = app::pairedDevices,
                     replySpeaker = replySpeaker,
                     cloudAssistAvailable = app.cloudAssistAvailable,
-                    tryCloudAssist = app::tryCloudAssist,
                     sarvamSpeechInput = sarvamSpeechInput,
                     sarvamReadback = sarvamReadback,
                     translateToEnglish = { text -> sarvamClient?.translate(text, sourceLanguageCode = "auto", targetLanguageCode = "en-IN")?.translatedText ?: text },
@@ -290,7 +290,6 @@ private fun CuesApp(
     pairedDevices: () -> List<PairedDevice>,
     replySpeaker: com.cues.app.voice.ReplySpeaker,
     cloudAssistAvailable: Boolean = false,
-    tryCloudAssist: suspend (String) -> com.cues.core.drafting.DraftResult = { com.cues.core.drafting.DraftResult.Failed(DraftSourceId.SARVAM_CLOUD, "Cloud assist is not configured.") },
     sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null,
     sarvamReadback: com.cues.app.voice.SarvamReadback? = null,
     translateToEnglish: suspend (String) -> String = { it },
@@ -333,11 +332,15 @@ private fun CuesApp(
     val conversation = remember { Conversation() }
     var assistantTurns by remember { mutableStateOf<List<Turn>>(emptyList()) }
     var speakReplies by remember { mutableStateOf(false) }
-    // CL-35: off by default even when a key is configured — cloud assist is
-    // an explicit, per-session opt-in, not a standing preference read from
-    // storage. Mirrors speakReplies' own in-memory-only pattern above.
-    var cloudAssistEnabled by remember { mutableStateOf(false) }
+    // CL-35: enabled by default when a key is configured. The visible switch
+    // remains an immediate per-session opt-out for offline authoring.
+    // A configured Sarvam key is an explicit developer/user opt-in. Once the
+    // key exists, make Sarvam the default language-assist path in Ask rather
+    // than hiding the controls behind a second toggle; the user can still
+    // switch it off for an offline session.
+    var cloudAssistEnabled by remember { mutableStateOf(cloudAssistAvailable) }
     var isTryingCloudAssist by remember { mutableStateOf(false) }
+    var cloudVoiceJob by remember { mutableStateOf<Job?>(null) }
     val cloudAssistOn = cloudAssistEnabled && cloudAssistAvailable
     var utilityTestResult by remember { mutableStateOf<String?>(null) }
     val coachPolicy = remember { CoachPolicy(store) }
@@ -490,7 +493,8 @@ private fun CuesApp(
             onError("Cloud assist is not available.")
             return
         }
-        scope.launch {
+        cloudVoiceJob?.cancel()
+        cloudVoiceJob = scope.launch {
             when (val result = input.listen()) {
                 is com.cues.core.ports.SpeechResult.Recognized -> {
                     val translated = try {
@@ -510,6 +514,11 @@ private fun CuesApp(
                     onError("${result.reason} Type your cue instead.")
             }
         }
+    }
+
+    fun stopCloudVoice() {
+        cloudVoiceJob?.cancel()
+        cloudVoiceJob = null
     }
 
     /**
@@ -587,6 +596,20 @@ private fun CuesApp(
         }
     }
 
+    // Gemma's yellow state means "enabled and ready, but still cold". Warm it
+    // as soon as that state is entered so the first real cue does not pay the
+    // multi-hundred-MB engine load. The runner's mutex/load gate deduplicates
+    // this with an in-flight draft or another warm request, and failures stay
+    // visible in RunnerState rather than retrying in a loop.
+    LaunchedEffect(onDeviceModelEnabled, modelProvisionState) {
+        if (onDeviceModelEnabled &&
+            modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed &&
+            runnerState is com.cues.app.drafting.RunnerState.Cold
+        ) {
+            onDeviceModelRunner.warm()
+        }
+    }
+
     fun downloadModelNow() {
         modelProvisionState = com.cues.core.inference.ModelProvisionState.Downloading(0, null)
         modelDownloadJob = scope.launch {
@@ -617,28 +640,6 @@ private fun CuesApp(
         }
     }
 
-    /**
-     * The explicit, opt-in "third opinion" (docs/FDD.md's "Optional cloud
-     * assist" section): reached only from here, only after the offline pair
-     * already disagreed or both failed, and only with cloud assist on.
-     * [tryCloudAssist] independently validates its own result, so a
-     * [com.cues.core.drafting.DraftResult.Drafted] here is exactly as trusted
-     * as any other draft reaching Review.
-     */
-    suspend fun offerCloudAssist(fallbackMessage: String, text: String) {
-        isTryingCloudAssist = true
-        when (val result = tryCloudAssist(text)) {
-            is com.cues.core.drafting.DraftResult.Drafted -> {
-                missingCapabilities = emptySet()
-                reviewDraft = result.routine
-                reviewDraftTrace = result.trace
-                navController.navigate(CuesRoutes.REVIEW)
-            }
-            else -> notify(fallbackMessage)
-        }
-        isTryingCloudAssist = false
-    }
-
     fun draft(text: String) {
         isDrafting = true
         scope.launch {
@@ -647,7 +648,17 @@ private fun CuesApp(
             // used to leave isDrafting stuck true, with no way back to a
             // usable Ask screen short of leaving and reopening it.
             try {
-                val turn = cueService.converse(conversation, text)
+                // Sarvam is translation only. Once text is English, every
+                // template and spoken request goes through the same local
+                // Gemma → GrammarParser → validator pipeline. If translation
+                // is unavailable or times out, the original text is retained
+                // so the parser/Gemma can still make the best local attempt.
+                val translatedText = if (cloudAssistOn) {
+                    runCatching {
+                        withTimeoutOrNull(12_000) { translateToEnglish(text) }
+                    }.getOrNull()?.takeUnless { it.isNullOrBlank() } ?: text
+                } else text
+                val turn = cueService.converse(conversation, translatedText)
                 assistantTurns = conversation.turns.toList()
                 if (speakReplies) replySpeaker.speak(turn.reply.text)
                 val draftedRoutine = turn.draft
@@ -672,11 +683,9 @@ private fun CuesApp(
                                 deviceSourceText = text
                                 deviceCandidates = candidates
                             }
-                            cloudAssistOn -> offerCloudAssist(turn.reply.text, text)
                             else -> notify(turn.reply.text)
                         }
                     }
-                    cloudAssistOn && turn.reply.code == ReplyCode.DRAFT_FAILED -> offerCloudAssist(turn.reply.text, text)
                     else -> notify(turn.reply.text)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -792,6 +801,7 @@ private fun CuesApp(
                         cloudAssistEnabled = cloudAssistEnabled,
                         onToggleCloudAssist = { cloudAssistEnabled = !cloudAssistEnabled },
                         onStartCloudVoice = ::startCloudVoice,
+                        onStopCloudVoice = ::stopCloudVoice,
                         isTryingCloudAssist = isTryingCloudAssist,
                         onTranslateReadback = ::startCloudReadback,
                         deviceCandidates = deviceCandidates,

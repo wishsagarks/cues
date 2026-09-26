@@ -22,6 +22,36 @@ private fun parser() = GrammarParser(PAIRED) { "routine-test" }
 class GrammarParserTest {
 
     @Test
+    fun `scheduled trigger consumes every weekday and preserves the schedule`() {
+        val drafted = assertIs<DraftResult.Drafted>(parser().parse(
+            "every weekday at 9 AM, start a 25 minute focus timer",
+        ))
+
+        assertEquals(Trigger.AtTime(LocalTimeOfDay(9, 0), WEEKDAYS), drafted.routine.trigger)
+        assertTrue(drafted.unsupported.isEmpty(), "schedule wording must not block approval")
+        assertTrue(drafted.routine.actions.any { it.actionId == ActionId.START_FOCUS_TIMER })
+    }
+
+    @Test
+    fun `scheduled trigger accepts named days and midnight`() {
+        val drafted = assertIs<DraftResult.Drafted>(parser().parse(
+            "at midnight on Mondays and Fridays, silence notifications",
+        ))
+
+        assertEquals(Trigger.AtTime(LocalTimeOfDay(0, 0)), drafted.routine.trigger)
+        assertTrue(Condition.DaysOfWeek(setOf(Day.MON, Day.FRI)) in drafted.routine.conditions)
+        assertTrue(drafted.unsupported.isEmpty())
+    }
+
+    @Test
+    fun `unpaired template device gives an actionable pairing question`() {
+        val result = GrammarParser().parse("when my earbuds connect, start a 25 minute focus timer")
+        val clarification = assertIs<DraftResult.NeedsClarification>(result)
+        assertTrue(clarification.deviceCandidates.isEmpty())
+        assertTrue(clarification.question.contains("Pair the device"))
+    }
+
+    @Test
     fun `the hero sentence compiles to the reviewed routine`() {
         val result = parser().parse(
             "When my earbuds connect after 6 PM on weekdays, start a 45-minute focus timer " +

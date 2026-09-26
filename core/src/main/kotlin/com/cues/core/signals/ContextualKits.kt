@@ -174,7 +174,13 @@ object PlaceTransitionKit : TriggerKit<Trigger.PlaceTransition> {
     override fun reverses(trigger: Trigger.PlaceTransition, event: TriggerEvent) = PlaceSupport.reverses(trigger, event)
     override fun semanticForm(trigger: Trigger.PlaceTransition) = PlaceSupport.triggerSemanticForm(trigger)
     override fun validate(trigger: Trigger.PlaceTransition) = PlaceSupport.validateTrigger(trigger)
-    override fun capabilities(trigger: Trigger.PlaceTransition) = setOf(Capability.LOCATION_FOREGROUND, Capability.LOCATION_BACKGROUND)
+    // Delivery is a foreground service (PlaceWatcherService), not a
+    // GeofencingClient/ACCESS_BACKGROUND_LOCATION callback that fires while
+    // Cues is killed — so only foreground location is actually needed.
+    // Requiring LOCATION_BACKGROUND here would show it in Review as a
+    // permanently-ungrantable requirement (no grant button exists for it)
+    // and the cue could never arm. See CLEANUP.md CL-13.
+    override fun capabilities(trigger: Trigger.PlaceTransition) = setOf(Capability.LOCATION_FOREGROUND)
     override fun describe(trigger: Trigger.PlaceTransition) = "${trigger.transition.name.lowercase()} ${trigger.label}"
     override fun rehearsalEvents(trigger: Trigger.PlaceTransition, atMillis: Long) = listOf(TriggerEvent(if (trigger.transition == PlaceTransitionKind.ENTER) EventKind.PLACE_ENTERED else EventKind.PLACE_EXITED, atMillis, deviceId = trigger.placeId, provenance = EventProvenance.REHEARSAL))
     override fun reversalEvent(trigger: Trigger.PlaceTransition, atMillis: Long) = TriggerEvent(EventKind.PLACE_EXITED, atMillis, deviceId = trigger.placeId, provenance = EventProvenance.REHEARSAL)
