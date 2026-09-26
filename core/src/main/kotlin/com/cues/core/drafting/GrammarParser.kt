@@ -224,10 +224,15 @@ class GrammarParser(
                 ),
             )
         }
-        CHARGER_WORDS.forEach { word ->
-            val match = Regex("\\b($word)\\b").find(text) ?: return@forEach
+        // Every CHARGER_WORDS phrase present must be consumed, not just the
+        // first one in list order — "the charger is plugged in" says both
+        // "charger" and "plugged in", and stopping at "charger" alone left
+        // "plugged" surfacing as an unaccounted word (see ClauseAccounting's
+        // former "plug"-only filler workaround for the same root cause).
+        val chargerMatches = CHARGER_WORDS.mapNotNull { word -> Regex("\\b($word)\\b").find(text) }
+        if (chargerMatches.isNotEmpty()) {
             val unplugged = Regex("\\b(unplug\\w*|disconnect\\w*|stop\\w* charging|off charge)\\b").containsMatchIn(text)
-            consumed += match.range
+            chargerMatches.forEach { consumed += it.range }
             return ResolvedTrigger(
                 Trigger.Charging(if (unplugged) PowerTransition.UNPLUGGED else PowerTransition.PLUGGED_IN),
             )
@@ -440,7 +445,7 @@ class GrammarParser(
             add(ActionSpec(ActionId.NOTIFY_RESULT, ActionArgs.Notify("The phone is not charging.")))
         }
 
-        Regex("\\b(?:pin|pinned|keep)\\s+(?:a\\s+)?(?:note|message)\\b(?:[: ]+(.+?))?(?=\\s+until\\b|$)")
+        Regex("\\b(?:pin|pinned|keep)\\s+(?:a\\s+)?(?:note|message)\\b(?:\\s*(?:saying|that|:)?\\s+(.+?))?(?=\\s+until\\b|$)")
             .find(text)?.let { match ->
             consumed += match.range
             val message = match.groups[1]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
