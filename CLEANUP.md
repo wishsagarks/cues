@@ -1539,9 +1539,10 @@ chat model consulted as an explicit third opinion when the offline
 grammar/on-device-model pair disagrees or both fail.
 
 **What makes this safe, by construction:**
-- Configured-key default. `AskScreen`'s "Cloud language assist" switch only
-  appears when `BuildConfig.SARVAM_API_KEY` is non-blank, and starts enabled
-  when present; the user can still turn it off for an offline session.
+- Explicit per-session opt-in. `AskScreen`'s "Cloud language assist" switch
+  only appears when `BuildConfig.SARVAM_API_KEY` is non-blank, and starts off
+  even when present; a configured key makes the service available, never
+  consents to sending a user's speech or cue text.
 - Authoring-time only. Every Sarvam call happens before approval — regional
   voice input translates into the existing `GrammarParser`/`OnDeviceLlmDrafter`
   pipeline unchanged, and the cloud chat drafter (`SarvamChatDrafter`,
@@ -1571,8 +1572,10 @@ grammar/on-device-model pair disagrees or both fail.
    itself on screen during that emulator run.
 3. `SarvamSpeechInput` records for a fixed 6-second window rather than
    detecting silence — a deliberate simplification, not a measured choice.
-4. The translated read-back only offers Hindi (`hi-IN`) — there is no
-   language-picker UI.
+4. The language picker now exposes Hindi (`hi-IN`), Bengali (`bn-IN`), Marathi
+   (`mr-IN`), Telugu (`te-IN`) and Tamil (`ta-IN`), with an explicit language
+   code forwarded to Sarvam STT and translation. The picker and these codes
+   compile, but none has been exercised against a live Sarvam API key.
 5. `HomeScreen.kt`'s "Speak replies" toggle (and the parallel pattern this
    entry's own cloud-assist switch follows) is itself dead code in the
    redesigned app — `AskScreen.kt` is what's live, which is where this
@@ -1995,3 +1998,52 @@ a shippable feature:**
 **Remove when:** a `PlanExecutor` exists, is covered by session-engine-style
 tests the way `SessionEngineTest` covers a single routine, and a real drafter
 call site produces a `PlanDraft` a user can review and approve end to end.
+
+## CL-42 — Regional authoring no longer requires Sarvam, translation quality unmeasured
+
+**Status:** open · **Raised:** 26 Sep 2026
+
+The Ask screen's authoring-language picker (English, Hindi, Bengali,
+Marathi, Telugu, Tamil — `app/.../voice/AuthoringLanguage.kt`) previously
+gated every non-English choice on Cloud language assist (Sarvam) being on.
+It no longer does: with cloud assist off, an installed on-device model now
+gets one translate-only pass — `core/.../drafting/TranslationPrompt.kt`,
+called via `MainActivity.translateToEnglishOnDevice` — before the request
+goes through the same Gemma → `GrammarParser` pipeline every English cue
+already goes through. This is the same two-stage shape Sarvam's own
+translate-then-normalize path uses, just with the phone's own model doing
+the first stage instead of Sarvam's dedicated translation endpoint.
+`LocalSpeechInput.start` also takes an explicit language code now instead
+of a hardcoded `en-IN`, so speaking a cue in a regional language routes
+through the OS recognizer for that locale without Sarvam either.
+
+**What is and isn't verified:**
+- The prompt and its output-cleaning (`TranslationPrompt.build`/`clean`)
+  are unit-tested in `:core` against fixed strings — the *plumbing* is
+  fixed and tested, same as CL-40's provenance work.
+- **Translation quality from Gemma3-1B for Hindi/Bengali/Marathi/Telugu/
+  Tamil has not been measured against a human reference on the loaner.** A
+  1B model doing translation is a materially harder ask than the same
+  model normalizing already-English text into the closed cue grammar
+  (OnDeviceLlmDrafter's job) — it may mistranslate names, drop clauses, or
+  hallucinate content the source sentence didn't say. The Ask screen's copy
+  says this plainly ("less reliable than Sarvam's; review the drafted cue
+  carefully") rather than presenting it as equivalent.
+- **Regional on-device speech recognition has not been confirmed available
+  on the loaner.** CL-19 already found no on-device en-IN model on this
+  SM8850/OriginOS 6 build, meaning `LocalSpeechInput` falls through to
+  Google's online recognizer even for English; a non-English locale is at
+  least as unconfirmed and could return `ERROR_LANGUAGE_NOT_SUPPORTED` or
+  silently fall back to a different language depending on OEM speech
+  packs installed on the specific device.
+- The rest of the pipeline downstream of translation — GrammarParser,
+  Validator, capability derivation, Review, receipts — is unchanged and
+  already covered by the existing test suite; this entry is scoped to the
+  translation step only.
+
+**Remove when:** at least one real Hindi/Bengali/Marathi/Telugu/Tamil
+sentence has been spoken or typed on the loaner with cloud assist off, the
+on-device translation and resulting drafted cue have been checked against
+a fluent speaker's expectation, and the speech-recognition locale behaviour
+(supported vs. `ERROR_LANGUAGE_NOT_SUPPORTED`) has been observed and
+recorded here.

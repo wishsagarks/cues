@@ -121,8 +121,14 @@ text-to-speech, chat completion) exists for regional-Indian-language cue
 drafting, a translated read-back of the assistant's reply, and a cloud chat
 model consulted as an explicit third opinion when the offline
 grammar/on-device-model pair disagrees or both fail. When a key is configured,
-Ask starts with Sarvam enabled as the default translation/cue-authoring path;
-the visible switch can still turn it off for an offline session.
+Ask presents Sarvam as an explicit off-by-default, per-session choice; the key
+makes the service available but does not authorize sending user content. With
+cloud assist enabled, authors can explicitly select Hindi (`hi-IN`), Bengali
+(`bn-IN`), Marathi (`mr-IN`), Telugu (`te-IN`) or Tamil (`ta-IN`). Sarvam STT
+receives that exact code and the editable transcript remains in that selected
+script. Only after an author submits the cue does Cues translate a private copy
+to English for the existing deterministic parser; it never replaces the text
+the author saw or edited.
 
 Every Sarvam call happens at authoring time only, before approval. It does not
 change where the trust boundary sits: nothing downstream of approval consults
@@ -134,8 +140,9 @@ rule above apply regardless of which drafter produced the text.
 
 Provenance is never blurred. A draft produced by the cloud chat path is
 labelled `DraftSourceId.SARVAM_CLOUD`; a reply it drafts carries
-`ReplySource.SARVAM_CLOUD`; a translated string is shown labelled "Translated
-via Sarvam (online)" next to the original English, never replacing it. See
+`ReplySource.SARVAM_CLOUD`; a translated read-back is shown labelled
+"Translated via Sarvam (online)" next to the original English, never replacing
+it. See
 CLEANUP.md CL-35 for what is and is not verified about this path, and
 docs/API_VERIFICATION.md for the endpoints it calls.
 

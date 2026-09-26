@@ -55,6 +55,7 @@ object ReviewCopy {
             is ActionArgs.PinnedNote -> "keep \"${args.message}\" pinned"
             is ActionArgs.OpenApp -> "open ${args.label} — you finish this"
             is ActionArgs.ComposeMessage -> "pre-fill a message: \"${args.text}\" — you send it"
+            is ActionArgs.ComposeWhatsApp -> "open WhatsApp with \"${args.text}\" for ${args.contactHint ?: "your chosen chat"} — you send it"
             is ActionArgs.CalendarEvent -> "add a calendar event: \"${args.title}\" — you save it"
             is ActionArgs.Alarm -> "ask the clock app to set an alarm for %02d:%02d".format(args.hour, args.minute)
             is ActionArgs.MediaControl -> "send a ${args.command.name.lowercase()} media command"
@@ -75,6 +76,7 @@ object ReviewCopy {
                 ActionId.USE_UTILITY -> "restore the utility to what it was, if nothing else has changed it since"
                 ActionId.OPEN_APP,
                 ActionId.COMPOSE_MESSAGE,
+                ActionId.COMPOSE_WHATSAPP,
                 ActionId.ADD_CALENDAR_EVENT,
                 ActionId.SET_ALARM,
                 ActionId.MEDIA_CONTROL,
@@ -94,6 +96,9 @@ object ReviewCopy {
         }
         if (routine.rearmPolicy.cooldownSeconds > 0) {
             append("; waits ${routine.rearmPolicy.cooldownSeconds}s between runs")
+        }
+        if (routine.rearmPolicy.oncePerLocalDay) {
+            append("; at most once per local day")
         }
     }
 

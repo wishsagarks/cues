@@ -202,7 +202,9 @@ class MainActivity : ComponentActivity() {
                     cloudAssistAvailable = app.cloudAssistAvailable,
                     sarvamSpeechInput = sarvamSpeechInput,
                     sarvamReadback = sarvamReadback,
-                    translateToEnglish = { text -> sarvamClient?.translate(text, sourceLanguageCode = "auto", targetLanguageCode = "en-IN")?.translatedText ?: text },
+                    translateToEnglish = { text, sourceLanguageCode ->
+                        sarvamClient?.translate(text, sourceLanguageCode = sourceLanguageCode, targetLanguageCode = "en-IN")?.translatedText ?: text
+                    },
                     testUtilityAction = app::testUseUtility,
                     incomingScreenText = incomingScreenText,
                     newCueShortcutTick = newCueShortcutTick,
@@ -211,6 +213,16 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (application as CuesApplication).setUserVisible(true)
+    }
+
+    override fun onPause() {
+        (application as CuesApplication).setUserVisible(false)
+        super.onPause()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -292,7 +304,7 @@ private fun CuesApp(
     cloudAssistAvailable: Boolean = false,
     sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null,
     sarvamReadback: com.cues.app.voice.SarvamReadback? = null,
-    translateToEnglish: suspend (String) -> String = { it },
+    translateToEnglish: suspend (String, String) -> String = { text, _ -> text },
     testUtilityAction: (com.cues.core.model.UtilityId, com.cues.core.model.UtilityState) -> com.cues.core.ports.ActionOutcome,
     incomingScreenText: String? = null,
     newCueShortcutTick: Int = 0,
@@ -332,16 +344,14 @@ private fun CuesApp(
     val conversation = remember { Conversation() }
     var assistantTurns by remember { mutableStateOf<List<Turn>>(emptyList()) }
     var speakReplies by remember { mutableStateOf(false) }
-    // CL-35: enabled by default when a key is configured. The visible switch
+    // CL-35: a configured key exposes the optional service, but it starts off.
     // remains an immediate per-session opt-out for offline authoring.
-    // A configured Sarvam key is an explicit developer/user opt-in. Once the
-    // key exists, make Sarvam the default language-assist path in Ask rather
-    // than hiding the controls behind a second toggle; the user can still
-    // switch it off for an offline session.
-    var cloudAssistEnabled by remember { mutableStateOf(cloudAssistAvailable) }
+    // Turning the visible switch on is the user consent to send text or audio.
+    var cloudAssistEnabled by remember { mutableStateOf(false) }
     var isTryingCloudAssist by remember { mutableStateOf(false) }
     var cloudVoiceJob by remember { mutableStateOf<Job?>(null) }
     val cloudAssistOn = cloudAssistEnabled && cloudAssistAvailable
+    var authoringLanguage by remember { mutableStateOf(com.cues.app.voice.AuthoringLanguage.English) }
     var utilityTestResult by remember { mutableStateOf<String?>(null) }
     val coachPolicy = remember { CoachPolicy(store) }
     var coachSuggestion by remember {
@@ -480,14 +490,12 @@ private fun CuesApp(
 
     /**
      * The regional-language mic button's data flow (docs/FDD.md's "Optional
-     * cloud assist" section, architecture decision 3): record → Sarvam STT →
-     * Sarvam translate to en-IN → hand the English string to the existing,
-     * untouched draft pipeline exactly as typed English input already is.
-     * Both strings reach [onResult] so the caller can show/correct either
-     * before submitting — [LocalSpeechInput]'s default mic button is
-     * completely untouched by this.
+     * cloud assist" section, architecture decision 3): record → Sarvam STT
+     * in the selected language → show that same script in the editor. The
+     * input is translated privately only after the author submits it to the
+     * established English parser pipeline. [LocalSpeechInput] is untouched.
      */
-    fun startCloudVoice(onResult: (original: String, translated: String) -> Unit, onError: (String) -> Unit) {
+    fun startCloudVoice(languageCode: String, onResult: (String) -> Unit, onError: (String) -> Unit) {
         val input = sarvamSpeechInput
         if (input == null) {
             onError("Cloud assist is not available.")
@@ -495,14 +503,9 @@ private fun CuesApp(
         }
         cloudVoiceJob?.cancel()
         cloudVoiceJob = scope.launch {
-            when (val result = input.listen()) {
+            when (val result = input.listen(languageCode)) {
                 is com.cues.core.ports.SpeechResult.Recognized -> {
-                    val translated = try {
-                        translateToEnglish(result.transcript)
-                    } catch (e: Exception) {
-                        result.transcript
-                    }
-                    onResult(result.transcript, translated)
+                    onResult(result.transcript)
                 }
                 is com.cues.core.ports.SpeechResult.PermissionDenied ->
                     onError("Microphone access was not granted. Type your cue instead.")
@@ -517,6 +520,7 @@ private fun CuesApp(
     }
 
     fun stopCloudVoice() {
+        sarvamSpeechInput?.cancel()
         cloudVoiceJob?.cancel()
         cloudVoiceJob = null
     }
@@ -525,8 +529,8 @@ private fun CuesApp(
      * Translated read-back of the assistant's own reply text (docs/FDD.md's
      * "Optional cloud assist" section, architecture decision 4) — never
      * [ReplySpeaker]'s job, since the translation is genuinely different text
-     * from what Cues rendered. Hindi is the only target offered today; there
-     * is no language-picker UI yet (CLEANUP.md CL-35).
+     * from what Cues rendered. Its target follows the selected authoring
+     * language.
      */
     fun startCloudReadback(englishText: String, onDone: (String) -> Unit, onError: (String) -> Unit) {
         val readback = sarvamReadback
@@ -536,7 +540,7 @@ private fun CuesApp(
         }
         scope.launch {
             try {
-                onDone(readback.translateAndSpeak(englishText, targetLanguageCode = "hi-IN"))
+                onDone(readback.translateAndSpeak(englishText, targetLanguageCode = authoringLanguage.languageCode))
             } catch (e: Exception) {
                 onError(e.message ?: "Could not translate and speak that reply.")
             }
@@ -640,6 +644,21 @@ private fun CuesApp(
         }
     }
 
+    /**
+     * CL-42's on-device counterpart to the Sarvam `translateToEnglish`
+     * lambda: one translate-only call to the already-warmed Gemma runner,
+     * cleaned the same way [com.cues.core.drafting.OnDeviceLlmDrafter]
+     * cleans a cue-normalization answer. This never touches the network and
+     * never asks the model to also produce cue grammar — that stays a
+     * second, separate pass through the existing pipeline once the text is
+     * in English, so the trust boundary (model proposes prose, parser is
+     * sole authority) is unchanged.
+     */
+    suspend fun translateToEnglishOnDevice(text: String, language: com.cues.app.voice.AuthoringLanguage): String {
+        val output = onDeviceModelRunner.generate(com.cues.core.drafting.TranslationPrompt.build(text, language.label))
+        return com.cues.core.drafting.TranslationPrompt.clean(output.text)
+    }
+
     fun draft(text: String) {
         isDrafting = true
         scope.launch {
@@ -653,10 +672,27 @@ private fun CuesApp(
                 // Gemma → GrammarParser → validator pipeline. If translation
                 // is unavailable or times out, the original text is retained
                 // so the parser/Gemma can still make the best local attempt.
-                val translatedText = if (cloudAssistOn) {
-                    runCatching {
-                        withTimeoutOrNull(12_000) { translateToEnglish(text) }
-                    }.getOrNull()?.takeUnless { it.isNullOrBlank() } ?: text
+                //
+                // CL-42: a regional authoring language no longer requires
+                // Sarvam. With cloud assist off, an installed on-device model
+                // gets one translate-only pass (TranslationPrompt, not the
+                // cue-grammar prompt) before the normal Gemma → GrammarParser
+                // pipeline runs on its output — the same two-stage shape as
+                // the Sarvam path, just with the phone's own model doing the
+                // first stage. Translation quality from a 1B model has not
+                // been measured against a human reference; see CL-42.
+                val translatedText = if (authoringLanguage.languageCode != "en-IN") {
+                    when {
+                        cloudAssistOn -> runCatching {
+                            withTimeoutOrNull(12_000) { translateToEnglish(text, authoringLanguage.languageCode) }
+                        }.getOrNull()?.takeUnless { it.isNullOrBlank() } ?: text
+
+                        onDeviceModelEnabled && modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed -> runCatching {
+                            withTimeoutOrNull(12_000) { translateToEnglishOnDevice(text, authoringLanguage) }
+                        }.getOrNull()?.takeUnless { it.isNullOrBlank() } ?: text
+
+                        else -> text
+                    }
                 } else text
                 val turn = cueService.converse(conversation, translatedText)
                 assistantTurns = conversation.turns.toList()
@@ -795,11 +831,15 @@ private fun CuesApp(
                             onDeviceModelEnabled = enabled
                             onToggleOnDeviceModel(enabled)
                         },
-                        onStartVoice = { onTranscript, onUnavailable -> localSpeechInput.start(onTranscript, onUnavailable) },
+                        onStartVoice = { onTranscript, onUnavailable ->
+                            localSpeechInput.start(authoringLanguage.languageCode, onTranscript, onUnavailable)
+                        },
                         onStopVoice = { localSpeechInput.finishAndDeliver() },
                         cloudAssistAvailable = cloudAssistAvailable,
                         cloudAssistEnabled = cloudAssistEnabled,
                         onToggleCloudAssist = { cloudAssistEnabled = !cloudAssistEnabled },
+                        authoringLanguage = authoringLanguage,
+                        onAuthoringLanguageChange = { authoringLanguage = it },
                         onStartCloudVoice = ::startCloudVoice,
                         onStopCloudVoice = ::stopCloudVoice,
                         isTryingCloudAssist = isTryingCloudAssist,

@@ -1,6 +1,7 @@
 package com.cues.core.session
 
 import com.cues.core.Fixtures
+import com.cues.core.eval.ReasonCode
 import com.cues.core.model.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -527,6 +528,26 @@ class SessionEngineTest {
         )
 
         assertIs<EngineResult.Skipped>(result)
+    }
+
+    @Test
+    fun `a daily limit suppresses re-entry on the same local date`() {
+        val routine = Fixtures.heroRoutine(
+            rearmPolicy = RearmPolicy(reconnectGraceSeconds = 0, oncePerLocalDay = true),
+        )
+        val engine = engine()
+        engine.onTriggerEvent(routine, Fixtures.connect(connectionSessionId = "conn-1"), Fixtures.snapshot())
+        engine.onExitEvent(routine, Fixtures.disconnect(atMillis = clock.now))
+
+        clock.advanceMinutes(30)
+        val result = engine.onTriggerEvent(
+            routine,
+            Fixtures.connect(atMillis = clock.now, connectionSessionId = "conn-2"),
+            Fixtures.snapshot(nowMillis = clock.now),
+        )
+
+        val skipped = assertIs<EngineResult.Skipped>(result)
+        assertTrue(skipped.reasons.any { it.code == ReasonCode.DAILY_LIMIT_ACTIVE })
     }
 
     @Test

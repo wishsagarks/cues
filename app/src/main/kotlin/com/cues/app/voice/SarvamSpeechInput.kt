@@ -11,8 +11,10 @@ import com.cues.app.net.SarvamClient
 import com.cues.core.ports.SpeechInput
 import com.cues.core.ports.SpeechResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The cloud counterpart to [com.cues.app.drafting.LocalSpeechInput]: records
@@ -35,13 +37,29 @@ class SarvamSpeechInput(
     private val maxDurationMillis: Long = 6_000,
 ) : SpeechInput {
 
-    override suspend fun listen(): SpeechResult {
+    private val recordingCancelled = AtomicBoolean(false)
+
+    @Volatile
+    private var activeRecorder: AudioRecord? = null
+
+    /** Stops capture immediately; the cancelled job will not submit audio. */
+    fun cancel() {
+        recordingCancelled.set(true)
+        runCatching { activeRecorder?.stop() }
+    }
+
+    override suspend fun listen(): SpeechResult = listen(languageCode = "unknown")
+
+    /** Uses an explicit author choice; `unknown` is reserved for auto-detection. */
+    suspend fun listen(languageCode: String): SpeechResult {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return SpeechResult.PermissionDenied
         }
+        recordingCancelled.set(false)
         val wav = withContext(Dispatchers.IO) { recordWav() } ?: return SpeechResult.Unavailable
+        kotlin.coroutines.coroutineContext.ensureActive()
         return try {
-            val transcript = client.transcribe(wav).transcript.trim()
+            val transcript = client.transcribe(wav, languageCode = languageCode).transcript.trim()
             if (transcript.isEmpty()) SpeechResult.NoMatch else SpeechResult.Recognized(transcript)
         } catch (e: Exception) {
             SpeechResult.Failed(e.message ?: "Cloud speech recognition failed.")
@@ -67,16 +85,20 @@ class SarvamSpeechInput(
         val pcm = ByteArrayOutputStream()
         val buffer = ByteArray(minBufferSize)
         try {
+            activeRecorder = recorder
+            if (recordingCancelled.get()) return null
             recorder.startRecording()
             val started = System.currentTimeMillis()
-            while (System.currentTimeMillis() - started < maxDurationMillis) {
+            while (!recordingCancelled.get() && System.currentTimeMillis() - started < maxDurationMillis) {
                 val read = recorder.read(buffer, 0, buffer.size)
                 if (read > 0) pcm.write(buffer, 0, read)
             }
         } finally {
-            recorder.stop()
+            if (activeRecorder === recorder) activeRecorder = null
+            runCatching { recorder.stop() }
             recorder.release()
         }
+        if (recordingCancelled.get()) return null
         return wavHeader(pcm.size(), sampleRate) + pcm.toByteArray()
     }
 

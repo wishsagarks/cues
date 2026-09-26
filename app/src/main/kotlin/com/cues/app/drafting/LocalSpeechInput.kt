@@ -10,12 +10,18 @@ import android.speech.SpeechRecognizer
  * Speech input via the phone's microphone and the installed recognition service
  * (Google's engine on this device). The on-device-only path was dropped: the
  * on-device recognizer has no en-IN model on OriginOS 6 / SM8850 (CL-19).
+ *
+ * [start] takes an explicit BCP-47 language code so a regional authoring
+ * language (CL-42) can be spoken and recognised without routing through
+ * Sarvam — recognition quality for a non-English locale on this recognizer
+ * has not been confirmed on the loaner any more than en-IN's on-device tier
+ * was; see CL-42.
  */
 class LocalSpeechInput(private val context: Context) {
 
     private var recognizer: SpeechRecognizer? = null
 
-    fun start(onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) {
+    fun start(languageCode: String = "en-IN", onTranscript: (String) -> Unit, onUnavailable: (String) -> Unit) {
         stop()
 
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -56,8 +62,8 @@ class LocalSpeechInput(private val context: Context) {
         try {
             activeRecognizer.startListening(
                 Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN")
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageCode)
                     .putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                     .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false),
             )

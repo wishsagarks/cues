@@ -319,6 +319,9 @@ enum class ActionId {
     /** Pre-fills a message. Never sends one — see [ActionRisk.HANDOFF]. */
     COMPOSE_MESSAGE,
 
+    /** Opens WhatsApp with a draft. The user chooses the chat and sends it. */
+    COMPOSE_WHATSAPP,
+
     /** Opens the calendar app's own "add event" screen, pre-filled. The user saves it. */
     ADD_CALENDAR_EVENT,
 
@@ -381,6 +384,11 @@ sealed interface ActionArgs {
     @Serializable
     @SerialName("composeMessage")
     data class ComposeMessage(val contactHint: String? = null, val text: String) : ActionArgs
+
+    /** A WhatsApp handoff. [contactHint] is only shown to the user; Cues never resolves contacts. */
+    @Serializable
+    @SerialName("composeWhatsapp")
+    data class ComposeWhatsApp(val contactHint: String? = null, val text: String) : ActionArgs
 
     /**
      * No stored moment on purpose: unlike a fact-dated reminder (not yet
@@ -483,6 +491,8 @@ data class CleanupPolicy(
 data class RearmPolicy(
     val reconnectGraceSeconds: Int = 20,
     val cooldownSeconds: Int = 0,
+    /** Suppress later starts on the same local calendar date, even after the session ends. */
+    val oncePerLocalDay: Boolean = false,
     val maxConcurrentSessions: Int = 1,
 )
 

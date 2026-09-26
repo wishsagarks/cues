@@ -126,7 +126,7 @@ class PlaceWatcherService : Service() {
     }
 
     private fun selectProvider(manager: LocationManager): String? {
-        val available = manager.allProviders
+        val available = manager.getProviders(true)
         return when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && available.contains(LocationManager.FUSED_PROVIDER) ->
                 LocationManager.FUSED_PROVIDER
@@ -138,12 +138,26 @@ class PlaceWatcherService : Service() {
 
     private fun onLocation(location: Location) {
         val now = System.currentTimeMillis()
+        var evaluatedPlace = false
         watchedPlaces.forEach { place ->
+            if (!isReliableFixFor(location, place, now)) return@forEach
             val distance = location.distanceTo(placeLocation(place))
             evaluateDwell(place.id, isInsideNow = distance <= place.radiusMeters, now = now)
+            evaluatedPlace = true
         }
+        // Preserve the last known reading when the platform cannot provide a
+        // fresh, sufficiently accurate fix. Guessing an arrival is worse
+        // than waiting for the next update.
+        if (!evaluatedPlace) return
         val insideNow = watchedPlaces.filter { confirmedInside[it.id] == true }.map { it.id }.toSet()
         PlaceReadings.record(this, insideNow, now)
+    }
+
+    private fun isReliableFixFor(location: Location, place: Place, now: Long): Boolean {
+        val ageMillis = now - location.time
+        if (ageMillis !in 0..MAX_LOCATION_AGE_MILLIS) return false
+        if (!location.hasAccuracy()) return false
+        return location.accuracy <= minOf(place.radiusMeters.toFloat(), MAX_ACCEPTED_ACCURACY_METERS)
     }
 
     private fun placeLocation(place: Place): Location = Location(PROVIDER_LABEL).apply {
@@ -226,6 +240,8 @@ class PlaceWatcherService : Service() {
         private const val NOTIFICATION_ID = 2
         private const val MIN_TIME_MILLIS = 20_000L
         private const val MIN_DISTANCE_METERS = 25f
+        private const val MAX_LOCATION_AGE_MILLIS = 2 * 60_000L
+        private const val MAX_ACCEPTED_ACCURACY_METERS = 75f
 
         /** How long a candidate inside/outside state must hold before it counts as arrived/left. */
         private const val DWELL_MILLIS = 60_000L

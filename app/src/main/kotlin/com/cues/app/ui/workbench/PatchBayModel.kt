@@ -121,6 +121,7 @@ enum class DoKind(val label: String, val risk: com.cues.core.registry.ActionRisk
     NOTIFY("Show a result", com.cues.core.registry.ActionRisk.LOCAL_NOTICE),
     OPEN_APP("Open an app", com.cues.core.registry.ActionRisk.HANDOFF),
     COMPOSE_MESSAGE("Pre-fill a message", com.cues.core.registry.ActionRisk.HANDOFF),
+    COMPOSE_WHATSAPP("Draft a WhatsApp message", com.cues.core.registry.ActionRisk.HANDOFF),
     CALENDAR_EVENT("Add calendar event", com.cues.core.registry.ActionRisk.HANDOFF),
     ALARM("Set an alarm", com.cues.core.registry.ActionRisk.EXTERNAL_UNOWNED),
     MEDIA("Media control", com.cues.core.registry.ActionRisk.EXTERNAL_UNOWNED),
@@ -146,7 +147,7 @@ data class DoSelection(
         get() = when (kind) {
             DoKind.PINNED_NOTE, DoKind.NOTIFY -> message.isNotBlank()
             DoKind.OPEN_APP -> app != null
-            DoKind.COMPOSE_MESSAGE -> message.isNotBlank()
+            DoKind.COMPOSE_MESSAGE, DoKind.COMPOSE_WHATSAPP -> message.isNotBlank()
             DoKind.CALENDAR_EVENT -> calendarTitle.isNotBlank()
             else -> true
         }
@@ -160,6 +161,8 @@ data class DoSelection(
         DoKind.OPEN_APP -> app?.let { ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp(it.packageName, it.label)) }
         DoKind.COMPOSE_MESSAGE -> message.takeIf { it.isNotBlank() }
             ?.let { ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage(contactHint.takeIf { it.isNotBlank() }, it)) }
+        DoKind.COMPOSE_WHATSAPP -> message.takeIf { it.isNotBlank() }
+            ?.let { ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp(contactHint.takeIf { it.isNotBlank() }, it)) }
         DoKind.CALENDAR_EVENT -> calendarTitle.takeIf { it.isNotBlank() }
             ?.let { ActionSpec(ActionId.ADD_CALENDAR_EVENT, ActionArgs.CalendarEvent(it, calendarMinutes)) }
         DoKind.ALARM -> ActionSpec(ActionId.SET_ALARM, ActionArgs.Alarm(alarmHour, alarmMinute))

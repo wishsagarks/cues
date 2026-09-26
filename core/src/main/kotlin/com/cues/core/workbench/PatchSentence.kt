@@ -313,6 +313,8 @@ class PatchSentence(
         is ActionArgs.OpenApp -> Phrase.Yes("open ${args.label}, (selected app: ${args.packageName}|${args.label})")
         is ActionArgs.ComposeMessage -> lowercaseOnly(args.text, "A message")
             ?: Phrase.Yes(listOfNotNull("text", args.contactHint, "saying", args.text).joinToString(" "))
+        is ActionArgs.ComposeWhatsApp -> lowercaseOnly(args.text, "A WhatsApp message")
+            ?: Phrase.Yes(listOfNotNull("WhatsApp", args.contactHint, "saying", args.text).joinToString(" "))
         is ActionArgs.CalendarEvent -> when {
             args.durationMinutes != CALENDAR_MINUTES ->
                 Phrase.No("A calendar event from the grammar is always $CALENDAR_MINUTES minutes long.")

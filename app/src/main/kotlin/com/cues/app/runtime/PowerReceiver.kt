@@ -30,23 +30,6 @@ class PowerReceiver : BroadcastReceiver() {
                 if (!preferences.getBoolean(KEY_LAST_CHARGING, true) && preferences.contains(KEY_LAST_CHARGING)) return
                 EventKind.POWER_DISCONNECTED
             }
-            Intent.ACTION_BATTERY_CHANGED -> {
-                val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
-                val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
-                    status == android.os.BatteryManager.BATTERY_STATUS_FULL
-                val previous = if (!preferences.contains(KEY_LAST_CHARGING)) null
-                else preferences.getBoolean(KEY_LAST_CHARGING, false)
-                preferences.edit().putBoolean(KEY_LAST_CHARGING, charging).apply()
-                // BatteryChanged is the OEM-safe fallback. Establishing the
-                // baseline must not replay a cue just because the app process
-                // was restarted while the cable was already connected.
-                when {
-                    previous == null -> return
-                    previous == charging -> return
-                    charging -> EventKind.POWER_CONNECTED
-                    else -> EventKind.POWER_DISCONNECTED
-                }
-            }
             else -> return
         }
 

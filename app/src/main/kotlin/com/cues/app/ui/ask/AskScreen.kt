@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -50,6 +53,7 @@ import com.cues.app.ui.components.SlabTier
 import com.cues.app.ui.theme.CuesShape
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
+import com.cues.app.voice.AuthoringLanguage
 import com.cues.core.assistant.PendingCommand
 import com.cues.core.assistant.Turn
 import com.cues.core.drafting.DraftTrace
@@ -63,6 +67,7 @@ import com.cues.core.ports.ModelAvailability
  * same picker semantics, only the shell around them is new.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AskScreen(
     isDrafting: Boolean,
     onDraft: (String) -> Unit,
@@ -76,8 +81,10 @@ fun AskScreen(
     cloudAssistAvailable: Boolean = false,
     cloudAssistEnabled: Boolean = false,
     onToggleCloudAssist: () -> Unit = {},
-    onStartCloudVoice: (onResult: (original: String, translated: String) -> Unit, onError: (String) -> Unit) -> Unit =
-        { _, onError -> onError("Cloud assist is not available.") },
+    authoringLanguage: AuthoringLanguage = AuthoringLanguage.English,
+    onAuthoringLanguageChange: (AuthoringLanguage) -> Unit = {},
+    onStartCloudVoice: (languageCode: String, onResult: (String) -> Unit, onError: (String) -> Unit) -> Unit =
+        { _, _, onError -> onError("Cloud assist is not available.") },
     onStopCloudVoice: () -> Unit = {},
     isTryingCloudAssist: Boolean = false,
     onTranslateReadback: (englishText: String, onDone: (String) -> Unit, onError: (String) -> Unit) -> Unit =
@@ -113,7 +120,8 @@ fun AskScreen(
         isCloudListening = cloudAssistEnabled
         if (cloudAssistEnabled) {
             onStartCloudVoice(
-                { original, translated -> text = translated; cloudOriginalTranscript = original; isListening = false; isCloudListening = false },
+                authoringLanguage.languageCode,
+                { original -> text = original; cloudOriginalTranscript = original; isListening = false; isCloudListening = false },
                 { message -> speechMessage = message; isListening = false; isCloudListening = false },
             )
         } else {
@@ -183,6 +191,38 @@ fun AskScreen(
                     style = CuesType.labelSmall,
                     color = t.inkSlate,
                 )
+                Text(
+                    "Authoring language",
+                    style = CuesType.labelSmall,
+                    color = t.inkPrimary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AuthoringLanguage.choices.forEach { language ->
+                        FilterChip(
+                            selected = authoringLanguage == language,
+                            onClick = { onAuthoringLanguageChange(language) },
+                            enabled = cloudAssistEnabled || onDeviceModelEnabled || language == AuthoringLanguage.English,
+                            label = { Text(language.displayLabel) },
+                        )
+                    }
+                }
+                Text(
+                    when {
+                        cloudAssistEnabled ->
+                            "Typed text and speech stay in ${authoringLanguage.displayLabel}. Sarvam translates just this cue for the English parser."
+                        onDeviceModelEnabled ->
+                            "Typed text and speech stay in ${authoringLanguage.displayLabel}. Gemma translates on-device before the parser — no network call, but a small model's translation is less reliable than Sarvam's; review the drafted cue carefully."
+                        else ->
+                            "Regional typing and speech need either Cloud language assist or an installed on-device model. Offline authoring without either accepts English only."
+                    },
+                    style = CuesType.labelSmall,
+                    color = t.inkSlate,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
 
@@ -250,7 +290,7 @@ fun AskScreen(
             cloudOriginalTranscript?.let { original ->
                 item {
                     Text(
-                        "Heard (your language, via Sarvam): $original",
+                        "Heard in ${authoringLanguage.displayLabel} (via Sarvam): $original",
                         style = CuesType.labelSmall,
                         color = t.inkSlate,
                     )

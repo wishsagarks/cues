@@ -58,6 +58,21 @@ import kotlinx.coroutines.launch
 class CuesApplication : Application() {
 
     /**
+     * Location uses a while-in-use permission. Keep foreground-service starts
+     * tied to a visible activity rather than letting a receiver-created
+     * process attempt one in the background.
+     */
+    @Volatile
+    private var userVisible = false
+
+    fun setUserVisible(visible: Boolean) {
+        userVisible = visible
+        if (visible) {
+            adapterSupervisor.sync(cueService.list().filter { it.status == com.cues.core.model.RoutineStatus.ARMED })
+        }
+    }
+
+    /**
      * For fire-and-forget cleanup that outlives one Compose call site — a
      * model toggle turning off, or a low-memory callback — neither of which
      * has a natural `rememberCoroutineScope()` of its own to run on.
@@ -528,7 +543,7 @@ class CuesApplication : Application() {
             "wifi" to WifiAdapter(this),
             "time" to timeAdapter,
             "audio-output" to AudioOutputAdapter(this),
-            "place" to PlaceAdapter(this),
+            "place" to PlaceAdapter(this) { userVisible },
         ))
     }
 

@@ -126,9 +126,10 @@ fun DoEditor(sel: DoSelection, installedApps: () -> List<InstalledApp>, onChange
                 sel.app?.let { Text("Selected: ${it.label}", style = CuesType.labelSmall, color = cuesTokens.go, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
-        DoKind.COMPOSE_MESSAGE -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PatchTextField("Contact (optional)", sel.contactHint, { onChange(sel.copy(contactHint = it)) })
+        DoKind.COMPOSE_MESSAGE, DoKind.COMPOSE_WHATSAPP -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            PatchTextField(if (sel.kind == DoKind.COMPOSE_WHATSAPP) "Chat to choose in WhatsApp" else "Contact (optional)", sel.contactHint, { onChange(sel.copy(contactHint = it)) })
             PatchTextField("Message", sel.message, { onChange(sel.copy(message = it)) })
+            if (sel.kind == DoKind.COMPOSE_WHATSAPP) MissingNote("Cues opens WhatsApp with this text; choose the chat and tap Send there.")
         }
         DoKind.CALENDAR_EVENT -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PatchTextField("Title", sel.calendarTitle, { onChange(sel.copy(calendarTitle = it)) })

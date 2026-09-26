@@ -14,6 +14,8 @@ import com.cues.core.ports.SessionStore
 import com.cues.core.registry.ActionRegistry
 import com.cues.core.registry.Presence
 import com.cues.core.signals.SignalRegistry
+import java.time.Instant
+import java.time.ZoneId
 
 /** What the engine did, and why, in a form a receipt can render without interpreting. */
 sealed interface EngineResult {
@@ -45,6 +47,7 @@ class SessionEngine(
     private val idGenerator: () -> String = { "session-" + java.util.UUID.randomUUID() },
     /** Defaults to "always present", which is exactly today's behaviour for every action that predates this. */
     private val attention: DeviceAttention = DeviceAttention { true },
+    private val zoneId: () -> ZoneId = { ZoneId.systemDefault() },
 ) {
 
     // ----------------------------------------------------------- admission
@@ -109,6 +112,7 @@ class SessionEngine(
             )
         }
 
+        dailyLimitReason(routine, event)?.let { return EngineResult.Skipped(listOf(it)) }
         cooldownReason(routine, event)?.let { return EngineResult.Skipped(listOf(it)) }
 
         val decision = Evaluator.evaluate(routine, event, context, freshness)
@@ -465,6 +469,20 @@ class SessionEngine(
             Truth.NO_MATCH,
             "This cue ran ${since / 1000} seconds ago and waits " +
                 "${routine.rearmPolicy.cooldownSeconds} seconds between runs.",
+        )
+    }
+
+    private fun dailyLimitReason(routine: Routine, event: TriggerEvent): Reason? {
+        if (!routine.rearmPolicy.oncePerLocalDay) return null
+        val date = Instant.ofEpochMilli(event.atMillis).atZone(zoneId()).toLocalDate()
+        val alreadyRan = store.activeFor(routine.id).any { session ->
+            Instant.ofEpochMilli(session.startedAtMillis).atZone(zoneId()).toLocalDate() == date
+        }
+        if (!alreadyRan) return null
+        return Reason(
+            ReasonCode.DAILY_LIMIT_ACTIVE,
+            Truth.NO_MATCH,
+            "This cue already ran on $date and is limited to once per day.",
         )
     }
 }

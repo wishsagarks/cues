@@ -73,6 +73,7 @@ object Normalizer {
             .append(",respectOverride:").append(cleanupPolicy.respectUserOverride).append('\n')
         append("rearm=grace:").append(rearmPolicy.reconnectGraceSeconds)
             .append(",cooldown:").append(rearmPolicy.cooldownSeconds)
+            .append(",oncePerLocalDay:").append(rearmPolicy.oncePerLocalDay)
             .append(",max:").append(rearmPolicy.maxConcurrentSessions).append('\n')
         requiredCapabilities.map { it.name }.sorted().forEach { append("capability=").append(it).append('\n') }
         factDependencies.sortedBy { it.id }.forEach {
@@ -87,6 +88,7 @@ object Normalizer {
         is ActionArgs.PinnedNote -> "message=${a.message}"
         is ActionArgs.OpenApp -> "package=${a.packageName}"
         is ActionArgs.ComposeMessage -> "contact=${a.contactHint.orEmpty()},text=${a.text}"
+        is ActionArgs.ComposeWhatsApp -> "contact=${a.contactHint.orEmpty()},text=${a.text}"
         is ActionArgs.CalendarEvent -> "title=${a.title},minutes=${a.durationMinutes}"
         is ActionArgs.Alarm -> "hour=${a.hour},minute=${a.minute},label=${a.label.orEmpty()}"
         is ActionArgs.MediaControl -> "command=${a.command.name}"

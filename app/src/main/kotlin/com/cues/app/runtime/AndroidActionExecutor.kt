@@ -108,6 +108,7 @@ class AndroidActionExecutor(
             ActionId.PINNED_NOTE -> pinnedNote(args, sessionId)
             ActionId.OPEN_APP -> openApp(args)
             ActionId.COMPOSE_MESSAGE -> composeMessage(args)
+            ActionId.COMPOSE_WHATSAPP -> composeWhatsApp(args)
             ActionId.ADD_CALENDAR_EVENT -> addCalendarEvent(args)
             ActionId.SET_ALARM -> setAlarm(args)
             ActionId.MEDIA_CONTROL -> mediaControl(args)
@@ -475,6 +476,28 @@ class AndroidActionExecutor(
             ActionOutcome(ActionState.SUCCEEDED, "Pre-filled a message. You send it.")
         } catch (e: android.content.ActivityNotFoundException) {
             ActionOutcome(ActionState.BLOCKED, "Could not open a messaging app: ${e.message}.")
+        }
+    }
+
+    /**
+     * Opens WhatsApp's own composer with text only. WhatsApp does not expose a
+     * public API to select a personal contact or silently send on the user's
+     * behalf, so the named contact remains review copy and the user completes
+     * the handoff in WhatsApp.
+     */
+    private fun composeWhatsApp(args: ActionArgs): ActionOutcome {
+        val message = (args as? ActionArgs.ComposeWhatsApp)
+            ?: return ActionOutcome(ActionState.FAILED, "No WhatsApp message text was supplied.")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, message.text)
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Opened WhatsApp with a draft. Choose ${message.contactHint ?: "a chat"} and send it.")
+        } catch (_: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "WhatsApp is not installed or cannot accept a text draft.")
         }
     }
 

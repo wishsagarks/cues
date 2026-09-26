@@ -187,6 +187,7 @@ internal fun ActionId.friendly(): String = when (this) {
     ActionId.PINNED_NOTE -> "Pinned note"
     ActionId.OPEN_APP -> "Open app"
     ActionId.COMPOSE_MESSAGE -> "Pre-filled message"
+    ActionId.COMPOSE_WHATSAPP -> "WhatsApp draft"
     ActionId.ADD_CALENDAR_EVENT -> "Calendar event"
     ActionId.SET_ALARM -> "Alarm"
     ActionId.MEDIA_CONTROL -> "Media control"

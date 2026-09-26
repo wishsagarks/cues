@@ -141,7 +141,7 @@ class CueService(
     private val cloudOptInProbe: (() -> Boolean)? = null,
 ) {
 
-    private val engine = SessionEngine(sessions, executor, clock, attention = attention)
+    private val engine = SessionEngine(sessions, executor, clock, attention = attention, zoneId = zoneId)
     private val _lastTrace = kotlinx.coroutines.flow.MutableStateFlow<com.cues.core.drafting.DraftTrace?>(null)
 
     /** The most recent draft's full [com.cues.core.drafting.DraftTrace], updated by every [draft] call and by [refinePhraser]'s own calls. Observable so `:app` never has to re-read a snapshot to notice a change (CLEANUP.md CL-18's "diagnostics is read once per composition"). */

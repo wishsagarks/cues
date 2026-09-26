@@ -139,7 +139,7 @@ class GrammarParser(
                 actions = actions,
                 endConditions = endConditions,
                 cleanupPolicy = CleanupPolicy(),
-                rearmPolicy = RearmPolicy(),
+                rearmPolicy = parseRearmPolicy(normalized, consumed),
                 requiredCapabilities = ActionRegistry.capabilitiesFor(actions),
                 status = RoutineStatus.DRAFT,
             ),
@@ -153,6 +153,12 @@ class GrammarParser(
     }
 
     // ------------------------------------------------------------ triggers
+
+    private fun parseRearmPolicy(text: String, consumed: MutableList<IntRange>): RearmPolicy {
+        val oncePerDay = ONCE_PER_LOCAL_DAY.find(text)
+        if (oncePerDay != null) consumed += oncePerDay.range
+        return RearmPolicy(oncePerLocalDay = oncePerDay != null)
+    }
 
     /**
      * Explains why nothing could start this cue.
@@ -522,6 +528,14 @@ class GrammarParser(
             add(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp(resolvedApp.packageName, resolvedApp.label)))
         }
 
+        WHATSAPP_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
+            val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
+                ?: "Sent from Cues."
+            add(ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp(contactHint, body)))
+        }
+
         // "Never sends" — see ActionRisk.HANDOFF. contactHint is whatever free
         // text follows "to", resolved by the OS share sheet, never by Cues.
         MESSAGE_PATTERN.find(text)?.let { match ->
@@ -713,8 +727,16 @@ class GrammarParser(
 
         val MESSAGE_PATTERN = Regex(
             "\\b(?:text|message)\\s+(?:(?<contact>my\\s+\\w+|him|her|them|[a-z]+)\\s+)?" +
-                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until)\\b|[.,]|$)",
+                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until|once\\s+per\\s+(?:local\\s+)?day)\\b|[.,]|$)",
         )
+
+        val WHATSAPP_PATTERN = Regex(
+            "\\b(?:send\\s+(?:a\\s+)?)?whats\\s*app\\s+" +
+                "(?:(?:message|text)\\s+)?(?:(?:to\\s+)?(?<contact>[a-z][a-z0-9 _-]{0,30})\\s+)?" +
+                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until|once\\s+per\\s+(?:local\\s+)?day)\\b|[.,]|$)",
+        )
+
+        val ONCE_PER_LOCAL_DAY = Regex("\\bonce\\s+per\\s+(?:local\\s+)?day\\b")
 
         val CALENDAR_PATTERN = Regex(
             "\\b(?:add|create)\\s+(?:a\\s+)?calendar\\s+event" +

@@ -222,6 +222,26 @@ object ActionRegistry {
         ),
 
         ActionDefinition(
+            id = ActionId.COMPOSE_WHATSAPP,
+            label = "Draft a WhatsApp message",
+            risk = ActionRisk.HANDOFF,
+            presence = Presence.NEEDS_USER,
+            requiredCapabilities = emptySet(),
+            owns = null,
+            validate = { args ->
+                when (args) {
+                    is ActionArgs.ComposeWhatsApp -> when {
+                        args.text.isBlank() -> ArgResult.Invalid("A WhatsApp message needs text to pre-fill.")
+                        args.text.length > MAX_MESSAGE_CHARS ->
+                            ArgResult.Invalid("A WhatsApp message must be $MAX_MESSAGE_CHARS characters or fewer.")
+                        else -> ArgResult.Valid(args)
+                    }
+                    else -> ArgResult.Invalid("Drafting a WhatsApp message needs text.")
+                }
+            },
+        ),
+
+        ActionDefinition(
             id = ActionId.ADD_CALENDAR_EVENT,
             label = "Add a calendar event",
             risk = ActionRisk.HANDOFF,

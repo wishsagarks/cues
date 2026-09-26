@@ -22,6 +22,27 @@ private fun parser() = GrammarParser(PAIRED) { "routine-test" }
 class GrammarParserTest {
 
     @Test
+    fun `place arrival can draft a once-daily WhatsApp handoff`() {
+        val hackathon = Place("cue-hackathon", "Cue Hackathon", 1, 12.9716, 77.5946, 150)
+        val parser = GrammarParser(
+            pairedDevices = PAIRED,
+            placesProvider = { listOf(hackathon) },
+            idGenerator = { "routine-hackathon" },
+        )
+
+        val drafted = assertIs<DraftResult.Drafted>(parser.parse(
+            "When I arrive at Cue Hackathon, WhatsApp Wish saying I am in office once per day.",
+        ))
+
+        assertEquals(Trigger.PlaceTransition(hackathon.id, hackathon.version, hackathon.label, PlaceTransitionKind.ENTER), drafted.routine.trigger)
+        assertEquals(true, drafted.routine.rearmPolicy.oncePerLocalDay)
+        assertTrue(
+            ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp("wish", "i am in office")) in drafted.routine.actions,
+        )
+        assertTrue(drafted.unsupported.isEmpty())
+    }
+
+    @Test
     fun `scheduled trigger consumes every weekday and preserves the schedule`() {
         val drafted = assertIs<DraftResult.Drafted>(parser().parse(
             "every weekday at 9 AM, start a 25 minute focus timer",

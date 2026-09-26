@@ -103,6 +103,7 @@ class PatchSentenceTest {
         "open an app" to doing(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp("com.spotify.music", "Spotify"))),
         "pre-fill a message" to doing(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage("mum", "running late"))),
         "pre-fill a message, no contact" to doing(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage(null, "on my way"))),
+        "WhatsApp draft" to doing(ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp("wish", "i am in office"))),
         "calendar event" to doing(ActionSpec(ActionId.ADD_CALENDAR_EVENT, ActionArgs.CalendarEvent("dentist", 30))),
         "alarm" to doing(ActionSpec(ActionId.SET_ALARM, ActionArgs.Alarm(7, 30))),
         "ringer silent" to doing(ActionSpec(ActionId.RINGER_MODE, ActionArgs.RingerMode(RingerModeKind.SILENT))),
