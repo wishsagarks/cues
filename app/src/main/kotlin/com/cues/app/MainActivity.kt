@@ -1,5 +1,8 @@
 package com.cues.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -100,6 +103,23 @@ import java.util.UUID
  */
 class MainActivity : ComponentActivity() {
 
+    private val allPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* grants recorded by the OS; app re-reads them on next resume */ }
+
+    private fun requestAllPermissions() {
+        val needed = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            add(Manifest.permission.CAMERA)
+            add(Manifest.permission.READ_CALENDAR)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (needed.isNotEmpty()) allPermissionsLauncher.launch(needed.toTypedArray())
+    }
+
     private lateinit var localSpeechInput: LocalSpeechInput
     private lateinit var replySpeaker: com.cues.app.voice.ReplySpeaker
 
@@ -153,6 +173,7 @@ class MainActivity : ComponentActivity() {
         }
         incomingScreenText = sharedOrCapturedText(intent)
         applyShortcutIntent(intent)
+        requestAllPermissions()
 
         setContent {
             CuesTheme {
@@ -968,6 +989,7 @@ private fun CuesApp(
             }
         }
     }
+
 }
 
 private fun NavHostController.navigateToTab(route: String) {
