@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import com.cues.app.drafting.LocalSpeechInput
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -326,6 +327,7 @@ private fun CuesApp(
     var deviceCandidates by remember { mutableStateOf<List<PairedDevice>?>(null) }
     var deviceSourceText by remember { mutableStateOf<String?>(null) }
     var appQuery by remember { mutableStateOf<String?>(null) }
+    var reviewBackText by remember { mutableStateOf<String?>(null) }
     var appCandidates by remember { mutableStateOf<List<com.cues.app.runtime.InstalledApp>?>(null) }
     var appSourceText by remember { mutableStateOf<String?>(null) }
     var adapterStatuses by remember { mutableStateOf(monitoring.statuses(adapterHealth())) }
@@ -558,14 +560,17 @@ private fun CuesApp(
     }
 
     fun draft(text: String) {
+        Log.d("CuesDebug", "draft input=[$text]")
         isDrafting = true
         scope.launch {
             val turn = cueService.converse(conversation, text)
+            Log.d("CuesDebug", "converse code=${turn.reply.code} hasDraft=${turn.draft != null} reply=[${turn.reply.text.take(80)}]")
             assistantTurns = conversation.turns.toList()
             if (speakReplies) replySpeaker.speak(turn.reply.text)
             val draftedRoutine = turn.draft
             when {
                 draftedRoutine != null -> {
+                    Log.d("CuesDebug", "→Review unaccounted=${draftedRoutine.unaccountedClauses} caps=${draftedRoutine.requiredCapabilities}")
                     missingCapabilities = emptySet()
                     reviewDraft = draftedRoutine
                     navController.navigate(CuesRoutes.REVIEW)
@@ -718,7 +723,7 @@ private fun CuesApp(
                             if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
                             else notify("No system assistant is available on this phone.")
                         },
-                        incomingText = incomingScreenText,
+                        incomingText = incomingScreenText ?: reviewBackText,
                     )
                 }
 
@@ -772,7 +777,7 @@ private fun CuesApp(
                             },
                             onMissingCapabilities = { missingCapabilities = it },
                             onNotify = ::notify,
-                            onBack = { reviewDraft = null; navController.popBackStack() },
+                            onBack = { reviewBackText = routine.sourceText; reviewDraft = null; navController.popBackStack() },
                         )
                     }
                 }
@@ -1019,11 +1024,17 @@ private fun ReviewFlow(
     val review = remember(routine) { cueService.review(routine) }
     val rehearsal = remember(routine) { Rehearsal.run(review.normalized).rows }
 
+    androidx.compose.runtime.SideEffect {
+        Log.d("CuesDebug", "ReviewFlow src=[${routine.sourceText}] unaccounted=${review.normalized.unaccountedClauses} missingCaps=$missingCapabilities valid=${review.validation.isValid}")
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, review) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                onMissingCapabilities(cueService.missingCapabilities(review.normalized))
+                val caps = cueService.missingCapabilities(review.normalized)
+                Log.d("CuesDebug", "ReviewFlow ON_RESUME missingCaps=$caps")
+                onMissingCapabilities(caps)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

@@ -41,7 +41,7 @@ fun AssistantHistory(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        turns.takeLast(6).forEach { turn ->
+        turns.takeLast(2).forEach { turn ->
             // User bubble — right-aligned
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Box(

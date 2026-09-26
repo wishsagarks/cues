@@ -168,41 +168,6 @@ fun AskScreen(
             }
         }
 
-        item {
-            Text(
-                "RECENT",
-                style = CuesType.labelSmall,
-                color = t.inkSlate,
-                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-            )
-        }
-        item {
-            SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-                Column {
-                    AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
-                    if (cloudAssistEnabled && assistantTurns.isNotEmpty()) {
-                        TextButton(onClick = {
-                            cloudReadbackText = null
-                            onTranslateReadback(
-                                assistantTurns.last().reply.text,
-                                { translated -> cloudReadbackText = translated },
-                                { message -> speechMessage = message },
-                            )
-                        }) {
-                            Text("Translate & speak (Sarvam, online)")
-                        }
-                        cloudReadbackText?.let { translated ->
-                            Text(
-                                "Translated via Sarvam (online): $translated",
-                                style = CuesType.labelSmall,
-                                color = t.inkSlate,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // TemplateGallery renders its own "TRY A TEMPLATE" label internally.
         item { TemplateGallery(onPick = { template -> text = template.sentence }) }
 
@@ -321,6 +286,41 @@ fun AskScreen(
                 style = CuesType.labelSmall,
                 color = t.inkSlate,
             )
+        }
+
+        item {
+            Text(
+                "RECENT",
+                style = CuesType.labelSmall,
+                color = t.inkSlate,
+                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+            )
+        }
+        item {
+            SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    AssistantHistory(assistantTurns, onConfirmCommand, onHandoffToJovi)
+                    if (cloudAssistEnabled && assistantTurns.isNotEmpty()) {
+                        TextButton(onClick = {
+                            cloudReadbackText = null
+                            onTranslateReadback(
+                                assistantTurns.last().reply.text,
+                                { translated -> cloudReadbackText = translated },
+                                { message -> speechMessage = message },
+                            )
+                        }) {
+                            Text("Translate & speak (Sarvam, online)")
+                        }
+                        cloudReadbackText?.let { translated ->
+                            Text(
+                                "Translated via Sarvam (online): $translated",
+                                style = CuesType.labelSmall,
+                                color = t.inkSlate,
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         item { Spacer(Modifier.height(72.dp)) }
