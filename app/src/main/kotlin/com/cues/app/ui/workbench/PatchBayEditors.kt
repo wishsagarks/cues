@@ -30,6 +30,17 @@ private fun MissingNote(text: String) {
     Text(text, style = CuesType.labelSmall, color = cuesTokens.warn, modifier = Modifier.padding(top = 4.dp))
 }
 
+/**
+ * [EnumChipRow.selected] is non-null, so a not-yet-chosen picker used to pass
+ * `selected ?: options.first()` just to satisfy that type — which rendered
+ * the first option as highlighted without ever calling [onSelect], so the
+ * underlying [WhenSelection]/[IfSelection] field stayed null. That silent
+ * mismatch was the Patch Bay "Compile to Review" bug: a place/device/context
+ * chip could look chosen while `isComplete` was still false. The
+ * [LaunchedEffect] below makes the visual default a real one, firing
+ * [onSelect] once the moment nothing is selected yet — after that, `selected`
+ * is non-null and the effect does not re-fire.
+ */
 @Composable
 private fun DevicePickerRow(label: String, devices: List<PairedDevice>, selected: PairedDevice?, onSelect: (PairedDevice) -> Unit) {
     Column {
@@ -37,6 +48,9 @@ private fun DevicePickerRow(label: String, devices: List<PairedDevice>, selected
         if (devices.isEmpty()) {
             MissingNote("No paired devices found — grant Bluetooth access, or pair one first.")
         } else {
+            androidx.compose.runtime.LaunchedEffect(selected, devices) {
+                if (selected == null) onSelect(devices.first())
+            }
             EnumChipRow(devices, selected ?: devices.first(), { it.label }, onSelect, modifier = Modifier.padding(top = 4.dp))
         }
     }
@@ -49,6 +63,9 @@ private fun PlacePickerRow(label: String, places: List<Place>, selected: Place?,
         if (places.isEmpty()) {
             MissingNote("No saved places yet — add one in Workbench › Contexts & places.")
         } else {
+            androidx.compose.runtime.LaunchedEffect(selected, places) {
+                if (selected == null) onSelect(places.first())
+            }
             EnumChipRow(places, selected ?: places.first(), { it.label }, onSelect, modifier = Modifier.padding(top = 4.dp))
         }
     }
@@ -61,6 +78,9 @@ private fun ContextPickerRow(contexts: List<NamedContext>, selected: NamedContex
         if (contexts.isEmpty()) {
             MissingNote("No named contexts yet — add one in Workbench › Contexts & places.")
         } else {
+            androidx.compose.runtime.LaunchedEffect(selected, contexts) {
+                if (selected == null) onSelect(contexts.first())
+            }
             EnumChipRow(contexts, selected ?: contexts.first(), { it.label }, onSelect, modifier = Modifier.padding(top = 4.dp))
         }
     }
