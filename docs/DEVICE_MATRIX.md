@@ -72,7 +72,7 @@ Note: CLEANUP.md and sprint docs consistently assumed *OriginOS 7 on Android 15*
 | M1 | 2026-09-26 | Limited | Game mode packages: `com.vivo.game`, `com.vivo.gamecube`. Power/ultra-saver: `com.bbk.SuperPowerSave`, `com.iqoo.powersaving`, `com.vivo.devicepower`. Eye protection: package not identified from `pm list packages` — needs manual Settings navigation. Jovi: **not present**; `ACTION_ASSIST` resolves to `com.google.android.googlequicksearchbox` (Google Assistant). | probe-20260926T060004Z | Eye protection package TBD. Utility bindings stay unscoped until confirmed. |
 | M2 | | Not run | | | |
 | M3 | | Not run | | | |
-| M4 | | Not run | | | |
+| M4 | 2026-09-26 | Pass | Console exported from app, transferred via Office Kit, received on laptop, opened from `file://` in browser — all sections rendered (Cues, Forecast, Coach evidence, Receipts, Diagnostics, Ledger). | probe-20260926T060004Z (baseline) | File drop import (`.cue.txt`/`.cuecard` → app) still not built — QR/text-share is the stated alternative (CL-22). |
 | M5 | | Not run | | | |
 | M6 | | Not run | | | |
 | M7 | 2026-09-26 | Limited | `ACTION_ASSIST` → `com.google.android.googlequicksearchbox/.GoogleAppImplicitActionAssistGatewayInternal` (Google Assistant). No Jovi package on device. Handoff button label fixed to "Open assistant" (was "Open Jovi") in this session. AppFunctions rows not yet run. | probe-20260926T060004Z | AppFunctions half of M7 still requires `adb shell cmd app_function` run. |

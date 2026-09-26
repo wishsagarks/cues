@@ -684,10 +684,16 @@ at least one real share target, with results recorded here or in
    button, pre-filling charging + a connected device) has not been exercised
    with a real paired laptop.
 
-**Remove when:** a real Office Kit transfer of an exported Console has been
-confirmed end to end (phone export → Office Kit → laptop open), and either a
-`.cue.txt`/`.cuecard` file-drop import path is built or this is explicitly
-descoped with the QR/text-share paths named as the supported alternative.
+**Confirmed 26 Sep 2026:** Phone export → Office Kit transfer → laptop `file://`
+open: all sections (Cues, Forecast, Coach evidence, Receipts, Diagnostics,
+Ledger) rendered correctly. Items 1 and 2 above are closed. Items 3 and 4
+remain open — file-drop import is explicitly descoped; QR/text-share is the
+stated alternative. The "Desk" context quick-fill (item 4) is still unexercised
+with a real paired laptop.
+
+**~~Remove when~~** (partial close): items 3 and 4 retire separately — item 3
+when a file-drop import path is built or confirmed descoped in the submission,
+item 4 when the Desk context is exercised on the loaner with Office Kit paired.
 
 ---
 
