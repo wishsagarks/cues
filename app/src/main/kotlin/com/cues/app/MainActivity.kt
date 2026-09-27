@@ -660,10 +660,14 @@ private fun CuesApp(
 
     // Gemma's yellow state means "enabled and ready, but still cold". Warm it
     // as soon as that state is entered so the first real cue does not pay the
-    // multi-hundred-MB engine load. The runner's mutex/load gate deduplicates
-    // this with an in-flight draft or another warm request, and failures stay
-    // visible in RunnerState rather than retrying in a loop.
-    LaunchedEffect(onDeviceModelEnabled, modelProvisionState) {
+    // multi-hundred-MB engine load — and keyed on runnerState too, so a later
+    // return to Cold (a low-memory release via CuesApplication.onTrimMemory,
+    // or a toggle off-then-on) is warmed again on its own rather than waiting
+    // for the next draft to pay the load cost. The runner's mutex/load gate
+    // deduplicates this with an in-flight draft or another warm request, and
+    // a Failed state is deliberately excluded from the trigger so a real
+    // failure stays visible in RunnerState rather than retrying in a loop.
+    LaunchedEffect(onDeviceModelEnabled, modelProvisionState, runnerState) {
         if (onDeviceModelEnabled &&
             modelProvisionState is com.cues.core.inference.ModelProvisionState.Installed &&
             runnerState is com.cues.app.drafting.RunnerState.Cold
