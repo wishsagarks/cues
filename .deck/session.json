@@ -1,0 +1,26 @@
+{
+  "category": "product-tour",
+  "narrative": "Cues — the shortcut layer for real life",
+  "audience": "Hackathon judges, product leaders, and everyday Android users",
+  "duration": 12,
+  "outcome": "See the office-arrival workflow, approve the safety model, and choose the next real-life automation to build",
+  "features": [
+    "webgl",
+    "telemetry"
+  ],
+  "sources": "Live Cues build, declared Office place, local parser, review screen, and device adapters",
+  "constraints": "No silent personal-WhatsApp send; every cue is reviewable, approval-gated, and deterministic after approval",
+  "tempo": "energetic",
+  "background": "",
+  "problem": "",
+  "solution": "",
+  "traction": "",
+  "competitors": "",
+  "fundingAsk": "",
+  "productEmbed": {
+    "mode": "none",
+    "src": ""
+  },
+  "aiCapabilities": [],
+  "aiProvider": "none"
+}

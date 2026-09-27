@@ -137,6 +137,12 @@ enum class EventKind {
     AUDIO_OUTPUT_REMOVED,
     PLACE_ENTERED,
     PLACE_EXITED,
+
+    /** Reported only by an explicit dev-simulated control today — see `Trigger.MissedCall`. */
+    MISSED_CALL,
+
+    /** A `Trigger.RecurringInterval` occurrence came due. */
+    RECURRING_REACHED,
 }
 
 /** Kept distinct so a receipt can never present a rehearsal as something that happened. */

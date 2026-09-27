@@ -49,7 +49,6 @@ import com.cues.app.ui.ContextsScreen
 import com.cues.app.ui.DiagnosticsScreen
 import com.cues.app.ui.MemoryScreen
 import com.cues.app.ui.LearningSettings
-import com.cues.app.ui.ReceiptScreen
 import com.cues.app.ui.RoutineDetailScreen
 import com.cues.app.ui.review.ReviewScreenV2
 import com.cues.app.ui.ask.AskScreen
@@ -128,6 +127,7 @@ class MainActivity : ComponentActivity() {
     private var sarvamClient: com.cues.app.net.SarvamClient? = null
     private var sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null
     private var sarvamReadback: com.cues.app.voice.SarvamReadback? = null
+    private var briefingNarrator: com.cues.app.voice.BriefingNarrator? = null
 
     private var incomingScreenText by androidx.compose.runtime.mutableStateOf<String?>(null)
     private var newCueShortcutTick by androidx.compose.runtime.mutableStateOf(0)
@@ -171,6 +171,7 @@ class MainActivity : ComponentActivity() {
             sarvamClient = client
             sarvamSpeechInput = com.cues.app.voice.SarvamSpeechInput(this, client)
             sarvamReadback = com.cues.app.voice.SarvamReadback(this, client)
+            briefingNarrator = com.cues.app.voice.BriefingNarrator(this, client)
         }
         incomingScreenText = sharedOrCapturedText(intent)
         applyShortcutIntent(intent)
@@ -202,11 +203,13 @@ class MainActivity : ComponentActivity() {
                     cloudAssistAvailable = app.cloudAssistAvailable,
                     sarvamSpeechInput = sarvamSpeechInput,
                     sarvamReadback = sarvamReadback,
+                    briefingNarrator = briefingNarrator,
                     translateToEnglish = { text, sourceLanguageCode ->
                         sarvamClient?.translate(text, sourceLanguageCode = sourceLanguageCode, targetLanguageCode = "en-IN")?.translatedText ?: text
                     },
                     testUtilityAction = app::testUseUtility,
                     incomingScreenText = incomingScreenText,
+                    onAskFromNow = { text -> incomingScreenText = text },
                     newCueShortcutTick = newCueShortcutTick,
                     startRoutineShortcutId = startRoutineShortcutId,
                     onStartRoutineShortcutConsumed = { startRoutineShortcutId = null },
@@ -291,7 +294,7 @@ private fun CuesApp(
     runBakeOff: suspend () -> com.cues.core.corpus.BakeOffReport,
     modelDownloader: com.cues.app.drafting.ModelDownloader,
     onDeviceModelRunner: com.cues.app.drafting.LocalModelRunner,
-    onDeviceModelUserEnabled: Boolean = false,
+    onDeviceModelUserEnabled: Boolean = true,
     onToggleOnDeviceModel: (Boolean) -> Unit = {},
     probeNpu: (suspend (String) -> com.cues.core.drafting.InferenceOutput)? = null,
     externalModelDownloader: com.cues.app.drafting.ModelDownloader,
@@ -304,9 +307,11 @@ private fun CuesApp(
     cloudAssistAvailable: Boolean = false,
     sarvamSpeechInput: com.cues.app.voice.SarvamSpeechInput? = null,
     sarvamReadback: com.cues.app.voice.SarvamReadback? = null,
+    briefingNarrator: com.cues.app.voice.BriefingNarrator? = null,
     translateToEnglish: suspend (String, String) -> String = { text, _ -> text },
     testUtilityAction: (com.cues.core.model.UtilityId, com.cues.core.model.UtilityState) -> com.cues.core.ports.ActionOutcome,
     incomingScreenText: String? = null,
+    onAskFromNow: (String) -> Unit = {},
     newCueShortcutTick: Int = 0,
     startRoutineShortcutId: String? = null,
     onStartRoutineShortcutConsumed: () -> Unit = {},
@@ -320,6 +325,7 @@ private fun CuesApp(
     var diagnostics by remember { mutableStateOf(deviceDiagnostics.latest()) }
     var isBakingOff by remember { mutableStateOf(false) }
     var bakeOffReport by remember { mutableStateOf<String?>(null) }
+    var missedCallResult by remember { mutableStateOf<String?>(null) }
     var isProbingNpu by remember { mutableStateOf(false) }
     var npuProbeResult by remember { mutableStateOf<String?>(null) }
     // CL-36: the "Cues Brain" download tile's state. Re-read from disk on
@@ -476,6 +482,31 @@ private fun CuesApp(
         }
     }
 
+    /**
+     * This build reads no real call state — no `READ_CALL_LOG`/`READ_PHONE_STATE`
+     * permission is requested. This reports a missed call to every armed
+     * `Trigger.MissedCall` cue, scoped one event per routine exactly like
+     * [startManualCue] scopes a manual run — see `MissedCallKit` and
+     * `CueService.couldStart`.
+     */
+    fun simulateMissedCall(): String {
+        val targets = cueService.list().filter {
+            it.trigger is com.cues.core.model.Trigger.MissedCall && it.status == RoutineStatus.ARMED
+        }
+        if (targets.isEmpty()) return "No armed missed-call cue to simulate."
+        val started = targets.count { routine ->
+            cueService.onDeviceEvent(
+                com.cues.core.model.TriggerEvent(
+                    com.cues.core.model.EventKind.MISSED_CALL,
+                    System.currentTimeMillis(),
+                    routineId = routine.id,
+                ),
+            ).filterIsInstance<com.cues.core.session.EngineResult.Started>().any()
+        }
+        refresh()
+        return "Sent a test missed call for ${targets.size} cue(s); $started started."
+    }
+
     androidx.compose.runtime.LaunchedEffect(incomingScreenText) {
         if (incomingScreenText != null) navController.navigateToTab(CuesRoutes.ASK)
     }
@@ -547,6 +578,22 @@ private fun CuesApp(
         }
     }
 
+    fun speakBriefing(text: String, languageCode: String, onDone: () -> Unit, onError: (String) -> Unit) {
+        val narrator = briefingNarrator
+        if (narrator == null) {
+            onError("Cloud assist is not available.")
+            return
+        }
+        scope.launch {
+            try {
+                narrator.speak(text, languageCode)
+                onDone()
+            } catch (e: Exception) {
+                onError(e.message ?: "Could not play the briefing.")
+            }
+        }
+    }
+
     fun runBakeOffNow() {
         isBakingOff = true
         scope.launch {
@@ -575,6 +622,17 @@ private fun CuesApp(
                 "NPU attempt failed: ${e.message ?: e::class.simpleName}"
             }
             isProbingNpu = false
+        }
+    }
+
+    // Diagnostics screen shows the *latest* real probe result rather than a
+    // one-shot manual check; the button there still exists for an immediate
+    // re-check, this just keeps that reading fresh on its own.
+    LaunchedEffect(probeNpu) {
+        if (probeNpu == null) return@LaunchedEffect
+        while (true) {
+            probeNpuNow()
+            kotlinx.coroutines.delay(30_000)
         }
     }
 
@@ -761,6 +819,7 @@ private fun CuesApp(
                     val forecast = remember(routines) {
                         forecastToday(routines, store.allPatches(), snapshot, ZoneId.systemDefault(), store)
                     }
+                    val hasCompletedFirstSession = remember(generation) { cueService.hasCompletedSession() }
                     NowScreen(
                         routines = routines,
                         liveSessions = liveSessions,
@@ -768,9 +827,11 @@ private fun CuesApp(
                         chipset = remember { DeviceIdentity.chipset() },
                         phoneName = remember { DeviceIdentity.phoneName() },
                         forecast = forecast,
+                        hasCompletedFirstSession = hasCompletedFirstSession,
+                        onSpeakBriefing = ::speakBriefing,
                         titleFor = { id -> routines.firstOrNull { it.id == id }?.title ?: id },
-                        drafterLabel = cueService.diagnostics().setup.friendlyLabel(),
                         onCreateCue = { navController.navigateToTab(CuesRoutes.ASK) },
+                        onAskSubmit = onAskFromNow,
                         onStartManualCue = { routine -> startManualCue(routine.id) },
                         onOpenRoutine = { routine -> navController.navigate(CuesRoutes.cueDetail(routine.id)) },
                         onArmPause = { routine ->
@@ -875,15 +936,6 @@ private fun CuesApp(
                             else notify("No system assistant is available on this phone.")
                         },
                         incomingText = incomingScreenText ?: reviewBackText,
-                    )
-                }
-
-                composable(CuesRoutes.RECEIPTS) {
-                    ReceiptScreen(
-                        loadReceipts = { store.raw.receipts() },
-                        loadReceiptRecords = { store.receiptRecords() },
-                        onBack = {},
-                        onSpeak = replySpeaker::speak,
                     )
                 }
 
@@ -1049,6 +1101,8 @@ private fun CuesApp(
                         isProbingNpu = isProbingNpu,
                         npuProbeResult = npuProbeResult,
                         onProbeNpu = probeNpu?.let { ::probeNpuNow },
+                        onSimulateMissedCall = { missedCallResult = simulateMissedCall() },
+                        missedCallResult = missedCallResult,
                     )
                 }
 

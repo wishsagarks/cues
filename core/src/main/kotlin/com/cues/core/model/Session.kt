@@ -95,6 +95,14 @@ enum class Verification {
 
     /** No check was possible, or none was recorded. */
     NONE,
+
+    /**
+     * The action deliberately never touched real platform state — a send
+     * Cues has no way to make real (see [ActionId.SIMULATE_SEND]). Its own
+     * receipt line, distinct from [READ_BACK] and [STEPS_CONFIRMED], so a
+     * rehearsal can never read like a live effect.
+     */
+    SIMULATED,
 }
 
 /**

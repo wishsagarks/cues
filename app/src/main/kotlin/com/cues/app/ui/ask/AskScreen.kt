@@ -2,7 +2,6 @@ package com.cues.app.ui.ask
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -47,6 +46,7 @@ import com.cues.app.ui.DevicePickerDialog
 import com.cues.app.ui.TemplateGallery
 import com.cues.app.ui.components.KineticButton
 import com.cues.app.ui.components.DraftPipelineStrip
+import com.cues.app.ui.components.GeminiGlowFrame
 import com.cues.app.ui.components.ModelStatusBar
 import com.cues.app.ui.components.SlabCard
 import com.cues.app.ui.components.SlabTier
@@ -134,24 +134,9 @@ fun AskScreen(
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startVoice() else speechMessage = "Microphone access was not granted. Type your cue instead."
     }
-    var pendingDeviceDraft by remember { mutableStateOf<String?>(null) }
-    val bluetoothPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val pending = pendingDeviceDraft
-        pendingDeviceDraft = null
-        if (granted && pending != null) onDraft(pending)
-        else if (!granted) speechMessage = "Bluetooth access is needed to pick a paired device. You can still describe a charging cue."
-    }
     val submitDraft = {
-        val needsBluetoothPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            com.cues.app.ui.textMentionsDevice(text) &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        if (needsBluetoothPermission) {
-            pendingDeviceDraft = text
-            bluetoothPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            onDraft(text)
-            text = ""
-        }
+        onDraft(text)
+        text = ""
     }
 
     LazyColumn(
@@ -173,24 +158,9 @@ fun AskScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         Text("Cloud language assist (Sarvam)", style = CuesType.labelSmall, color = t.inkPrimary)
-                        Text(
-                            "Translation only. Sends audio/text to Sarvam, then Gemma and the local parser handle the cue — switch off for offline authoring.",
-                            style = CuesType.labelSmall,
-                            color = t.inkSlate,
-                        )
                     }
                     Switch(checked = cloudAssistEnabled, onCheckedChange = { onToggleCloudAssist() })
                 }
-                Text(
-                    when {
-                        cloudAssistEnabled && onDeviceModelEnabled -> "Routing: Sarvam translates → Gemma normalizes → parser validates."
-                        cloudAssistEnabled -> "Routing: Sarvam translates → parser validates (Gemma is off)."
-                        onDeviceModelEnabled -> "Routing: Gemma normalizes → local parser validates."
-                        else -> "Routing: local grammar parser only (offline)."
-                    },
-                    style = CuesType.labelSmall,
-                    color = t.inkSlate,
-                )
                 Text(
                     "Authoring language",
                     style = CuesType.labelSmall,
@@ -210,19 +180,6 @@ fun AskScreen(
                         )
                     }
                 }
-                Text(
-                    when {
-                        cloudAssistEnabled ->
-                            "Typed text and speech stay in ${authoringLanguage.displayLabel}. Sarvam translates just this cue for the English parser."
-                        onDeviceModelEnabled ->
-                            "Typed text and speech stay in ${authoringLanguage.displayLabel}. Gemma translates on-device before the parser — no network call, but a small model's translation is less reliable than Sarvam's; review the drafted cue carefully."
-                        else ->
-                            "Regional typing and speech need either Cloud language assist or an installed on-device model. Offline authoring without either accepts English only."
-                    },
-                    style = CuesType.labelSmall,
-                    color = t.inkSlate,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
             }
         }
 
@@ -230,23 +187,25 @@ fun AskScreen(
         item { TemplateGallery(onPick = { template -> text = template.sentence }) }
 
         item {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text("Describe a cue, or ask about one") },
-                placeholder = { Text("When my earbuds connect after 6 PM on weekdays…") },
-                minLines = 3,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = t.doYellow,
-                    unfocusedContainerColor = t.recess,
-                    focusedContainerColor = t.recess,
-                    unfocusedTextColor = t.inkPrimary,
-                    focusedTextColor = t.inkPrimary,
-                ),
-                shape = CuesShape.card,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            GeminiGlowFrame(modifier = Modifier.fillMaxWidth(), rotating = false) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Describe a cue, or ask about one") },
+                    placeholder = { Text("When my earbuds connect after 6 PM on weekdays…") },
+                    minLines = 3,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = t.doYellow,
+                        unfocusedContainerColor = t.recess,
+                        focusedContainerColor = t.recess,
+                        unfocusedTextColor = t.inkPrimary,
+                        focusedTextColor = t.inkPrimary,
+                    ),
+                    shape = CuesShape.card,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         item {

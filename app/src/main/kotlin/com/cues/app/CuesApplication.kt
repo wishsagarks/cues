@@ -20,6 +20,7 @@ import com.cues.app.runtime.BluetoothCoverage
 import com.cues.app.runtime.DeviceDiagnosticsRepository
 import com.cues.app.runtime.MonitoringRepository
 import com.cues.app.runtime.PlaceAdapter
+import com.cues.app.runtime.RecurringReminderAdapter
 import com.cues.app.runtime.TimeAdapter
 import com.cues.app.runtime.WifiAdapter
 import com.cues.core.CueService
@@ -214,12 +215,16 @@ class CuesApplication : Application() {
     /**
      * CL-36's second gate level, mirroring [cloudAssistAvailable]/
      * `cloudAssistEnabled` below: a model being installed does not, by
-     * itself, mean it's used. Starts off every launch, same as cloud assist.
-     * Reachable from anywhere `drafter` is (Home, Ask, anywhere `CueService`
-     * drafts) — not scoped to one screen's Compose state, since drafting
-     * itself is not scoped to one screen.
+     * itself, mean it's used. Starts on every launch (default flipped for
+     * the hackathon demo — a still-installed model would otherwise sit idle
+     * behind a toggle nobody remembered to flip) — [onDeviceModelAvailability]
+     * still reports `NOT_INSTALLED` until a model file is actually present,
+     * so this alone never fabricates capability. Reachable from anywhere
+     * `drafter` is (Home, Ask, anywhere `CueService` drafts) — not scoped to
+     * one screen's Compose state, since drafting itself is not scoped to one
+     * screen.
      */
-    var onDeviceModelUserEnabled: Boolean = false
+    var onDeviceModelUserEnabled: Boolean = true
         set(value) {
             field = value
             // Turning the model off is the one moment its warm Engine is
@@ -538,10 +543,13 @@ class CuesApplication : Application() {
 
     val timeAdapter by lazy { TimeAdapter(this) }
 
+    val recurringReminderAdapter by lazy { RecurringReminderAdapter(this) }
+
     val adapterSupervisor by lazy {
         AdapterSupervisor(mapOf(
             "wifi" to WifiAdapter(this),
             "time" to timeAdapter,
+            "recurring" to recurringReminderAdapter,
             "audio-output" to AudioOutputAdapter(this),
             "place" to PlaceAdapter(this) { userVisible },
         ))

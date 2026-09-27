@@ -20,6 +20,35 @@ class IntentRouterTest {
         )
     }
 
+    /**
+     * Every checked-in Ask-screen template must actually reach the drafter —
+     * a template a judge taps and gets "That is a Jovi task" for is worse
+     * than no template at all. This is the exact gap a real on-device tap
+     * caught: SYSTEM_AGENT_PATTERNS' plain \bbuy\b/\bcall\b used to be
+     * checked before CUE_PATTERNS and stole these before GrammarParser ever
+     * saw them.
+     */
+    @Test
+    fun `new template phrasings are routed to Create, not misread as one-off Jovi tasks`() {
+        assertIs<AssistantIntent.Create>(router.route("At 18:00, automatically whatsapp and notify parents saying I'm home."))
+        assertIs<AssistantIntent.Create>(router.route("Buy 2kg potato, 2kg tomato."))
+        assertIs<AssistantIntent.Create>(router.route("When I miss a call, whatsapp mom saying sorry I missed your call."))
+        assertIs<AssistantIntent.Create>(router.route("Every 3 days at 9:00, automatically notify saying water the plants."))
+        assertIs<AssistantIntent.Create>(router.route("Check my mail as mcq."))
+    }
+
+    @Test
+    fun `a genuine one-off task without a digit or trigger word still goes to the system agent`() {
+        assertEquals(
+            UnsupportedRoute.SYSTEM_AGENT,
+            assertIs<AssistantIntent.Unsupported>(router.route("buy me a pizza")).routeTo,
+        )
+        assertEquals(
+            UnsupportedRoute.SYSTEM_AGENT,
+            assertIs<AssistantIntent.Unsupported>(router.route("call Priya now")).routeTo,
+        )
+    }
+
     @Test
     fun `control requests are parsed as pending intent rather than authoring text`() {
         val intent = assertIs<AssistantIntent.Control>(router.route("pause my Study cue"))

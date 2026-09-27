@@ -39,6 +39,7 @@ fun SlabCard(
     tier: SlabTier = SlabTier.ONE,
     shape: Shape = CuesShape.card,
     edgeColor: Color? = null,
+    accentBrush: Brush? = null,
     contentPadding: PaddingValues = PaddingValues(CuesSpacing.md),
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -53,17 +54,18 @@ fun SlabCard(
         modifier = modifier
             .clip(shape)
             .background(surface)
-            .then(
-                if (t.isDark) {
-                    Modifier.background(
-                        Brush.linearGradient(
-                            colors = listOf(Color.White.copy(alpha = 0.05f), Color.Transparent),
-                            start = Offset(0f, 0f),
-                            end = Offset(0f, 120f),
-                        ),
-                    )
-                } else Modifier,
+            .background(
+                Brush.linearGradient(
+                    colors = if (t.isDark) {
+                        listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)
+                    } else {
+                        listOf(Color.Black.copy(alpha = 0.05f), Color.Transparent)
+                    },
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, 120f),
+                ),
             )
+            .then(if (accentBrush != null) Modifier.background(accentBrush) else Modifier)
             .border(1.dp, edge, shape)
             .padding(contentPadding),
         content = content,

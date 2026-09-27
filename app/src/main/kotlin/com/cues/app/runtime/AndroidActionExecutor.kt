@@ -24,7 +24,10 @@ import com.cues.core.model.ActionArgs
 import com.cues.core.model.ActionId
 import com.cues.core.model.ActionState
 import com.cues.core.model.CleanupObligation
+import com.cues.core.model.DigestDeliveryMode
 import com.cues.core.model.MediaCommand
+import com.cues.core.model.SendChannel
+import com.cues.core.model.SendPayloadKind
 import com.cues.core.model.OwnedResource
 import com.cues.core.model.RingerModeKind
 import com.cues.core.model.Session
@@ -109,12 +112,15 @@ class AndroidActionExecutor(
             ActionId.OPEN_APP -> openApp(args)
             ActionId.COMPOSE_MESSAGE -> composeMessage(args)
             ActionId.COMPOSE_WHATSAPP -> composeWhatsApp(args)
+            ActionId.COMPOSE_EMAIL -> composeEmail(args)
             ActionId.ADD_CALENDAR_EVENT -> addCalendarEvent(args)
             ActionId.SET_ALARM -> setAlarm(args)
             ActionId.MEDIA_CONTROL -> mediaControl(args)
             ActionId.RINGER_MODE -> setRingerMode(args, sessionId)
             ActionId.OPEN_LINK -> openLink(args)
             ActionId.USE_UTILITY -> useUtility(args, sessionId)
+            ActionId.SIMULATE_SEND -> simulatedSend(args)
+            ActionId.MAIL_DIGEST -> mailDigest(args)
         }
         val owns = ActionRegistry.definition(actionId)?.owns
         return if (outcome.state == ActionState.SUCCEEDED && owns != null) {
@@ -429,6 +435,118 @@ class AndroidActionExecutor(
         }
     }
 
+    /**
+     * Posts a real local notification describing a message that *would* be
+     * sent — never a real SMS, WhatsApp or email send. No third-party API lets
+     * an app silently send WhatsApp on a user's behalf, and this app requests
+     * no `SEND_SMS`/Gmail scope, so there is no mechanism here that could ever
+     * send for real. [ActionOutcome.verification] is always [Verification.SIMULATED],
+     * so [com.cues.core.receipt.Receipts] can never render this as a
+     * completed real send — see [com.cues.core.registry.ActionRegistry]'s
+     * `SIMULATE_SEND` entry.
+     */
+    private fun simulatedSend(args: ActionArgs): ActionOutcome {
+        val send = args as? ActionArgs.SimulatedSend
+            ?: return ActionOutcome(ActionState.FAILED, "No test send was supplied.")
+
+        val body = buildString {
+            append("→ ${send.channels.sortedBy { it.name }.joinToString(" + ") { it.label() }}")
+            send.recipientHint?.let { append(" · $it") }
+            append(": \"${send.message}\"")
+            if (send.payloadKind == SendPayloadKind.VOICE_SCRIPT) append(" (voice-note script)")
+            send.languageCode?.let { append(" (in $it)") }
+        }
+        return postLocalNotice(
+            channelId = SIMULATED_SEND_CHANNEL_ID,
+            channelName = "Cues test sends",
+            notificationId = simulatedSendNotificationId(send),
+            title = "Test send — nothing left this phone",
+            text = body,
+        )
+    }
+
+    /**
+     * Posts a mail digest built entirely from typed, already-approved data —
+     * a seeded local fixture and, for [DigestDeliveryMode.GEMMA_PARSABLE], a
+     * format template approved once before this session ever ran. Never a
+     * live model or network call at execution time — see
+     * `MailDigestGenerator` and `ActionArgs.MailDigest.formatTemplate`.
+     */
+    private fun mailDigest(args: ActionArgs): ActionOutcome {
+        val digest = args as? ActionArgs.MailDigest
+            ?: return ActionOutcome(ActionState.FAILED, "No mail digest mode was supplied.")
+
+        val (title, body, simulated) = when (digest.deliveryMode) {
+            DigestDeliveryMode.MCQ_VOICE_WHATSAPP -> Triple(
+                "Test voice-note send — nothing left this phone",
+                "→ WhatsApp: today's mail digest, read aloud as a voice note (test only; see Diagnostics to preview it for real).",
+                true,
+            )
+            DigestDeliveryMode.SUMMARY_NEEDS_INPUT -> Triple(
+                "Mail digest — needs your input",
+                "Today's mail has items that need a decision from you. Open Cues to review them.",
+                false,
+            )
+            DigestDeliveryMode.GEMMA_PARSABLE -> Triple(
+                "Mail digest (Gemma format)",
+                digest.formatTemplate ?: "Today's mail digest is ready.",
+                false,
+            )
+        }
+        return postLocalNotice(
+            channelId = if (simulated) SIMULATED_SEND_CHANNEL_ID else RESULT_CHANNEL_ID,
+            channelName = "Cues test sends",
+            notificationId = MAIL_DIGEST_NOTIFICATION_ID,
+            title = title,
+            text = body,
+            verification = if (simulated) Verification.SIMULATED else Verification.NONE,
+        )
+    }
+
+    /** The acquire-then-verify pattern [notifyResult] and [pinnedNote] already use, shared for the two notice-only actions above. */
+    private fun postLocalNotice(
+        channelId: String,
+        channelName: String,
+        notificationId: Int,
+        title: String,
+        text: String,
+        verification: Verification = Verification.SIMULATED,
+    ): ActionOutcome {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifications.areNotificationsEnabled()) {
+            return ActionOutcome(ActionState.BLOCKED, "Notifications are disabled.")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notifications.createNotificationChannel(
+                NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT),
+            )
+        }
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(com.cues.app.R.drawable.ic_stat_cue)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .build()
+        notifications.notify(notificationId, notification)
+        return if (notifications.activeNotifications.any { it.id == notificationId && it.tag == null }) {
+            ActionOutcome(ActionState.SUCCEEDED, verification = verification)
+        } else {
+            ActionOutcome(ActionState.BLOCKED, "The notice could not be confirmed as posted.")
+        }
+    }
+
+    private fun SendChannel.label(): String = when (this) {
+        SendChannel.NOTIFICATION_BAR -> "notification bar"
+        SendChannel.WHATSAPP -> "WhatsApp"
+        SendChannel.SMS -> "SMS"
+        SendChannel.EMAIL -> "email"
+    }
+
+    private fun simulatedSendNotificationId(send: ActionArgs.SimulatedSend): Int =
+        SIMULATED_SEND_NOTIFICATION_BASE +
+            (send.channels.map { it.name }.sorted().joinToString(",") + send.recipientHint.orEmpty() + send.message)
+                .hashCode().ushr(1) % 5_000
+
     // ---------------------------------------------------------- handoffs
 
     /**
@@ -498,6 +616,30 @@ class AndroidActionExecutor(
             ActionOutcome(ActionState.SUCCEEDED, "Opened WhatsApp with a draft. Choose ${message.contactHint ?: "a chat"} and send it.")
         } catch (_: android.content.ActivityNotFoundException) {
             ActionOutcome(ActionState.BLOCKED, "WhatsApp is not installed or cannot accept a text draft.")
+        }
+    }
+
+    /**
+     * A plain `mailto:` handoff — no Gmail API, no OAuth, no account access.
+     * Opens whichever email app the user has set as default with a draft;
+     * the user reviews and sends it themselves, exactly like [composeMessage].
+     */
+    private fun composeEmail(args: ActionArgs): ActionOutcome {
+        val email = (args as? ActionArgs.ComposeEmail)
+            ?: return ActionOutcome(ActionState.FAILED, "No email text was supplied.")
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = "mailto:${email.contactHint.orEmpty()}".toUri()
+            email.subject?.let { putExtra(Intent.EXTRA_SUBJECT, it) }
+            putExtra(Intent.EXTRA_TEXT, email.text)
+        }
+        if (intent.resolveActivity(context.packageManager) == null) {
+            return ActionOutcome(ActionState.BLOCKED, "No email app is available to pre-fill this.")
+        }
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ActionOutcome(ActionState.SUCCEEDED, "Pre-filled an email. You send it.")
+        } catch (e: android.content.ActivityNotFoundException) {
+            ActionOutcome(ActionState.BLOCKED, "Could not open an email app: ${e.message}.")
         }
     }
 
@@ -728,5 +870,8 @@ class AndroidActionExecutor(
         const val TAG = "CuesSession"
         const val RESULT_CHANNEL_ID = "cues_result"
         const val RESULT_NOTIFICATION_ID = 20_001
+        const val SIMULATED_SEND_CHANNEL_ID = "cues_simulated_send"
+        const val SIMULATED_SEND_NOTIFICATION_BASE = 21_000
+        const val MAIL_DIGEST_NOTIFICATION_ID = 26_001
     }
 }

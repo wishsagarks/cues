@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Psychology
@@ -90,6 +92,9 @@ fun DiagnosticsScreen(
     isProbingNpu: Boolean = false,
     npuProbeResult: String? = null,
     onProbeNpu: (() -> Unit)? = null,
+    /** Fires a dev-simulated `EventKind.MISSED_CALL` at every armed `Trigger.MissedCall` cue — see MissedCallKit. */
+    onSimulateMissedCall: (() -> Unit)? = null,
+    missedCallResult: String? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     androidx.activity.compose.BackHandler(onBack = onBack)
@@ -128,8 +133,6 @@ fun DiagnosticsScreen(
             )
             Spacer(Modifier.height(8.dp))
         }
-        DiagnosticCard("On-device speech", diagnostics.onDeviceSpeech)
-        DiagnosticCard("English (India) pack", diagnostics.englishIndiaPack)
         cueDiagnostics?.let { DiagnosticCard("Drafting path", it.render()) }
 
         if (inferenceEntries.isNotEmpty()) {
@@ -239,6 +242,36 @@ fun DiagnosticsScreen(
                 )
             }
         }
+
+        if (onSimulateMissedCall != null) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Missed call (test)",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "This build cannot read real call state (no READ_CALL_LOG/READ_PHONE_STATE permission is requested). " +
+                    "This reports a missed call to every armed missed-call cue, exactly the event a real one would send.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cuesColors.ink200,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            OutlinedButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSimulateMissedCall()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Send test missed call") }
+            missedCallResult?.let { result ->
+                Text(
+                    result,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
     }
 }
 
@@ -342,7 +375,22 @@ private fun DeviceHealthCard(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth().animateContentSize(),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            cuesColors.bg100,
+                            cuesColors.bg300,
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(0f, Float.POSITIVE_INFINITY),
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                )
+                .padding(14.dp),
+        ) {
             Text("DEVICE HEALTH", style = MaterialTheme.typography.labelMedium, color = cuesColors.ink200)
 
             Text(
@@ -400,19 +448,25 @@ private fun DeviceHealthCard(
                     onClick = onProbeNpu,
                     enabled = !isProbingNpu,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                ) { Text(if (isProbingNpu) "Testing NPU…" else "Test NPU on this chip anyway") }
+                ) { Text(if (isProbingNpu) "Testing NPU…" else "Test NPU now") }
                 Text(
-                    "Forces a real attempt on this exact chip, bypassing the allow-list above. " +
-                        "May fail safely, or may crash if the native NPU dispatch layer can't run on this Hexagon version.",
+                    "Retested automatically every 30s. Latest result:",
                     style = MaterialTheme.typography.labelSmall,
                     color = cuesColors.ink200,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-                npuProbeResult?.let { result ->
+                if (npuProbeResult != null) {
                     Text(
-                        result,
+                        npuProbeResult,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (result.startsWith("NPU loaded")) cuesColors.go else cuesColors.amber,
+                        color = if (npuProbeResult.startsWith("NPU loaded")) cuesColors.go else cuesColors.amber,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                } else if (npuKnownIssue != null) {
+                    Text(
+                        npuKnownIssue,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cuesColors.amber,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
@@ -437,7 +491,14 @@ private fun DeviceHealthCard(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     ) {
                         rowGroups.forEach { group ->
-                            HealthTile(Icons.Filled.Sensors, group.label, "${group.count}", Modifier.weight(1f))
+                            val healthy = group.count > 0
+                            HealthTile(
+                                Icons.Filled.Sensors,
+                                group.label,
+                                "${group.count}",
+                                Modifier.weight(1f),
+                                statusColor = if (healthy) cuesColors.go else cuesColors.stop,
+                            )
                         }
                         if (rowGroups.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -448,20 +509,35 @@ private fun DeviceHealthCard(
 }
 
 @Composable
-private fun HealthTile(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+private fun HealthTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    statusColor: androidx.compose.ui.graphics.Color? = null,
+) {
     Column(
         modifier = modifier
             .background(cuesColors.bg200, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = cuesColors.ink200, modifier = Modifier.size(16.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = cuesColors.ink200,
-                modifier = Modifier.padding(start = 6.dp),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = cuesColors.ink200, modifier = Modifier.size(16.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cuesColors.ink200,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+            if (statusColor != null) {
+                Spacer(
+                    Modifier
+                        .size(8.dp)
+                        .background(statusColor, androidx.compose.foundation.shape.CircleShape),
+                )
+            }
         }
         Text(
             value,
@@ -518,7 +594,7 @@ private fun ModelBrainCard(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).animateContentSize(),
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text("Cues Brain", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text("Local Inference", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
             Text(
                 "Bring your own Gemma model. Drafting stays on this phone — no cue text leaves it.",
                 style = MaterialTheme.typography.bodySmall,
@@ -610,6 +686,35 @@ private fun ModelBrainCard(
                         color = cuesColors.ink200,
                         modifier = Modifier.padding(top = 2.dp),
                     )
+                    // Mockup only: Gemma is the only model Cues ever actually drafts
+                    // with. These two extra rows are non-functional demo dressing —
+                    // there is no runtime path that loads either of them.
+                    Column(Modifier.padding(top = 10.dp)) {
+                        Text("MODEL", style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Gemma", style = MaterialTheme.typography.bodySmall)
+                            Text("In use", style = MaterialTheme.typography.labelSmall, color = cuesColors.go)
+                        }
+                        listOf("Phi-3 Mini", "Qwen2 0.5B").forEach { mockModelName ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(mockModelName, style = MaterialTheme.typography.labelSmall, color = cuesColors.ink200)
+                                Icon(
+                                    Icons.Filled.Download,
+                                    contentDescription = null,
+                                    tint = cuesColors.ink200,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                    }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -794,17 +899,13 @@ private fun npuReading(
     npuEligible: Boolean,
     npuKnownIssue: String? = null,
     lastInferenceReport: com.cues.core.inference.InferenceReport?,
-): String {
-    val hardwareLine = npuHardwareFamily ?: "No NPU family identified from this chipset"
-    val cuesLine = when {
-        lastInferenceReport?.backend == com.cues.core.inference.InferenceBackend.NPU ->
-            "Cues ran last on NPU: ${lastInferenceReport.loadMs}ms load, ${"%.1f".format(lastInferenceReport.tokensPerSecond)} tok/s"
-        npuKnownIssue != null -> npuKnownIssue
-        !npuEligible -> "Cues' model has no confirmed NPU build for this exact chip yet"
-        lastInferenceReport != null -> "Cues model eligible, but last draft ran on ${lastInferenceReport.backend.name}"
-        else -> "Cues model eligible, no draft has used it yet"
-    }
-    return "$hardwareLine\n$cuesLine"
+): String = when {
+    lastInferenceReport?.backend == com.cues.core.inference.InferenceBackend.NPU ->
+        "Ran on NPU: ${lastInferenceReport.loadMs}ms load, ${"%.1f".format(lastInferenceReport.tokensPerSecond)} tok/s"
+    npuKnownIssue != null -> npuHardwareFamily ?: "Known issue on this chip"
+    !npuEligible -> "No confirmed NPU build yet"
+    lastInferenceReport != null -> "Eligible, last ran on ${lastInferenceReport.backend.name}"
+    else -> npuHardwareFamily ?: "Eligible, not yet used"
 }
 
 private fun mb(bytes: Long): String = "%.1f".format(bytes / 1_000_000.0)

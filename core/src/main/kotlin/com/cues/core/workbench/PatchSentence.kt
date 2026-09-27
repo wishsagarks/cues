@@ -261,6 +261,11 @@ class PatchSentence(
         is Trigger.PlaceTransition -> Phrase.Yes(
             "when I ${if (trigger.transition == PlaceTransitionKind.ENTER) "arrive at" else "leave"} ${trigger.label}",
         )
+        // Both are typed with a spoken sentence today (see GrammarParser's
+        // "miss a call" / "every N days|months|years" phrases); the patch
+        // bay's tap chips don't compose them yet.
+        is Trigger.MissedCall -> Phrase.No(unavailable.getValue(Trigger.MissedCall::class))
+        is Trigger.RecurringInterval -> Phrase.No(unavailable.getValue(Trigger.RecurringInterval::class))
     }
 
     // ------------------------------------------------------------ conditions
@@ -315,6 +320,12 @@ class PatchSentence(
             ?: Phrase.Yes(listOfNotNull("text", args.contactHint, "saying", args.text).joinToString(" "))
         is ActionArgs.ComposeWhatsApp -> lowercaseOnly(args.text, "A WhatsApp message")
             ?: Phrase.Yes(listOfNotNull("WhatsApp", args.contactHint, "saying", args.text).joinToString(" "))
+        is ActionArgs.ComposeEmail -> when {
+            args.subject != null -> Phrase.No("The grammar can't carry an email subject line.")
+            else -> lowercaseOnly(args.text, "An email") ?: Phrase.Yes(
+                listOfNotNull("email", args.contactHint, "saying", args.text).joinToString(" "),
+            )
+        }
         is ActionArgs.CalendarEvent -> when {
             args.durationMinutes != CALENDAR_MINUTES ->
                 Phrase.No("A calendar event from the grammar is always $CALENDAR_MINUTES minutes long.")
@@ -340,7 +351,38 @@ class PatchSentence(
                     UtilityId.GAME_MODE -> "game mode"
                 },
         )
+        is ActionArgs.SimulatedSend -> when {
+            args.payloadKind != SendPayloadKind.TEXT ->
+                Phrase.No("The grammar can only express a text simulated send, not a voice script.")
+            args.languageCode != null ->
+                Phrase.No("The grammar doesn't carry a language tag; author a translated send by hand.")
+            else -> lowercaseOnly(args.message, "A simulated send") ?: Phrase.Yes(
+                listOfNotNull(
+                    "automatically",
+                    args.channels.sortedBy { it.name }.joinToString(" and ") { it.grammarWord() },
+                    args.recipientHint,
+                    "saying",
+                    args.message,
+                ).joinToString(" "),
+            )
+        }
+        is ActionArgs.MailDigest -> when (args.deliveryMode) {
+            DigestDeliveryMode.SUMMARY_NEEDS_INPUT -> Phrase.Yes("check my mail")
+            DigestDeliveryMode.MCQ_VOICE_WHATSAPP -> Phrase.Yes("check my mail as mcq")
+            DigestDeliveryMode.GEMMA_PARSABLE -> if (args.formatTemplate == com.cues.core.drafting.DEFAULT_MAIL_DIGEST_TEMPLATE) {
+                Phrase.Yes("check my mail as gemma format")
+            } else {
+                Phrase.No("The grammar only approves its one built-in Gemma template; a custom one can't be phrased.")
+            }
+        }
         ActionArgs.None -> Phrase.No("This action needs its details chosen first.")
+    }
+
+    private fun SendChannel.grammarWord(): String = when (this) {
+        SendChannel.WHATSAPP -> "whatsapp"
+        SendChannel.SMS -> "sms"
+        SendChannel.EMAIL -> "email"
+        SendChannel.NOTIFICATION_BAR -> "notify"
     }
 
     /** The grammar reads free text in lower case, so anything else would come back changed. */
@@ -375,6 +417,10 @@ class PatchSentence(
         val unavailable: Map<KClass<*>, String> = mapOf(
             Condition.WifiConnected::class to
                 "The phrase grammar has no words for a Wi-Fi condition yet; use a Wi-Fi trigger instead.",
+            Trigger.MissedCall::class to
+                "Type \"I missed a call\" instead; the patch bay has no chip for this trigger yet.",
+            Trigger.RecurringInterval::class to
+                "Type \"every N days/months/years\" instead; the patch bay has no chip for this trigger yet.",
         )
 
         private const val CHARGE_REMINDER = "The phone is not charging."

@@ -160,7 +160,39 @@ sealed interface Trigger {
         val label: String,
         val transition: PlaceTransitionKind,
     ) : Trigger
+
+    /**
+     * A missed call was reported. [callerHint] is free text shown in review
+     * only — never resolved to a real contact and never used to filter which
+     * call matched. Real detection needs `READ_CALL_LOG`/`READ_PHONE_STATE`,
+     * which this app does not request; on-device this trigger is fired only
+     * by an explicit "Simulate missed call" developer control (see
+     * `MissedCallKit.capabilities`, which is deliberately empty).
+     */
+    @Serializable
+    @SerialName("missedCall")
+    data class MissedCall(val callerHint: String? = null) : Trigger
+
+    /**
+     * Fires every [intervalValue] [intervalUnit] starting from [anchorEpochDay],
+     * at local [time]. Unlike [AtTime] (a recurring weekly time-of-day), this
+     * supports the "every N days/months/years" shape a weekly schedule can't
+     * express. Month/year arithmetic is delegated to `RecurrenceCalculator`
+     * (backed by `java.time`), including end-of-month clamping.
+     */
+    @Serializable
+    @SerialName("recurringInterval")
+    data class RecurringInterval(
+        val anchorEpochDay: Long,
+        val intervalValue: Int,
+        val intervalUnit: RecurrenceUnit,
+        val time: LocalTimeOfDay,
+        val zoneId: String = "system",
+    ) : Trigger
 }
+
+@Serializable
+enum class RecurrenceUnit { DAYS, MONTHS, YEARS }
 
 @Serializable
 enum class DeviceTransition { CONNECTED, DISCONNECTED }
@@ -322,6 +354,9 @@ enum class ActionId {
     /** Opens WhatsApp with a draft. The user chooses the chat and sends it. */
     COMPOSE_WHATSAPP,
 
+    /** Opens the phone's own email app with a draft, via a `mailto:` intent. Never sends — the user finishes it. */
+    COMPOSE_EMAIL,
+
     /** Opens the calendar app's own "add event" screen, pre-filled. The user saves it. */
     ADD_CALENDAR_EVENT,
 
@@ -346,6 +381,25 @@ enum class ActionId {
      * API.
      */
     USE_UTILITY,
+
+    /**
+     * Posts a real local notification describing a message that *would* be
+     * sent — never a real SMS, WhatsApp or email send. No third-party API
+     * lets an app silently send WhatsApp on a user's behalf, and a real
+     * unattended SMS send would need a new dangerous permission this app does
+     * not otherwise request. The receipt for this action always carries
+     * [Verification.SIMULATED] so it can never be mistaken for a completed
+     * external send.
+     */
+    SIMULATE_SEND,
+
+    /**
+     * Posts a digest built entirely from typed, already-approved data (a
+     * seeded mail fixture at authoring time, or a Gemma-authored template
+     * approved once before this action ever runs) — never a live model or
+     * network call at execution time.
+     */
+    MAIL_DIGEST,
 }
 
 @Serializable
@@ -391,6 +445,15 @@ sealed interface ActionArgs {
     data class ComposeWhatsApp(val contactHint: String? = null, val text: String) : ActionArgs
 
     /**
+     * An email handoff via a plain `mailto:` intent — no Gmail API, no OAuth,
+     * no account access of any kind. [contactHint] is a free-text address
+     * shown to the email app, never resolved or validated by Cues.
+     */
+    @Serializable
+    @SerialName("composeEmail")
+    data class ComposeEmail(val contactHint: String? = null, val subject: String? = null, val text: String) : ActionArgs
+
+    /**
      * No stored moment on purpose: unlike a fact-dated reminder (not yet
      * wired — see CLEANUP.md CL-16), this event begins when the *action*
      * runs, i.e. at session start, exactly the way every other action here
@@ -427,6 +490,42 @@ sealed interface ActionArgs {
     @Serializable
     @SerialName("useUtility")
     data class UseUtility(val utilityId: UtilityId, val state: UtilityState) : ActionArgs
+
+    /**
+     * Never sent for real — see [ActionId.SIMULATE_SEND]. [channels] is a set,
+     * not a single value, and deliberately so: fanning one message out to
+     * WhatsApp, the notification bar and email is one action with several
+     * destinations, not three near-identical [ActionId] entries — the
+     * registry forbids the same [ActionId] appearing twice in one routine
+     * (see `Validator.validateActions`), so three separate `SIMULATE_SEND`
+     * specs for one message would not even compile a valid routine.
+     * [recipientHint] is free text shown as-is, never resolved to a real
+     * contact or address. [languageCode] is display-only metadata: the
+     * message was already translated (or paraphrased) and approved in this
+     * exact form before the cue was armed, so runtime never re-consults a
+     * translation model.
+     */
+    @Serializable
+    @SerialName("simulatedSend")
+    data class SimulatedSend(
+        val channels: Set<SendChannel>,
+        val recipientHint: String? = null,
+        val message: String,
+        val payloadKind: SendPayloadKind = SendPayloadKind.TEXT,
+        val languageCode: String? = null,
+    ) : ActionArgs
+
+    /**
+     * [formatTemplate] is filled in only for [DigestDeliveryMode.GEMMA_PARSABLE]:
+     * a bounded, placeholder-only string a model authored once at approval
+     * time (see `TemplateRenderer`), never regenerated at execution time.
+     */
+    @Serializable
+    @SerialName("mailDigest")
+    data class MailDigest(
+        val deliveryMode: DigestDeliveryMode,
+        val formatTemplate: String? = null,
+    ) : ActionArgs
 }
 
 @Serializable
@@ -434,6 +533,17 @@ enum class MediaCommand { PLAY, PAUSE, NEXT, PREVIOUS }
 
 @Serializable
 enum class RingerModeKind { SILENT, VIBRATE }
+
+/** Where a simulated send would have gone, had it been real. */
+@Serializable
+enum class SendChannel { NOTIFICATION_BAR, WHATSAPP, SMS, EMAIL }
+
+@Serializable
+enum class SendPayloadKind { TEXT, VOICE_SCRIPT }
+
+/** How a mail digest is delivered. Chosen once, at authoring time — never re-decided by a model at runtime. */
+@Serializable
+enum class DigestDeliveryMode { MCQ_VOICE_WHATSAPP, SUMMARY_NEEDS_INPUT, GEMMA_PARSABLE }
 
 // ------------------------------------------------------------ end and exit
 

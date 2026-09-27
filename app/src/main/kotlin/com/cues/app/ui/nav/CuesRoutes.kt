@@ -12,7 +12,6 @@ object CuesRoutes {
     const val NOW = "now"
     const val INSIGHTS = "insights"
     const val ASK = "ask"
-    const val RECEIPTS = "receipts"
     const val WORKBENCH = "workbench"
 
     // Pushed flows.
@@ -29,14 +28,13 @@ object CuesRoutes {
     const val INGEST_SCAN = "ingest/scan"
     const val CUE_CARD_SHARE = "cue-card-share" // routine passed via ReviewArgHolder-style holder
 
-    val bottomTabs = listOf(NOW, INSIGHTS, ASK, RECEIPTS, WORKBENCH)
+    val bottomTabs = listOf(NOW, INSIGHTS, ASK, WORKBENCH)
 }
 
 fun tabTitle(route: String): String = when (route) {
     CuesRoutes.NOW -> "Now"
     CuesRoutes.INSIGHTS -> "Insights"
     CuesRoutes.ASK -> "Ask"
-    CuesRoutes.RECEIPTS -> "Receipts"
     CuesRoutes.WORKBENCH -> "Workbench"
     else -> "Cues"
 }

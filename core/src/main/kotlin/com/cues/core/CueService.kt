@@ -769,6 +769,14 @@ class CueService(
         if (kind == EventKind.MANUAL_RUN && routine.trigger is com.cues.core.model.Trigger.Manual) {
             return routineId == routine.id
         }
+        // A reported missed call has the same shape problem as a manual run:
+        // Trigger.MissedCall carries nothing of its own to match against
+        // (real detection is out of scope on this build — see MissedCallKit),
+        // so an unscoped report must start nothing rather than every armed
+        // missed-call cue at once.
+        if (kind == EventKind.MISSED_CALL && routine.trigger is com.cues.core.model.Trigger.MissedCall) {
+            return routineId == routine.id
+        }
         return SignalRegistry.listensFor(routine.trigger, kind) &&
             SignalRegistry.match(routine.trigger, this).truth == com.cues.core.eval.Truth.MATCH
     }
@@ -869,6 +877,9 @@ class CueService(
         gaps.forEach { session -> byId[session.routineId]?.let { recordReceipt(it, EngineResult.Ended(session), provenance = null) } }
         return gaps
     }
+
+    /** Whether this phone has ever recorded a session, finished or not. */
+    fun hasCompletedSession(): Boolean = sessions.recent(0).isNotEmpty() || sessions.allUnfinished().isNotEmpty()
 
     // -------------------------------------------------------------- insights
 

@@ -89,12 +89,17 @@ object Normalizer {
         is ActionArgs.OpenApp -> "package=${a.packageName}"
         is ActionArgs.ComposeMessage -> "contact=${a.contactHint.orEmpty()},text=${a.text}"
         is ActionArgs.ComposeWhatsApp -> "contact=${a.contactHint.orEmpty()},text=${a.text}"
+        is ActionArgs.ComposeEmail -> "contact=${a.contactHint.orEmpty()},subject=${a.subject.orEmpty()},text=${a.text}"
         is ActionArgs.CalendarEvent -> "title=${a.title},minutes=${a.durationMinutes}"
         is ActionArgs.Alarm -> "hour=${a.hour},minute=${a.minute},label=${a.label.orEmpty()}"
         is ActionArgs.MediaControl -> "command=${a.command.name}"
         is ActionArgs.RingerMode -> "mode=${a.mode.name}"
         is ActionArgs.OpenLink -> "url=${a.url}"
         is ActionArgs.UseUtility -> "utility=${a.utilityId.name},state=${a.state.name}"
+        is ActionArgs.SimulatedSend ->
+            "channels=${a.channels.map { it.name }.sorted().joinToString(",")},recipient=${a.recipientHint.orEmpty()}," +
+                "message=${a.message},payload=${a.payloadKind.name},language=${a.languageCode.orEmpty()}"
+        is ActionArgs.MailDigest -> "mode=${a.deliveryMode.name},template=${a.formatTemplate.orEmpty()}"
         ActionArgs.None -> "none"
     }
 

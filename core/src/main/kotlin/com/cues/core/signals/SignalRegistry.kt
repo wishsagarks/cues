@@ -27,6 +27,8 @@ object SignalRegistry {
         AtTimeKit,
         AudioOutputKit,
         PlaceTransitionKit,
+        MissedCallKit,
+        RecurringIntervalKit,
     )
 
     val conditionKits: List<ConditionKit<out Condition>> = listOf(
@@ -64,6 +66,8 @@ object SignalRegistry {
             Trigger.AtTime::class,
             Trigger.AudioOutput::class,
             Trigger.PlaceTransition::class,
+            Trigger.MissedCall::class,
+            Trigger.RecurringInterval::class,
         )) { "Every sealed Trigger subtype must have exactly one signal kit." }
         check(conditionByType.keys == setOf(
             Condition.DaysOfWeek::class,

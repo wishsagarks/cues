@@ -15,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.cues.app.ui.components.EmptyState
 import com.cues.app.ui.components.FixedSegmentedControl
 import com.cues.app.ui.components.KineticSwitch
 import com.cues.app.ui.components.SectionHeader
@@ -81,14 +80,7 @@ fun InsightsScreen(
 
         item { SectionHeader("OVERVIEW", meta = "local, verified") }
 
-        if (!report.hasData) {
-            item {
-                EmptyState(
-                    "Insights appear after your first session",
-                    "Nothing here is estimated — arm a cue and let it run once.",
-                )
-            }
-        }
+        item { com.cues.app.ui.components.ProjectedSavingsTrendSection() }
 
         item {
             SlabCard(tier = SlabTier.TWO, modifier = Modifier.fillMaxWidth()) {
@@ -257,7 +249,7 @@ fun InsightsScreen(
         item {
             SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Column {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("LEARNING", style = CuesType.labelSmall, color = t.inkSlate)
                         Text(
                             "Records events locally for 14 days, to power skip reasons and the coach.",
@@ -336,7 +328,7 @@ fun InsightsScreen(
         item {
             SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Column {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("USAGE & COST TRACKING", style = CuesType.labelSmall, color = t.inkSlate)
                         Text(
                             "Records each model call's token estimate and cost locally for 30 days.",

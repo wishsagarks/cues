@@ -5,6 +5,15 @@ import com.cues.core.model.*
 import com.cues.core.registry.ActionRegistry
 import com.cues.core.signals.SignalRegistry
 
+/**
+ * The built-in stand-in for a Gemma-authored template (see
+ * [ActionId.MAIL_DIGEST]'s doc comment): a live on-device model call to
+ * author this string at approval time is future work, so the grammar ships
+ * one fixed, already-approved template instead. Never regenerated at
+ * session-execution time either way.
+ */
+const val DEFAULT_MAIL_DIGEST_TEMPLATE = "Today's mail digest is ready — open Cues to read it."
+
 /** A paired device the parser is allowed to resolve "my earbuds" to. */
 data class PairedDevice(
     val id: String,
@@ -78,8 +87,16 @@ class GrammarParser(
         val conditions = parseConditions(normalized, consumed)
         // A named context is a gate, never an inferred trigger. In the terse
         // "while in Desk, start …" form the only honest event is the user's
-        // explicit manual run; the review makes that visible.
-        if (trigger == null && conditions.any { it is Condition.InContext || it is Condition.AtPlace }) {
+        // explicit manual run; the review makes that visible. A shopping-list
+        // capture or a mail-digest request is the same shape: "buy 2kg
+        // potato, 2kg tomato" names no event either, and the honest trigger
+        // for an immediate request is the same manual run.
+        if (trigger == null && (
+                conditions.any { it is Condition.InContext || it is Condition.AtPlace } ||
+                    SHOPPING_LIST_PATTERN.containsMatchIn(normalized) ||
+                    MAIL_DIGEST_PATTERN.containsMatchIn(normalized)
+                )
+        ) {
             trigger = ResolvedTrigger(Trigger.Manual)
         }
         if (trigger == null) return noTriggerResult(normalized)
@@ -199,6 +216,30 @@ class GrammarParser(
         if (Regex("\\b(?:every|each)\\s+(?:morning|evening|night|day|week)\\b").containsMatchIn(text) &&
             Regex("\\b(?:compile|news|content|summari[sz]e)\\b").containsMatchIn(text)
         ) return null
+
+        Regex("\\bmiss(?:ed)?\\s+(?:a\\s+)?call\\b").find(text)?.let { m ->
+            consumed += m.range
+            return ResolvedTrigger(Trigger.MissedCall())
+        }
+
+        // "Every N days/months/years" — distinct from the single-word "every
+        // day/weekday/weekend" DaysOfWeek condition phrasing, which never has
+        // a digit between "every" and the unit word.
+        Regex("\\bevery\\s+(\\d{1,4})\\s+(day|days|month|months|year|years)\\b").find(text)?.let { m ->
+            val value = m.groupValues[1].toIntOrNull()?.takeIf { it >= 1 } ?: return@let
+            val unit = when {
+                m.groupValues[2].startsWith("day") -> RecurrenceUnit.DAYS
+                m.groupValues[2].startsWith("month") -> RecurrenceUnit.MONTHS
+                else -> RecurrenceUnit.YEARS
+            }
+            consumed += m.range
+            val time = Regex("\\bat\\s+($TIME)\\b").find(text)?.let { t ->
+                parseTime(t.groupValues[1])?.also { consumed += t.range }
+            } ?: LocalTimeOfDay(DEFAULT_RECURRING_HOUR, 0)
+            return ResolvedTrigger(
+                Trigger.RecurringInterval(java.time.LocalDate.now().toEpochDay(), value, unit, time),
+            )
+        }
 
         Regex("\\b(?:plug|unplug|connect|disconnect)\\w*\\s+(?:my )?(wired|bluetooth|any )?(?:headphones|headset|audio)\\b").find(text)?.let { m ->
             val removed = Regex("\\b(unplug|disconnect)").containsMatchIn(m.value)
@@ -528,7 +569,41 @@ class GrammarParser(
             add(ActionSpec(ActionId.OPEN_APP, ActionArgs.OpenApp(resolvedApp.packageName, resolvedApp.label)))
         }
 
-        WHATSAPP_PATTERN.find(text)?.let { match ->
+        // Never sends for real — see ActionId.SIMULATE_SEND. Checked before
+        // WHATSAPP_PATTERN/MESSAGE_PATTERN, though the lookbehind guards on
+        // those two already make the three mutually exclusive.
+        SIMULATE_SEND_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val channels = match.groups["channels"]?.value.orEmpty()
+                .split(Regex("[,]|\\band\\b"))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .map { it.toSendChannel() }
+                .toSet()
+                .ifEmpty { setOf(SendChannel.NOTIFICATION_BAR) }
+            val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
+            val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
+                ?: "Sent from Cues."
+            add(ActionSpec(ActionId.SIMULATE_SEND, ActionArgs.SimulatedSend(channels, contactHint, body)))
+        }
+
+        MAIL_DIGEST_PATTERN.find(text)?.let { match ->
+            consumed += match.range
+            val mode = when (match.groups["mode"]?.value) {
+                "mcq" -> DigestDeliveryMode.MCQ_VOICE_WHATSAPP
+                "gemma format" -> DigestDeliveryMode.GEMMA_PARSABLE
+                else -> DigestDeliveryMode.SUMMARY_NEEDS_INPUT
+            }
+            val template = if (mode == DigestDeliveryMode.GEMMA_PARSABLE) DEFAULT_MAIL_DIGEST_TEMPLATE else null
+            add(ActionSpec(ActionId.MAIL_DIGEST, ActionArgs.MailDigest(mode, template)))
+        }
+
+        // The overlap check keeps this mutually exclusive with
+        // SIMULATE_SEND_PATTERN above: "automatically email and whatsapp ...
+        // saying ..." contains a real "whatsapp ... saying ..." substring
+        // this pattern would otherwise also match, drafting a second, real
+        // compose-and-handoff action nobody asked for.
+        WHATSAPP_PATTERN.find(text)?.takeUnless { m -> consumed.any { it.overlaps(m.range) } }?.let { match ->
             consumed += match.range
             val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
             val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
@@ -538,12 +613,48 @@ class GrammarParser(
 
         // "Never sends" — see ActionRisk.HANDOFF. contactHint is whatever free
         // text follows "to", resolved by the OS share sheet, never by Cues.
-        MESSAGE_PATTERN.find(text)?.let { match ->
+        // Same overlap guard as WHATSAPP_PATTERN above, and for the same
+        // reason: "automatically notify and text ... saying ..." contains a
+        // real "text ... saying ..." substring.
+        MESSAGE_PATTERN.find(text)?.takeUnless { m -> consumed.any { it.overlaps(m.range) } }?.let { match ->
             consumed += match.range
             val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
             val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
                 ?: "Sent from Cues."
             add(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage(contactHint, body)))
+        }
+
+        // Real mailto: handoff — see ActionId.COMPOSE_EMAIL. Same overlap
+        // guard: "automatically whatsapp and email mom saying ..." contains a
+        // real "email mom saying ..." substring this pattern would otherwise
+        // also match.
+        EMAIL_PATTERN.find(text)?.takeUnless { m -> consumed.any { it.overlaps(m.range) } }?.let { match ->
+            consumed += match.range
+            val contactHint = match.groups["contact"]?.value?.trim()?.takeIf { it.isNotBlank() }
+            val body = match.groups["body"]?.value?.trim()?.trim('"', '\'')?.takeIf { it.isNotBlank() }
+                ?: "Sent from Cues."
+            add(ActionSpec(ActionId.COMPOSE_EMAIL, ActionArgs.ComposeEmail(contactHint, null, body)))
+        }
+
+        // A shopping list produces its own bundle of actions and is never
+        // combined with other user-specified actions in the same sentence.
+        // Three real, distinct ActionIds — a real local notification and two
+        // real compose-and-handoff drafts — never SIMULATE_SEND here: every
+        // one of these channels already has an honest real mechanism, so
+        // there is nothing to simulate. Checked last among action patterns,
+        // and only if its match doesn't overlap anything already consumed:
+        // "buy" is ordinary English that can legitimately appear inside
+        // someone else's free-text message body ("email mom saying buy
+        // milk"), and that occurrence belongs to the pattern that already
+        // claimed it, not to this one.
+        SHOPPING_LIST_PATTERN.find(text)?.takeUnless { m -> consumed.any { it.overlaps(m.range) } }?.let { match ->
+            consumed += match.range
+            val itemsText = match.groups["items"]?.value.orEmpty()
+            val formatted = ShoppingListFormatter.format(ShoppingListGrammar.parse(itemsText))
+            add(ActionSpec(ActionId.PINNED_NOTE, ActionArgs.PinnedNote(formatted)))
+            add(ActionSpec(ActionId.NOTIFY_RESULT, ActionArgs.Notify(formatted.take(ActionRegistry.MAX_NOTIFY_CHARS))))
+            add(ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp(null, formatted)))
+            add(ActionSpec(ActionId.COMPOSE_EMAIL, ActionArgs.ComposeEmail(null, null, formatted)))
         }
 
         CALENDAR_PATTERN.find(text)?.let { match ->
@@ -702,6 +813,8 @@ class GrammarParser(
 
     private companion object {
         const val DEFAULT_FOCUS_MINUTES = 25
+        /** Used only when a recurring-interval phrase names no time of its own. */
+        const val DEFAULT_RECURRING_HOUR = 9
         const val TIME = "\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?|noon|midday|midnight"
 
         val CHARGER_WORDS = listOf("charger", "charging", "plugged in", "plug in", "on charge")
@@ -735,6 +848,45 @@ class GrammarParser(
                 "(?:(?:message|text)\\s+)?(?:(?:to\\s+)?(?<contact>[a-z][a-z0-9 _-]{0,30})\\s+)?" +
                 "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until|once\\s+per\\s+(?:local\\s+)?day)\\b|[.,]|$)",
         )
+
+        /** "Email <contact> saying <text>" — a real `mailto:` handoff, see [ActionId.COMPOSE_EMAIL]. */
+        val EMAIL_PATTERN = Regex(
+            "\\bemail\\s+(?:(?:to\\s+)?(?<contact>[a-z][a-z0-9 _-]{0,30})\\s+)?" +
+                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until|once\\s+per\\s+(?:local\\s+)?day)\\b|[.,]|$)",
+        )
+
+        /**
+         * "Automatically whatsapp[, sms and email] <recipient> saying <text>" —
+         * see [ActionId.SIMULATE_SEND]. Never sends for real; the "automatically"
+         * lead-in is what distinguishes it from [WHATSAPP_PATTERN]/[MESSAGE_PATTERN]'s
+         * real compose-and-handoff phrasing. One or more channel words, joined
+         * by "and"/",", because fanning one message to several channels is one
+         * action with several destinations — see [ActionArgs.SimulatedSend]'s
+         * doc comment on why it is never several actions.
+         */
+        private const val SEND_CHANNEL_WORD = "whatsapp|sms|text|email|notify|notification|message"
+        val SIMULATE_SEND_PATTERN = Regex(
+            "\\bautomatically\\s+(?<channels>(?:$SEND_CHANNEL_WORD)(?:\\s*(?:,|and)\\s*(?:$SEND_CHANNEL_WORD))*)\\s+" +
+                "(?:(?<contact>[a-z][a-z0-9 _-]{0,30})\\s+)?" +
+                "(?:saying|that|:)\\s+(?<body>.+?)(?=\\s+(?:and|when|if|until|once\\s+per\\s+(?:local\\s+)?day)\\b|[.,]|$)",
+        )
+
+        fun String.toSendChannel(): SendChannel = when (this) {
+            "whatsapp" -> SendChannel.WHATSAPP
+            "sms", "text" -> SendChannel.SMS
+            "email" -> SendChannel.EMAIL
+            else -> SendChannel.NOTIFICATION_BAR
+        }
+
+        /** "Buy 2kg potato, 2kg tomato" — see [ShoppingListGrammar]. Runs to the end of the clause; never combined with other actions in one sentence. */
+        val SHOPPING_LIST_PATTERN = Regex("\\bbuy\\s+(?<items>.+?)(?=\\s+(?:when|if|until)\\b|[.]|$)")
+
+        /** "Check my/today's/daily mail [as mcq|as a summary|in gemma format]" — see [ActionId.MAIL_DIGEST]. */
+        val MAIL_DIGEST_PATTERN = Regex(
+            "\\b(?:check|read)\\s+(?:my\\s+|today'?s\\s+)?(?:daily\\s+)?mail\\b" +
+                "(?:\\s+as\\s+(?<mode>mcq|a summary|gemma format))?",
+        )
+
 
         val ONCE_PER_LOCAL_DAY = Regex("\\bonce\\s+per\\s+(?:local\\s+)?day\\b")
 

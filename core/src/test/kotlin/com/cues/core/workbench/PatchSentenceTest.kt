@@ -104,11 +104,26 @@ class PatchSentenceTest {
         "pre-fill a message" to doing(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage("mum", "running late"))),
         "pre-fill a message, no contact" to doing(ActionSpec(ActionId.COMPOSE_MESSAGE, ActionArgs.ComposeMessage(null, "on my way"))),
         "WhatsApp draft" to doing(ActionSpec(ActionId.COMPOSE_WHATSAPP, ActionArgs.ComposeWhatsApp("wish", "i am in office"))),
+        "email draft" to doing(ActionSpec(ActionId.COMPOSE_EMAIL, ActionArgs.ComposeEmail("mom", null, "buy milk"))),
         "calendar event" to doing(ActionSpec(ActionId.ADD_CALENDAR_EVENT, ActionArgs.CalendarEvent("dentist", 30))),
         "alarm" to doing(ActionSpec(ActionId.SET_ALARM, ActionArgs.Alarm(7, 30))),
         "ringer silent" to doing(ActionSpec(ActionId.RINGER_MODE, ActionArgs.RingerMode(RingerModeKind.SILENT))),
         "ringer vibrate" to doing(ActionSpec(ActionId.RINGER_MODE, ActionArgs.RingerMode(RingerModeKind.VIBRATE))),
         "open a link" to doing(ActionSpec(ActionId.OPEN_LINK, ActionArgs.OpenLink("https://example.com/page"))),
+        "simulated send" to doing(
+            ActionSpec(
+                ActionId.SIMULATE_SEND,
+                ActionArgs.SimulatedSend(setOf(SendChannel.WHATSAPP, SendChannel.EMAIL), "parents", "i've reached office"),
+            ),
+        ),
+        "mail digest, needs input" to doing(ActionSpec(ActionId.MAIL_DIGEST, ActionArgs.MailDigest(DigestDeliveryMode.SUMMARY_NEEDS_INPUT))),
+        "mail digest, mcq" to doing(ActionSpec(ActionId.MAIL_DIGEST, ActionArgs.MailDigest(DigestDeliveryMode.MCQ_VOICE_WHATSAPP))),
+        "mail digest, gemma format" to doing(
+            ActionSpec(
+                ActionId.MAIL_DIGEST,
+                ActionArgs.MailDigest(DigestDeliveryMode.GEMMA_PARSABLE, com.cues.core.drafting.DEFAULT_MAIL_DIGEST_TEMPLATE),
+            ),
+        ),
     ) + MediaCommand.entries.map { command ->
         "media ${command.name.lowercase()}" to doing(ActionSpec(ActionId.MEDIA_CONTROL, ActionArgs.MediaControl(command)))
     } + UtilityId.entries.flatMap { utility ->

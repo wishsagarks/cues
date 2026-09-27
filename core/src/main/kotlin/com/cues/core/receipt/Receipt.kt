@@ -79,11 +79,13 @@ object Receipts {
     private fun actionLines(session: Session): List<String> = session.actions.map { record ->
         when (record.state) {
             // A macro whose on-screen steps landed is an assumption about a
-            // setting Cues never read, and the receipt says so every time.
-            ActionState.SUCCEEDED -> if (record.verification == Verification.STEPS_CONFIRMED) {
-                "${record.actionId.friendly()}: done, assumed. $STEPS_ONLY_CAVEAT"
-            } else {
-                "${record.actionId.friendly()}: done.${record.actionId.unownedCaveat()}"
+            // setting Cues never read, and the receipt says so every time. A
+            // simulated send never touched real platform state at all, and
+            // gets its own, even more explicit, caveat for the same reason.
+            ActionState.SUCCEEDED -> when (record.verification) {
+                Verification.STEPS_CONFIRMED -> "${record.actionId.friendly()}: done, assumed. $STEPS_ONLY_CAVEAT"
+                Verification.SIMULATED -> "${record.actionId.friendly()}: done. $SIMULATED_SEND_CAVEAT"
+                else -> "${record.actionId.friendly()}: done.${record.actionId.unownedCaveat()}"
             }
             // Named as refused, not folded into a general success.
             ActionState.BLOCKED -> "${record.actionId.friendly()}: blocked. ${record.detail.orEmpty()}".trim()
@@ -180,6 +182,10 @@ object Receipts {
 /** The one sentence every [Verification.STEPS_CONFIRMED] result carries, so it can never read as a checked fact. */
 internal const val STEPS_ONLY_CAVEAT = "Its on-screen steps were confirmed; Cues can't read the setting itself."
 
+/** The one sentence every [Verification.SIMULATED] result carries, so it can never read as a real completed send. */
+internal const val SIMULATED_SEND_CAVEAT =
+    "Nothing left this phone — this is a rehearsal of what a real send would say."
+
 internal fun ActionId.friendly(): String = when (this) {
     ActionId.START_FOCUS_TIMER -> "Focus timer"
     ActionId.REQUEST_DND -> "Quiet notifications"
@@ -188,12 +194,15 @@ internal fun ActionId.friendly(): String = when (this) {
     ActionId.OPEN_APP -> "Open app"
     ActionId.COMPOSE_MESSAGE -> "Pre-filled message"
     ActionId.COMPOSE_WHATSAPP -> "WhatsApp draft"
+    ActionId.COMPOSE_EMAIL -> "Email draft"
     ActionId.ADD_CALENDAR_EVENT -> "Calendar event"
     ActionId.SET_ALARM -> "Alarm"
     ActionId.MEDIA_CONTROL -> "Media control"
     ActionId.RINGER_MODE -> "Ringer"
     ActionId.OPEN_LINK -> "Link"
     ActionId.USE_UTILITY -> "Utility toggle"
+    ActionId.SIMULATE_SEND -> "Simulated send"
+    ActionId.MAIL_DIGEST -> "Mail digest"
 }
 
 /** " You finish this." or " Cues cannot undo this." — only for the two risk classes that need the caveat. */

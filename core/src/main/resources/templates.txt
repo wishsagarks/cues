@@ -3,3 +3,8 @@ Bedtime charge check|When the phone is charging after 10 PM, start a 30-minute f
 Commute focus|When my earbuds connect, start a 30-minute focus timer. End it if I disconnect.
 Weekday focus|When my earbuds connect on weekdays, start a 45-minute focus timer. End it if I disconnect.
 Gym session|When my earbuds connect on weekends, start a 60-minute focus timer and quiet notifications. End it if I disconnect.
+Family ping|At 18:00, automatically whatsapp and notify parents saying I'm home.
+Grocery run|Buy 2kg potato, 2kg tomato.
+Missed call reply|When I miss a call, whatsapp mom saying sorry I missed your call.
+Recurring reminder|Every 3 days at 9:00, automatically notify saying water the plants.
+Morning mail digest|Check my mail as mcq.

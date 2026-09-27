@@ -56,14 +56,34 @@ object ReviewCopy {
             is ActionArgs.OpenApp -> "open ${args.label} — you finish this"
             is ActionArgs.ComposeMessage -> "pre-fill a message: \"${args.text}\" — you send it"
             is ActionArgs.ComposeWhatsApp -> "open WhatsApp with \"${args.text}\" for ${args.contactHint ?: "your chosen chat"} — you send it"
+            is ActionArgs.ComposeEmail -> "draft an email${args.subject?.let { " (\"$it\")" } ?: ""} to " +
+                "${args.contactHint ?: "an address you choose"}: \"${args.text}\" — you send it"
             is ActionArgs.CalendarEvent -> "add a calendar event: \"${args.title}\" — you save it"
             is ActionArgs.Alarm -> "ask the clock app to set an alarm for %02d:%02d".format(args.hour, args.minute)
             is ActionArgs.MediaControl -> "send a ${args.command.name.lowercase()} media command"
             is ActionArgs.RingerMode -> "set the ringer to ${args.mode.name.lowercase()}"
             is ActionArgs.OpenLink -> "open ${args.url} — you finish this"
             is ActionArgs.UseUtility -> "turn ${args.utilityId.name.lowercase().replace('_', ' ')} ${args.state.name.lowercase()}"
+            is ActionArgs.SimulatedSend -> "simulate sending \"${args.message}\" to " +
+                "${args.recipientHint ?: "the recipient you name"} via " +
+                args.channels.sortedBy { it.name }.joinToString(" and ") { it.reviewLabel() } +
+                " — simulated only, nothing is actually sent"
+            is ActionArgs.MailDigest -> "post a mail digest (${args.deliveryMode.reviewLabel()})"
             ActionArgs.None -> spec.actionId.friendly().lowercase()
         }
+
+    private fun SendChannel.reviewLabel(): String = when (this) {
+        SendChannel.NOTIFICATION_BAR -> "the notification bar"
+        SendChannel.WHATSAPP -> "WhatsApp"
+        SendChannel.SMS -> "SMS"
+        SendChannel.EMAIL -> "email"
+    }
+
+    private fun DigestDeliveryMode.reviewLabel(): String = when (this) {
+        DigestDeliveryMode.MCQ_VOICE_WHATSAPP -> "a simulated voice-note send to WhatsApp"
+        DigestDeliveryMode.SUMMARY_NEEDS_INPUT -> "a summary that needs your input"
+        DigestDeliveryMode.GEMMA_PARSABLE -> "Gemma's approved parsable format"
+    }
 
     fun restoreText(routine: Routine): String {
         val owned = routine.actions.mapNotNull { spec ->
@@ -77,10 +97,13 @@ object ReviewCopy {
                 ActionId.OPEN_APP,
                 ActionId.COMPOSE_MESSAGE,
                 ActionId.COMPOSE_WHATSAPP,
+                ActionId.COMPOSE_EMAIL,
                 ActionId.ADD_CALENDAR_EVENT,
                 ActionId.SET_ALARM,
                 ActionId.MEDIA_CONTROL,
                 ActionId.OPEN_LINK,
+                ActionId.SIMULATE_SEND,
+                ActionId.MAIL_DIGEST,
                 -> null
             }
         }
@@ -246,5 +269,7 @@ object ReviewCopy {
         // The amber "assumed" state: steps landed, the setting was never read.
         Verification.STEPS_CONFIRMED -> "Assumed"
         Verification.NONE -> "Not checked"
+        // Never "Done": nothing external happened, by design — see ActionId.SIMULATE_SEND.
+        Verification.SIMULATED -> "Simulated — nothing sent"
     }
 }

@@ -2,7 +2,6 @@ package com.cues.app.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -144,29 +143,7 @@ fun HomeScreen(
         if (granted) startVoice()
         else speechMessage = "Microphone access was not granted. Type your cue instead."
     }
-    var pendingDeviceDraft by remember { mutableStateOf<String?>(null) }
-    val bluetoothPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        val pending = pendingDeviceDraft
-        pendingDeviceDraft = null
-        if (granted && pending != null) {
-            onDraft(pending)
-        } else if (!granted) {
-            speechMessage = "Bluetooth access is needed to pick a paired device. You can still describe a charging cue."
-        }
-    }
-    val submitDraft = {
-        val needsBluetoothPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            textMentionsDevice(text) &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        if (needsBluetoothPermission) {
-            pendingDeviceDraft = text
-            bluetoothPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            onDraft(text)
-        }
-    }
+    val submitDraft = { onDraft(text) }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
         Surface(
@@ -569,11 +546,6 @@ internal fun AppPickerDialog(
         dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
-
-internal fun textMentionsDevice(text: String): Boolean = Regex(
-    "\\b(earbuds|ear buds|buds|headphones|headset|airpods|speaker|watch|car)\\b",
-    RegexOption.IGNORE_CASE,
-).containsMatchIn(text)
 
 @Composable
 private fun CueCard(routine: Routine, onClick: () -> Unit) {

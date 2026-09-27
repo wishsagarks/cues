@@ -111,12 +111,17 @@ class SarvamClient(private val apiKey: String) {
         )
     }
 
-    /** Returns decoded WAV bytes, ready to write to a temp file and hand to [android.media.MediaPlayer]. */
+    /**
+     * Returns decoded WAV bytes, ready to write to a temp file and hand to
+     * [android.media.MediaPlayer]. Defaults to `bulbul:v3` — `bulbul:v2`'s
+     * speaker roster (`anushka` etc.) doesn't carry over, so the default
+     * [speaker] is `v3`'s own default voice, not a v2 name.
+     */
     suspend fun textToSpeech(
         text: String,
         languageCode: String,
-        speaker: String = "anushka",
-        model: String = "bulbul:v2",
+        speaker: String = "shubh",
+        model: String = "bulbul:v3",
     ): ByteArray = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             put("text", text)

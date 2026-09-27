@@ -242,6 +242,27 @@ object ActionRegistry {
         ),
 
         ActionDefinition(
+            id = ActionId.COMPOSE_EMAIL,
+            label = "Draft an email",
+            risk = ActionRisk.HANDOFF,
+            presence = Presence.NEEDS_USER,
+            // A plain mailto: intent needs no permission of its own.
+            requiredCapabilities = emptySet(),
+            owns = null,
+            validate = { args ->
+                when (args) {
+                    is ActionArgs.ComposeEmail -> when {
+                        args.text.isBlank() -> ArgResult.Invalid("An email needs text to pre-fill.")
+                        args.text.length > MAX_MESSAGE_CHARS ->
+                            ArgResult.Invalid("An email must be $MAX_MESSAGE_CHARS characters or fewer.")
+                        else -> ArgResult.Valid(args)
+                    }
+                    else -> ArgResult.Invalid("Drafting an email needs text.")
+                }
+            },
+        ),
+
+        ActionDefinition(
             id = ActionId.ADD_CALENDAR_EVENT,
             label = "Add a calendar event",
             risk = ActionRisk.HANDOFF,
@@ -336,6 +357,49 @@ object ActionRegistry {
                         }
                     }
                     else -> ArgResult.Invalid("Opening a link needs a URL.")
+                }
+            },
+        ),
+
+        ActionDefinition(
+            id = ActionId.SIMULATE_SEND,
+            label = "Simulate a send",
+            // Nothing external happens: no real SMS/WhatsApp/email leaves the
+            // phone, so this needs no SEND_SMS, no WhatsApp API and no Gmail
+            // OAuth scope — only the same notification permission NOTIFY_RESULT
+            // already needs.
+            risk = ActionRisk.LOCAL_NOTICE,
+            requiredCapabilities = setOf(Capability.POST_NOTIFICATIONS),
+            owns = null,
+            validate = { args ->
+                when (args) {
+                    is ActionArgs.SimulatedSend -> when {
+                        args.channels.isEmpty() -> ArgResult.Invalid("A simulated send needs at least one channel.")
+                        args.message.isBlank() -> ArgResult.Invalid("A simulated send needs message text.")
+                        args.message.length > MAX_MESSAGE_CHARS ->
+                            ArgResult.Invalid("A simulated send must be $MAX_MESSAGE_CHARS characters or fewer.")
+                        else -> ArgResult.Valid(args)
+                    }
+                    else -> ArgResult.Invalid("Simulating a send needs a channel and a message.")
+                }
+            },
+        ),
+
+        ActionDefinition(
+            id = ActionId.MAIL_DIGEST,
+            label = "Post a mail digest",
+            risk = ActionRisk.LOCAL_NOTICE,
+            requiredCapabilities = setOf(Capability.POST_NOTIFICATIONS),
+            owns = null,
+            validate = { args ->
+                when (args) {
+                    is ActionArgs.MailDigest -> when {
+                        args.deliveryMode == com.cues.core.model.DigestDeliveryMode.GEMMA_PARSABLE &&
+                            args.formatTemplate.isNullOrBlank() ->
+                            ArgResult.Invalid("A Gemma-parsable digest needs an approved format template.")
+                        else -> ArgResult.Valid(args)
+                    }
+                    else -> ArgResult.Invalid("Posting a mail digest needs a delivery mode.")
                 }
             },
         ),

@@ -263,6 +263,7 @@
 
         <receiver android:name=".runtime.DeadlineReceiver" android:exported="false" />
         <receiver android:name=".runtime.TimeTriggerReceiver" android:exported="false" />
+        <receiver android:name=".runtime.RecurringTriggerReceiver" android:exported="false" />
 
         <!-- Fires when a pending disconnect's reconnect-grace window elapses. -->
         <receiver android:name=".runtime.GraceReceiver" android:exported="false" />

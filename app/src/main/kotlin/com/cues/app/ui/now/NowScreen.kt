@@ -17,15 +17,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PowerOff
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +44,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cues.app.runtime.AdapterStatus
@@ -44,6 +54,7 @@ import com.cues.app.ui.components.ClauseBlock
 import com.cues.app.ui.components.CountdownRing
 import com.cues.app.ui.components.EmptyState
 import com.cues.app.ui.components.FilterChipRow
+import com.cues.app.ui.components.GeminiGlowFrame
 import com.cues.app.ui.components.GhostButton
 import com.cues.app.ui.components.HaltButton
 import com.cues.app.ui.components.KineticButton
@@ -54,10 +65,11 @@ import com.cues.app.ui.components.SectionHeader
 import com.cues.app.ui.components.SlabCard
 import com.cues.app.ui.components.SlabTier
 import com.cues.app.ui.components.StatusPill
-import com.cues.app.ui.components.TrustChip
 import com.cues.app.ui.components.formatCountdown
 import com.cues.app.ui.components.label
 import com.cues.app.ui.components.tone
+import com.cues.app.ui.theme.CuesPalette
+import com.cues.app.ui.theme.CuesShape
 import com.cues.app.ui.theme.CuesType
 import com.cues.app.ui.theme.cuesTokens
 import com.cues.core.model.ContextSnapshot
@@ -92,14 +104,17 @@ fun NowScreen(
     phoneName: String,
     forecast: List<ForecastItem>,
     titleFor: (String) -> String,
-    drafterLabel: String,
     onCreateCue: () -> Unit,
+    onAskSubmit: (String) -> Unit,
     onStartManualCue: (Routine) -> Unit,
     onOpenRoutine: (Routine) -> Unit,
     onArmPause: (Routine) -> Unit,
     onManualStop: (Session) -> Unit,
     onGrantCapability: () -> Unit,
     adapterStatuses: List<AdapterStatus>,
+    hasCompletedFirstSession: Boolean = false,
+    onSpeakBriefing: (text: String, languageCode: String, onDone: () -> Unit, onError: (String) -> Unit) -> Unit =
+        { _, _, onDone, _ -> onDone() },
     modifier: Modifier = Modifier,
 ) {
     var filter by remember { mutableStateOf(0) }
@@ -138,15 +153,20 @@ fun NowScreen(
         }
 
         item {
-            RuntimeContractPanel(drafterLabel)
-        }
-
-        item {
             ShortcutDeck(
                 manualCues = routines.filter { it.status == RoutineStatus.ARMED && it.trigger is Trigger.Manual },
                 onCreateCue = onCreateCue,
                 onStartManualCue = onStartManualCue,
+                onSpeakBriefing = onSpeakBriefing,
             )
+        }
+
+        item {
+            AskPromptCard(onSubmit = onAskSubmit)
+        }
+
+        if (hasCompletedFirstSession) {
+            item { com.cues.app.ui.components.ProjectedSavingsSection() }
         }
 
         if (forecast.isNotEmpty()) {
@@ -183,27 +203,104 @@ fun NowScreen(
     }
 }
 
+private data class AttentionItem(val title: String, val subtitle: String, val icon: ImageVector)
+
+/** Placeholder items for [ShortcutDeck]'s digest — simulated, not read from any real signal. */
+private val TODAY_ATTENTION_ITEMS = listOf(
+    AttentionItem("Call back Dad", "Missed call · 2h ago", Icons.Filled.Call),
+    AttentionItem("2 emails need your attention", "Inbox · unread", Icons.Filled.Email),
+    AttentionItem("Meeting at 10:00 AM", "Team sync", Icons.Filled.Event),
+    AttentionItem("Info update: iQOO Judges Round", "Today's schedule", Icons.Filled.Info),
+)
+
+/** [ShortcutDeck]'s spoken digest, in the same two languages as [com.cues.app.voice.AuthoringLanguage.English]/[com.cues.app.voice.AuthoringLanguage.Hindi] — hand-written, not machine-translated, so the speaker icon never depends on a live translation call. */
+private val BRIEFING_NARRATION_EN =
+    "Here's what needs your attention today. " +
+        TODAY_ATTENTION_ITEMS.joinToString(". ") { "${it.title} — ${it.subtitle}" } + "."
+private const val BRIEFING_NARRATION_HI =
+    "आज आपको इन पर ध्यान देना है। डैड को कॉल बैक करें, दो घंटे पहले मिस्ड कॉल। दो ईमेल पर ध्यान चाहिए, इनबॉक्स में अपठित। " +
+        "सुबह दस बजे मीटिंग, टीम सिंक। आईक्यूओओ जजेस राउंड की जानकारी अपडेट हुई है, आज का शेड्यूल।"
+
 /**
- * The app's visible equivalent of an Apple Shortcut: an action with an
- * explicit scope and result. Creating always enters review; running is only
- * offered for a cue that is already approved, armed, and manual.
+ * A daily-briefing digest above the app's Shortcut-equivalent actions. The
+ * items here are simulated placeholders, not derived from any real signal —
+ * labelled as such so this never reads as a live inbox/calendar integration
+ * Cues doesn't have. Creating always enters review; running is only offered
+ * for a cue that is already approved, armed, and manual.
+ *
+ * The Hi/Eng switch and speaker icon read that same placeholder digest aloud
+ * via [onSpeakBriefing] (Sarvam text-to-speech) — narrating simulated copy
+ * more clearly, not turning it into a real signal.
  */
 @Composable
 private fun ShortcutDeck(
     manualCues: List<Routine>,
     onCreateCue: () -> Unit,
     onStartManualCue: (Routine) -> Unit,
+    onSpeakBriefing: (text: String, languageCode: String, onDone: () -> Unit, onError: (String) -> Unit) -> Unit,
 ) {
     val t = cuesTokens
+    var briefingLanguage by remember { mutableStateOf(com.cues.app.voice.AuthoringLanguage.English) }
+    var isSpeakingBriefing by remember { mutableStateOf(false) }
+    var briefingSpeakError by remember { mutableStateOf<String?>(null) }
     SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-        SectionHeader("SHORTCUTS", meta = "reviewed actions")
-        Text(
-            "AI can help draft a cue. Only a reviewed, armed manual cue can run from here.",
-            style = CuesType.labelSmall,
-            color = t.inkSlate,
-            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+        SectionHeader(
+            "BRIEFING",
+            meta = "needs your attention",
+            action = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    listOf(com.cues.app.voice.AuthoringLanguage.Hindi, com.cues.app.voice.AuthoringLanguage.English).forEach { lang ->
+                        val selected = lang == briefingLanguage
+                        Text(
+                            if (lang == com.cues.app.voice.AuthoringLanguage.Hindi) "Hi" else "Eng",
+                            style = CuesType.labelSmall,
+                            color = if (selected) t.inkPrimary else t.inkSlate,
+                            modifier = Modifier
+                                .clickable { briefingLanguage = lang }
+                                .padding(horizontal = 4.dp),
+                        )
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Play briefing in ${briefingLanguage.label}",
+                        tint = if (isSpeakingBriefing) t.inkSlate else CuesPalette.doYellowDark,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(18.dp)
+                            .clickable(enabled = !isSpeakingBriefing) {
+                                briefingSpeakError = null
+                                isSpeakingBriefing = true
+                                val text = if (briefingLanguage == com.cues.app.voice.AuthoringLanguage.Hindi) BRIEFING_NARRATION_HI else BRIEFING_NARRATION_EN
+                                onSpeakBriefing(text, briefingLanguage.languageCode, { isSpeakingBriefing = false }, { error ->
+                                    isSpeakingBriefing = false
+                                    briefingSpeakError = error
+                                })
+                            },
+                    )
+                }
+            },
         )
-        KineticButton("Create a cue", onCreateCue, modifier = Modifier.fillMaxWidth())
+        if (briefingSpeakError != null) {
+            Text(briefingSpeakError.orEmpty(), style = CuesType.labelSmall, color = t.inkSlate, modifier = Modifier.padding(top = 2.dp))
+        }
+        TODAY_ATTENTION_ITEMS.forEach { attentionItem ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(32.dp).background(t.island, CircleShape),
+                ) {
+                    Icon(attentionItem.icon, contentDescription = null, tint = CuesPalette.doYellowDark, modifier = Modifier.size(16.dp))
+                }
+                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Text(attentionItem.title, style = CuesType.label, color = t.inkPrimary)
+                    Text(attentionItem.subtitle, style = CuesType.labelSmall, color = t.inkSlate)
+                }
+            }
+        }
+        KineticButton("Create a cue", onCreateCue, modifier = Modifier.fillMaxWidth().padding(top = 14.dp))
         manualCues.take(2).forEach { routine ->
             GhostButton(
                 text = "Run ${routine.title}",
@@ -222,20 +319,37 @@ private fun ShortcutDeck(
     }
 }
 
+/** The Ask prompt box, surfaced directly on Now so a cue can be described without switching tabs. */
 @Composable
-private fun RuntimeContractPanel(drafterLabel: String) {
+private fun AskPromptCard(onSubmit: (String) -> Unit) {
     val t = cuesTokens
+    var text by remember { mutableStateOf("") }
     SlabCard(tier = SlabTier.ONE, modifier = Modifier.fillMaxWidth()) {
-        Text("RUNTIME CONTRACT", style = CuesType.label, color = t.inkSlate)
-        Text(
-            "What Cues is allowed to use after approval",
-            style = CuesType.body,
-            color = t.inkSecondary,
-            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        SectionHeader("ASK", meta = "describe a cue")
+        GeminiGlowFrame(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("When my earbuds connect after 6 PM on weekdays…") },
+                minLines = 5,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = t.doYellow,
+                    unfocusedContainerColor = t.recess,
+                    focusedContainerColor = t.recess,
+                    unfocusedTextColor = t.inkPrimary,
+                    focusedTextColor = t.inkPrimary,
+                ),
+                shape = CuesShape.card,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        KineticButton(
+            text = "Ask Cues",
+            onClick = { if (text.isNotBlank()) { onSubmit(text); text = "" } },
+            enabled = text.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         )
-        TrustChip("NO MODEL AT RUNTIME", modifier = Modifier.fillMaxWidth())
-        TrustChip("NO NETWORK AT RUNTIME", modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-        TrustChip("DRAFTING: $drafterLabel", modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
     }
 }
 
@@ -268,7 +382,18 @@ private fun DeviceSnapshotCard(
     }
     val instant = remember(nowMillis) { Instant.ofEpochMilli(nowMillis) }
 
-    SlabCard(tier = SlabTier.TWO, modifier = Modifier.fillMaxWidth()) {
+    SlabCard(
+        tier = SlabTier.TWO,
+        edgeColor = CuesPalette.activeEdgeDark,
+        accentBrush = Brush.linearGradient(
+            colors = listOf(
+                CuesPalette.doYellowDark.copy(alpha = 0.16f),
+                CuesPalette.untilOrangeDark.copy(alpha = 0.07f),
+                androidx.compose.ui.graphics.Color.Transparent,
+            ),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.SpaceBetween,
